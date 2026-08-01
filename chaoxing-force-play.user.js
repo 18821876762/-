@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         学习通·强制续播 (iframe穿透 + 防暂停 + 防伪暂停 + 防重播)
 // @namespace    http://cx.local/
-// @version      4.6
+// @version      4.7
 // @author       anon
 // @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 window.attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 window.ananas.pause、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 window.attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。
 // @match        *://*.chaoxing.com/*
@@ -963,7 +963,7 @@
   // —— 悬浮控制面板（开关键 = PAUSE_HOTKEY，默认 p）——
   // 集中控制：暂停/恢复、自动停止计时(AUTO_STOP_MIN)、暂停后自动恢复(RESUME_AFTER_MIN)，并实时显示状态。
   // 仅懒创建一次，随状态刷新；不污染页面输入框，Esc/× 关闭。
-  var SCRIPT_VERSION = '4.6';   // 与文件头 @version 保持一致（面板与诊断信息显示用）
+  var SCRIPT_VERSION = '4.7';   // 与文件头 @version 保持一致（面板与诊断信息显示用）
   var _cxPanel = null;
   var _lastVideoList = [];       // 面板视频列表渲染时缓存的视频引用快照，供点击委托回调定位目标视频（索引稳定）
   // ===== MODULE: 副脚本注册中心 =====
@@ -1071,6 +1071,8 @@
   }
   try { window.__cxRegisterAddon = drainAddonQueue; } catch (e) { swallow(e); }
   drainAddonQueue();   // 排空先于主脚本加载的副脚本注册（此时面板未建，仅入册，建面板时渲染）
+  // 命令面板（v4.7）：暴露注册入口供副脚本扩展命令（initBuiltinCommands 在 MODULE 内、_cxCommands 初始化后调用，避免执行顺序问题）
+  try { window.__cxRegisterCommand = registerCommand; } catch (e) { swallow(e); }
   // 主从式导航当前激活区块（localStorage 持久化）：面板顶部分区导航，切换下方内容（暂停设置/副面板/高级/其他）。
   var _cxActiveTab = 'pause';
   try { _cxActiveTab = (localStorage.getItem('cx_panel_tab') || 'pause'); } catch (e) { swallow(e); }
@@ -1105,6 +1107,11 @@
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
         '<b style="font-size:14px;">学习通·主控面板 <span id="__cxVer" style="color:#6b7280;font-weight:normal;font-size:11px;"></span></b>' +
         '<span id="__cxPanelClose" style="cursor:pointer;padding:0 6px;font-size:18px;line-height:1;">×</span>' +
+      '</div>' +
+      // 命令输入栏（v4.7 命令面板）：输入 / 唤起命令下拉，支持参数与 ↑↓/Tab/Enter/Esc
+      '<div style="position:relative;margin-bottom:8px;">' +
+        '<input id="__cxCmd" type="text" placeholder="输入 / 唤起命令…" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#1a1d24;color:#e8e8e8;border:1px solid #3a3f4b;border-radius:6px;font-size:12px;outline:none;">' +
+        '<div id="__cxCmdList" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;max-height:200px;overflow-y:auto;background:#1a1d24;border:1px solid #3a3f4b;border-radius:6px;z-index:10;"></div>' +
       '</div>' +
       // 状态区
       '<div id="__cxPanelState" style="font-size:12px;color:#9aa0a8;margin-bottom:8px;word-break:break-all;white-space:pre-line;"></div>' +
@@ -1179,6 +1186,28 @@
       } catch (e) { swallow(e); }
     }
     el.querySelector('#__cxPanelClose').addEventListener('click', hidePanel);
+    // —— 命令面板（v4.7）：输入 / 唤起命令下拉，↑↓/Tab/Enter/Esc ——
+    var cmdInp = el.querySelector('#__cxCmd');
+    if (cmdInp) {
+      cmdInp.addEventListener('input', _cxCmdOnInput);
+      cmdInp.addEventListener('keydown', _cxCmdOnKey);
+      cmdInp.addEventListener('blur', _cxCmdOnBlur);
+      cmdInp.addEventListener('focus', _cxCmdUpdate);
+      // 鼠标点击命令项：用 mousedown + preventDefault 抢在 input blur 之前执行，避免点击被吞（修复点击无效）
+      var cmdListEl = el.querySelector('#__cxCmdList');
+      if (cmdListEl) {
+        cmdListEl.addEventListener('mousedown', function (ev) {
+          ev.preventDefault();   // 阻止 input 失焦，保证点击生效
+          var item = ev.target && ev.target.closest ? ev.target.closest('[data-ci]') : null;
+          if (!item) return;
+          var idx = +item.getAttribute('data-ci');
+          var c = _cxCmdFilter[idx];
+          if (!c) return;
+          if (c.args) { cmdInp.value = '/' + c.name + ' '; try { cmdInp.focus(); var L = cmdInp.value.length; cmdInp.setSelectionRange(L, L); } catch (ee) { swallow(ee); } _cxCmdRender(_cxCmdFilter, idx); }
+          else { cmdInp.value = '/' + c.name; executeRawCmd('/' + c.name); hideCmdList(); cmdInp.value = ''; }
+        });
+      }
+    }
     el.querySelector('#__cxBtnPause').addEventListener('click', function () {
       var v = currentVideo(); if (!v) { toast('无目标视频'); return; }
       if (v.__cxUserPaused) userResume(v); else userPause(v);
@@ -1439,6 +1468,142 @@
   }
   var _loopTimer = null;
   try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+
+  // ===== MODULE: 命令面板（v4.7）=====
+  // 在控制面板内提供「/命令」输入：输入 / 唤起下拉、↑↓ 选择、Tab 补全、Enter 执行、Esc 关闭下拉。
+  // 命令可带参数（如 /rate 2 /autostop 5）；无参数命令鼠标点击即执行，有参数命令点击后填入待补全。
+  // registerCommand 同时暴露到 window.__cxRegisterCommand，供副脚本/其它脚本扩展命令。
+  var _cxCommands = [];                 // [{name, desc, args, exec}]
+  var _cxCmdFilter = [];                // 当前过滤后的命令（用于 ↑↓ 高亮）
+  var _cxCmdHi = -1;                    // 高亮索引（过滤列表内）
+  function registerCommand(name, desc, hasArgs, exec) {   // name 不含斜杠；exec(rawInput, argStr)
+    name = ('' + (name || '')).replace(/^\//, '').trim().toLowerCase();
+    if (!name) return;
+    for (var i = 0; i < _cxCommands.length; i++) { if (_cxCommands[i].name === name) { _cxCommands[i].desc = desc; _cxCommands[i].args = !!hasArgs; _cxCommands[i].exec = exec; return; } }
+    _cxCommands.push({ name: name, desc: desc || '', args: !!hasArgs, exec: exec });
+  }
+  function executeRawCmd(raw) {         // 解析并执任何输入（含参数），下拉关闭与否都执行——修复「参数命令下拉关闭后 Enter 不执行」
+    raw = ('' + (raw || '')).trim();
+    if (!raw) return false;
+    var sp = raw.indexOf(' ');
+    var head = (sp < 0 ? raw : raw.slice(0, sp)).replace(/^\//, '').toLowerCase();
+    var arg = (sp < 0 ? '' : raw.slice(sp + 1)).trim();
+    if (!head) return false;
+    for (var i = 0; i < _cxCommands.length; i++) {
+      if (_cxCommands[i].name === head) {
+        try { _cxCommands[i].exec(raw, arg); } catch (e) { swallow(e); toast('命令执行出错: ' + head); }
+        return true;
+      }
+    }
+    toast('未知命令: /' + head + '（输入 / 查看全部）');
+    return false;
+  }
+  function _videoByArg(arg) {           // 参数为空→前台/当前视频；数字→该序号视频
+    if (!arg) { var v = currentVideo(); return v || null; }
+    var n = parseInt(arg, 10); if (isNaN(n)) { toast('参数需为视频序号'); return undefined; }
+    var vs = allVideos(); var v = vs[n - 1];
+    if (!v) { toast('无第 ' + n + ' 个视频'); return undefined; }
+    return v;
+  }
+  function initBuiltinCommands() {      // 注册内置命令（幂等）
+    if (_cxCommands.length) return;     // 已注册则跳过，避免重复
+    registerCommand('pause', '暂停视频（可带序号，如 /pause 2）', true, function (raw, arg) {
+      var v = _videoByArg(arg); if (!v) return; userPause(v); refreshPanelState(); toast('已暂停视频');
+    });
+    registerCommand('resume', '恢复续播（可带序号）', true, function (raw, arg) {
+      var v = _videoByArg(arg); if (!v) return; userResume(v); refreshPanelState(); toast('已恢复续播');
+    });
+    registerCommand('loop', '循环播放 on/off', true, function (raw, arg) {
+      var on = !(arg && (arg.toLowerCase() === 'off' || arg === '0')); CONFIG.LOOP_PLAY = on; clampCfg(); applyLoopAll(); syncPanelInputs(); refreshPanelState(); toast('循环播放 ' + (on ? '开' : '关'));
+    });
+    registerCommand('rate', '设置播放速率，如 /rate 1.5', true, function (raw, arg) {
+      var r = parseFloat(arg); if (isNaN(r)) { toast('用法: /rate 0.5~2'); return; } CONFIG.USER_RATE = r; clampCfg(); applyUserRateAll(); syncPanelInputs(); refreshPanelState(); toast('播放速率 ' + CONFIG.USER_RATE + 'x');
+    });
+    registerCommand('autostop', '自动停止计时(分钟)，如 /autostop 30', true, function (raw, arg) {
+      var m = parseFloat(arg); if (isNaN(m)) { toast('用法: /autostop 0~120'); return; } CONFIG.AUTO_STOP_MIN = m; clampCfg(); savePanelCfg(); syncPanelInputs(); refreshPanelState(); toast('自动停止 ' + CONFIG.AUTO_STOP_MIN + ' 分钟');
+    });
+    registerCommand('autoresume', '暂停后自动恢复(分钟)，如 /autoresume 10', true, function (raw, arg) {
+      var m = parseFloat(arg); if (isNaN(m)) { toast('用法: /autoresume 0~60'); return; } CONFIG.RESUME_AFTER_MIN = m; clampCfg(); savePanelCfg(); syncPanelInputs(); refreshPanelState(); toast('自动恢复 ' + CONFIG.RESUME_AFTER_MIN + ' 分钟');
+    });
+    registerCommand('debug', '调试日志 on/off', true, function (raw, arg) {
+      var on = !(arg && (arg.toLowerCase() === 'off' || arg === '0')); DEBUG = on; savePanelCfg(); toast('调试日志 ' + (on ? '开' : '关'));
+    });
+    registerCommand('copy', '复制诊断信息', false, function () { copyDiagnostics(); });
+    registerCommand('refresh', '立即重扫视频与状态', false, function () { try { _loopTick(); } catch (e) { swallow(e); } refreshPanelState(); toast('已重扫'); });
+    registerCommand('rescan', '重启轮询(ms)，如 /rescan 1000', true, function (raw, arg) {
+      var ms = parseInt(arg, 10); if (isNaN(ms)) { toast('用法: /rescan 500~5000'); return; } CONFIG.RESCAN_INTERVAL = ms; clampCfg(); savePanelCfg();
+      try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
+      try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+      syncPanelInputs(); refreshPanelState(); toast('轮询 ' + CONFIG.RESCAN_INTERVAL + 'ms');
+    });
+    registerCommand('help', '显示命令帮助', false, function () {
+      var names = _cxCommands.map(function (c) { return '/' + c.name + (c.args ? ' …' : ''); }).join('  ');
+      toast('命令: ' + names);
+      _cxCmdShowAll && _cxCmdShowAll();
+    });
+    registerCommand('close', '关闭面板', false, function () { hidePanel(); });
+    registerCommand('hide', '关闭面板', false, function () { hidePanel(); });
+  }
+  // —— 下拉渲染与交互（依赖面板内 #__cxCmd / #__cxCmdList，缺失时安全降级）——
+  function _cxCmdRender(list, hi) {
+    var box = _cxPanel && _cxPanel.querySelector('#__cxCmdList'); if (!box) return;
+    _cxCmdFilter = list; _cxCmdHi = hi;
+    if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      html += '<div data-ci="' + i + '" style="padding:6px 8px;cursor:pointer;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
+        (i === hi ? 'background:#2d6cdf;color:#fff;' : 'color:#e8e8e8;') + '"' +
+        ' title="' + (c.desc || ('/' + c.name)) + '">' +
+        '<b>/' + c.name + '</b>' + (c.args ? ' …' : '') +
+        (c.desc ? ' <span style="color:' + (i === hi ? '#dbeafe' : '#8b93a1') + ';">— ' + c.desc + '</span>' : '') +
+        '</div>';
+    }
+    box.innerHTML = html; box.style.display = 'block';
+  }
+  function _cxCmdUpdate() {
+    var inp = _cxPanel && _cxPanel.querySelector('#__cxCmd'); if (!inp) return;
+    var q = ('' + (inp.value || '')).trim().toLowerCase();
+    if (!q) { _cxCmdRender(_cxCommands.slice(), -1); return; }
+    var head = q.replace(/^\//, '');
+    var list = [];
+    for (var i = 0; i < _cxCommands.length; i++) { if (_cxCommands[i].name.indexOf(head) === 0) list.push(_cxCommands[i]); }
+    if (!list.length) { for (var j = 0; j < _cxCommands.length; j++) { if (_cxCommands[j].name.indexOf(head) >= 0) list.push(_cxCommands[j]); } }
+    _cxCmdRender(list, list.length ? 0 : -1);
+  }
+  function _cxCmdShowAll() { var inp = _cxPanel && _cxPanel.querySelector('#__cxCmd'); if (inp) inp.focus(); _cxCmdUpdate(); }
+  function _cxCmdOnInput() { _cxCmdUpdate(); }
+  function _cxCmdOnKey(e) {
+    var inp = e.target; if (!inp) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (_cxCmdFilter.length) { _cxCmdHi = (_cxCmdHi + 1) % _cxCmdFilter.length; _cxCmdRender(_cxCmdFilter, _cxCmdHi); } return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (_cxCmdFilter.length) { _cxCmdHi = (_cxCmdHi - 1 + _cxCmdFilter.length) % _cxCmdFilter.length; _cxCmdRender(_cxCmdFilter, _cxCmdHi); } return; }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var pick = (_cxCmdHi >= 0 && _cxCmdFilter[_cxCmdHi]) ? _cxCmdFilter[_cxCmdHi] : (_cxCmdFilter[0] || null);
+      if (pick) { inp.value = '/' + pick.name + ' '; _cxCmdHi = -1; _cxCmdRender(_cxCmdFilter, -1); try { inp.focus(); var L = inp.value.length; inp.setSelectionRange(L, L); } catch (ee) { swallow(ee); } }
+      return;
+    }
+    if (e.key === 'Enter') {
+      // 若有高亮项且下拉中与输入一致则取之；否则直接按原始输入解析执行（覆盖「参数命令下拉关闭不执行」bug）
+      e.preventDefault();
+      if (_cxCmdHi >= 0 && _cxCmdFilter[_cxCmdHi] && (('/' + _cxCmdFilter[_cxCmdHi].name) === ('' + inp.value).trim())) {
+        inp.value = '/' + _cxCmdFilter[_cxCmdHi].name + ' ';
+      }
+      var raw = inp.value;
+      executeRawCmd(raw);
+      hideCmdList(); inp.value = '';
+      return;
+    }
+    if (e.key === 'Escape') {
+      var box = _cxPanel && _cxPanel.querySelector('#__cxCmdList');
+      if (box && box.style.display !== 'none') { e.preventDefault(); e.stopPropagation(); hideCmdList(); }
+      return;
+    }
+  }
+  function hideCmdList() { var box = _cxPanel && _cxPanel.querySelector('#__cxCmdList'); if (box) { box.style.display = 'none'; box.innerHTML = ''; } _cxCmdFilter = []; _cxCmdHi = -1; }
+  function _cxCmdOnBlur() { hideCmdList(); }
+  // _cxCommands 已在本 MODULE 顶部初始化完毕，此处调用 initBuiltinCommands 注册内置命令（执行顺序正确，不会被 var 初始化覆盖）
+  try { initBuiltinCommands(); } catch (e) { swallow(e); }
 
   // 控制面板开关键：非输入框聚焦时按 PAUSE_HOTKEY 开/关悬浮控制面板（用户暂停开关的可视化控制，含暂停/恢复 + 计时器滑块）
   function keydownHandler(e) {   // 审查 JS1-2：命名以便卸载时 removeEventListener
