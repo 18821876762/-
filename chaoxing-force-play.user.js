@@ -1113,8 +1113,6 @@
         '<input id="__cxCmd" type="text" placeholder="输入 / 唤起命令…" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#1a1d24;color:#e8e8e8;border:1px solid #3a3f4b;border-radius:6px;font-size:12px;outline:none;">' +
         '<div id="__cxCmdList" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;max-height:200px;overflow-y:auto;background:#1a1d24;border:1px solid #3a3f4b;border-radius:6px;z-index:10;"></div>' +
       '</div>' +
-      // 状态区
-      '<div id="__cxPanelState" style="font-size:12px;color:#9aa0a8;margin-bottom:8px;word-break:break-all;white-space:pre-line;"></div>' +
       // 顶部导航栏（主从式布局）：点击切换下方内容区块
       '<div class="cx-nav" style="display:flex;gap:4px;margin-bottom:8px;">' +
         '<button class="cx-nav-btn" data-tab="pause" style="flex:1;padding:6px;background:#3a3f4b;color:#e8e8e8;border:0;border-radius:6px;cursor:pointer;font-size:12px;">暂停设置</button>' +
@@ -1146,8 +1144,13 @@
           '<div id="__cxSubPanels"></div>' +
         '</div>' +
       '</div>' +
-      // 区块：高级
+      // 区块：高级（视频信息 + 全局诊断 + 高级控制）
       '<div id="__cxTab_adv" class="cx-tab">' +
+        // 视频信息（v4.7 起从顶部移入高级）：当前视频状态/进度/已看
+        '<div style="border-top:1px solid #3a3f4b;margin-top:4px;padding-top:8px;">' +
+          '<div style="font-size:11px;color:#9aa0a8;margin-bottom:4px;">视频信息</div>' +
+          '<div id="__cxPanelState" style="font-size:12px;color:#9aa0a8;margin-bottom:8px;word-break:break-all;white-space:pre-line;"></div>' +
+        '</div>' +
         '<div id="__cxPanelInfo" style="font-size:11px;color:#8b93a1;margin-bottom:10px;white-space:pre-line;background:rgba(0,0,0,.25);padding:6px;border-radius:4px;"></div>' +
         '<label id="__cxRescanRow" style="display:block;margin-bottom:6px;font-size:12px;">轮询间隔 (ms): <b id="__cxRescanVal">2000</b>' +
           '<input id="__cxRescan" type="range" min="500" max="5000" step="500" value="2000" style="width:100%;"></label>' +
@@ -1484,11 +1487,11 @@
   }
   function executeRawCmd(raw) {         // 解析并执任何输入（含参数），下拉关闭与否都执行——修复「参数命令下拉关闭后 Enter 不执行」
     raw = ('' + (raw || '')).trim();
-    if (!raw) return false;
+    if (!raw) { toast('请输入命令，如 /pause（输入 / 查看全部）'); return false; }
     var sp = raw.indexOf(' ');
     var head = (sp < 0 ? raw : raw.slice(0, sp)).replace(/^\//, '').toLowerCase();
     var arg = (sp < 0 ? '' : raw.slice(sp + 1)).trim();
-    if (!head) return false;
+    if (!head) { toast('请输入命令名称，如 /pause'); return false; }
     for (var i = 0; i < _cxCommands.length; i++) {
       if (_cxCommands[i].name === head) {
         try { _cxCommands[i].exec(raw, arg); } catch (e) { swallow(e); toast('命令执行出错: ' + head); }
@@ -1499,10 +1502,10 @@
     return false;
   }
   function _videoByArg(arg) {           // 参数为空→前台/当前视频；数字→该序号视频
-    if (!arg) { var v = currentVideo(); return v || null; }
-    var n = parseInt(arg, 10); if (isNaN(n)) { toast('参数需为视频序号'); return undefined; }
+    if (!arg) { var v = currentVideo(); if (!v) { toast('未找到当前视频，无法执行'); return undefined; } return v; }
+    var n = parseInt(arg, 10); if (isNaN(n)) { toast('参数需为数字序号，如 /pause 2'); return undefined; }
     var vs = allVideos(); var v = vs[n - 1];
-    if (!v) { toast('无第 ' + n + ' 个视频'); return undefined; }
+    if (!v) { toast('无第 ' + n + ' 个视频（共 ' + vs.length + ' 个）'); return undefined; }
     return v;
   }
   function initBuiltinCommands() {      // 注册内置命令（幂等）
