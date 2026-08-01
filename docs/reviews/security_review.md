@@ -1,16 +1,16 @@
 # 工作空间代码安全性检测报告
 
 生成时间：2026-07-31
-检测范围：`cx_crawler/`（Python 爬虫 + 本地桥服务）、5 个浏览器用户脚本（`*.user.js`）、相关配置与文档
+检测范围：`perception/cx_crawler/`（Python 爬虫 + 本地桥服务）、5 个浏览器用户脚本（`*.user.js`）、相关配置与文档
 检测方式：静态代码审查 + 敏感模式扫描（`eval/exec/subprocess/shell=True/pickle/verify=False/innerHTML/document.write` 等）
 
 ---
 
 ## 1. 高危（Critical）
 
-### C1. 明文真实会话凭据存储于 `cx_crawler/cookies.json` ⚠️ 必须立即处理
+### C1. 明文真实会话凭据存储于 `perception/cx_crawler/cookies.json` ⚠️ 必须立即处理
 
-`cx_crawler/cookies.json` 中包含**真实有效的学习通登录会话**，可直接用于账号冒用（account takeover）：
+`perception/cx_crawler/cookies.json` 中包含**真实有效的学习通登录会话**，可直接用于账号冒用（account takeover）：
 
 - `UID` = `422956755`（账号标识）
 - `p_auth_token` = 完整 JWT（`uid=422956755`，`exp≈2026-08-07`），是登录态核心凭证
@@ -54,8 +54,8 @@
 ### L2. Windows 下凭据文件权限收紧无效（`session.py:_restrict_file_perms`）
 `os.chmod(0o600)` 在 Windows 仅设置只读位，无法限制同机其他用户读取 `cookies.json`。多用户/公共机器上仍有泄露风险。建议：凭据放在仅当前用户可读的私有目录，且绝不提交、不在共享机留存。
 
-### L3. `output/` 落盘含个人学习数据（`cx_crawler`）
-爬虫会把课程列表、章节树等 API 原始响应写入 `output/`（`SAVE_ALL_RAW=True` 时范围更大）。这些数据包含个人课程/进度信息，若被提交或分享，构成轻度 PII 泄露。代码注释称 `output/` 已 gitignore，但根 `.gitignore` 未显式列出，建议核实并补加 `cx_crawler/output/`。
+### L3. `output/` 落盘含个人学习数据（`perception/cx_crawler`）
+爬虫会把课程列表、章节树等 API 原始响应写入 `output/`（`SAVE_ALL_RAW=True` 时范围更大）。这些数据包含个人课程/进度信息，若被提交或分享，构成轻度 PII 泄露。代码注释称 `output/` 已 gitignore，但根 `.gitignore` 未显式列出，建议核实并补加 `perception/cx_crawler/output/`。
 
 ---
 
@@ -84,6 +84,6 @@
 | Medium | M1 桥 CORS/绑定 | 默认保持 127.0.0.1；收紧 CORS；校验 playlist |
 | Low | L1 匹配域 | 收窄 `@match` |
 | Low | L2 权限 | 私有目录存放凭据；不在共享机留存 |
-| Low | L3 落盘 | gitignore `cx_crawler/output/` |
+| Low | L3 落盘 | gitignore `perception/cx_crawler/output/` |
 
 > 注：报告未列出真实令牌值，仅以字段名与过期时间说明泄露面，防止二次扩散。

@@ -8,7 +8,7 @@ import requests
 
 from config import HEADERS, API, DEBUG, TIMEOUT, throttle, atomic_write_json
 
-# 默认凭据路径以脚本目录为基准的绝对路径，避免从其它 cwd 启动（如 `python cx_crawler/dump.py`）时
+# 默认凭据路径以脚本目录为基准的绝对路径，避免从其它 cwd 启动（如 `python perception/cx_crawler/dump.py`）时
 # 因相对路径找不到 cookies.json / 把 cookie 写到错误位置（吸收评审 P1-2）。
 DEFAULT_COOKIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.json")
 

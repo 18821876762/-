@@ -3,7 +3,7 @@
     "issue_id": 1,
     "exists": true,
     "severity": "critical",
-    "reasoning": "经代码搜索确认，AuthExpiredError 类在整个项目中从未定义。api_client.py L61/L78 两处 raise AuthExpiredError，但该文件无 class AuthExpiredError 声明；dump.py L19 'from api_client import AuthExpiredError' 在模块加载阶段就会抛出 ImportError/NameError；cx_crawler/__init__.py 文件不存在，也无法通过包导出提供。任何触发 401/403 响应或 import dump.py 的路径都会立即崩溃，属于严重的启动/运行时崩溃级错误。"
+    "reasoning": "经代码搜索确认，AuthExpiredError 类在整个项目中从未定义。api_client.py L61/L78 两处 raise AuthExpiredError，但该文件无 class AuthExpiredError 声明；dump.py L19 'from api_client import AuthExpiredError' 在模块加载阶段就会抛出 ImportError/NameError；perception/cx_crawler/__init__.py 文件不存在，也无法通过包导出提供。任何触发 401/403 响应或 import dump.py 的路径都会立即崩溃，属于严重的启动/运行时崩溃级错误。"
   },
   {
     "issue_id": 2,

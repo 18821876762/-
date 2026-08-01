@@ -1,6 +1,6 @@
 # 工作空间代码审查报告
 
-> 审查范围：`cx_crawler/`（10 个 Python 模块）+ 8 个浏览器用户脚本（`.user.js`）
+> 审查范围：`perception/cx_crawler/`（10 个 Python 模块）+ 8 个浏览器用户脚本（`.user.js`）
 > 审查日期：2026-07-29
 > 审查方式：逐文件静态阅读 + 跨文件一致性比对（JS 大文件由并行探索代理辅助定位行号）
 
@@ -12,7 +12,7 @@
 
 | 组件 | 规模 | 作用 | 运行位置 |
 |---|---|---|---|
-| `cx_crawler/`（Python） | 10 文件 ~1150 行 | 登录校验 → 拉课程 → 递归解析章节任务点 → 生成 playlist 快照 → 可选渲染/心跳/作业 | 本地 CLI |
+| `perception/cx_crawler/`（Python） | 10 文件 ~1150 行 | 登录校验 → 拉课程 → 递归解析章节任务点 → 生成 playlist 快照 → 可选渲染/心跳/作业 | 本地 CLI |
 | `chaoxing-force-play.user.js` | ~1450 行 | 强制续播、IMA 广告对抗、定向白名单、桥 playlist 拉取 | 学习通页面 |
 | `chaoxing-auto-next` / `allinone` | 中 | 自动/手动跳转下一未完成章节、遮罩暂停规避 | 学习通页面 |
 | `chaoxing-progress-panel` / `no-pause` / `visibility-resume` / `deceive-api` / `browser-media-collector` | 小 | 进度面板、防暂停、可见性续播、API 欺骗、媒体信息收集 | 学习通页面 |
@@ -22,7 +22,7 @@
 
 ---
 
-## 2. Python 爬虫 `cx_crawler/` 审查
+## 2. Python 爬虫 `perception/cx_crawler/` 审查
 
 ### 2.1 语法 / 解析层
 - 全部文件可正常解析，无语法错误；模块导入分层良好（`config` 不 import `requests`，`render` 惰性导入避免强制依赖 Playwright）。
@@ -66,7 +66,7 @@ completed = ('icon_Completed' in ch) or (unfinished == 0 and has_tp)
 
 ### 2.5 可维护性 / 工程规范
 
-- **【高】`dump.py:43-51` `ACTIVE_COURSE_IDS` 硬编码了 7 个具体个人课程 cid**（`265306897` 等）。换用户必须改源码，且散落于源码中易过期。建议移到配置文件（如 `cx_crawler/courses.json` 或环境变量 `CX_COURSE_IDS`），与 `bridge_config.json` 的处理方式一致，并在 README 说明。
+- **【高】`dump.py:43-51` `ACTIVE_COURSE_IDS` 硬编码了 7 个具体个人课程 cid**（`265306897` 等）。换用户必须改源码，且散落于源码中易过期。建议移到配置文件（如 `perception/cx_crawler/courses.json` 或环境变量 `CX_COURSE_IDS`），与 `bridge_config.json` 的处理方式一致，并在 README 说明。
 - **【中】`print` 与 `logger` 混用**：`courses.py`、`chapters.py`、`session.py` 大量用 `print(...)`，而 `dump.py`/`api_client.py` 用结构化 `logger`。后果：`CX_DEBUG` 无法统一控制输出，日志无 trace_id/时间戳前缀，风格割裂。建议统一为 `logger`。
 - **【中】`_to_int` 重复实现**：`courses.py:9-14` 与 `dump.py:107-111` 两份完全相同的拷贝，易漂移。建议抽进 `config` 公共 util。
 - **【中】缺 `requirements.txt`**：`requests`、`playwright` 依赖未锁定版本，跨环境复现困难。建议补充并 pin 版本。

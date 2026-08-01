@@ -1,6 +1,6 @@
 # 代码审查报告 · 2026
 
-> 审查对象：工作空间全部源码（前端 10 个 Tampermonkey 用户脚本 + 后端 `cx_crawler` 共 10 个 Python 模块 + 配置/示例）。
+> 审查对象：工作空间全部源码（前端 10 个 Tampermonkey 用户脚本 + 后端 `perception/cx_crawler` 共 10 个 Python 模块 + 配置/示例）。
 > 审查日期：2026-07-29
 > 配套文件：`code_review_report.md`（第一轮加固，已处理 R1–R3、G1–G5、J4–J6、L3、with_retry 等）、`CHANGELOG.md`、`USAGE.md`、`STAGES.md`、`crawler-framework-architecture.md`。
 
@@ -11,7 +11,7 @@
 项目由两套相对独立、通过「HTTP 桥」松耦合的子系统组成：
 
 - **前端（浏览器用户脚本）**：在「学习通（超星）」课程页面上做自动化——强制续播（`force-play`）、播完自动答题/下一课（`auto-next`）、防止鼠标移出暂停（`no-pause`）、进度面板（`progress-panel`）、章节/API 欺骗（`deceive-api`）、经本地桥把「已播完」事件/作业数据回传后端（`auto-next` 的 bridge 部分）。
-- **后端（`cx_crawler`，Python）**：只读快照爬虫，按「课程→章节→作业」抓取章节树与作业，落盘 JSON/HTML，供离线分析。**默认 `RENDER_JOBS=False`**，仅做 HTTP 抓取；可选开启 Playwright 无头渲染以补全 `jobid/objectid`。
+- **后端（`perception/cx_crawler`，Python）**：只读快照爬虫，按「课程→章节→作业」抓取章节树与作业，落盘 JSON/HTML，供离线分析。**默认 `RENDER_JOBS=False`**，仅做 HTTP 抓取；可选开启 Playwright 无头渲染以补全 `jobid/objectid`。
 
 整体完成度高、注释详尽、针对性加固扎实。但存在少量**可复现的高优先级问题**（依赖装不上、登录态误判），以及若干中优先级的健壮性/性能/冲突隐患。
 
@@ -24,13 +24,13 @@
 ### 高优先级（High）
 
 #### S1 · `verify_login` 整数比较会误判字符串 `"1"` 为未登录　✅ 已修复（本轮）
-- **位置**：`cx_crawler/session.py` `verify_login()`
+- **位置**：`perception/cx_crawler/session.py` `verify_login()`
 - **现象**：主判据为 `if result == 1:`（及嵌套 `data["data"].get("result") == 1`）。若 `backclazzdata` 接口把 `result` 以字符串 `"1"` 返回（部分网关/反代偶有此行为），`"1" == 1` 在 Python 中为 `False`，登录校验直接落到后续「登录失败」判定并 `abort` 整轮。
 - **影响**：偶发整轮空跑/误报未登录，排查困难。
 - **修复**：同时兼容 `int 1` 与 `str "1"`（`result == 1 or result == "1"`，嵌套处 `in (1, "1")`）。
 
 #### P2 · `requirements.txt` 的 `extra` marker 导致 playwright 永远装不上　✅ 已修复（本轮）
-- **位置**：`cx_crawler/requirements.txt`
+- **位置**：`perception/cx_crawler/requirements.txt`
 - **现象**：`playwright>=1.40,<2; extra == "render"`。PEP 508 的 `extra` environment marker **在普通 `requirements.txt` 中不被 pip 支持**——pip 安装时没有「当前 extra」上下文，`extra == "render"` 求值为 `False`，该依赖被**静默排除**。执行 `pip install -r requirements.txt` 后 playwright 实际不会被安装，开启 `RENDER_JOBS=True` 时运行即报 `ModuleNotFoundError`。
 - **影响**：高。开启渲染模式（作业/测验提取的关键路径）的用户必踩，且无任何报错提示「没装」。
 - **修复**：去掉 `extra` marker，直接声明 `playwright>=1.40,<2`，并在注释中说明「如需完全可选，可注释本行、需要时再单独 `pip install "playwright>=1.40,<2"`」。
@@ -39,12 +39,12 @@
 ### 中优先级（Medium）
 
 #### D3 · `dump.py` 未预创建 `OUTPUT_DIR`（首跑即崩）　⚪ 已具备 / 不适用
-- **位置**：`cx_crawler/dump.py` `main()`
+- **位置**：`perception/cx_crawler/dump.py` `main()`
 - **复核结论**：当前代码第 115 行已有 `os.makedirs(OUTPUT_DIR, exist_ok=True)`，且 `ApiClient.__init__` 也会 `makedirs`。**首跑不会因目录缺失而崩**。该条在当前代码不可复现，标记为 N/A（推测源于旧版本 review）。
 
 #### O1 · `courses.py` 的 `clazzid` 缺类型归一化　✅ 已修复
 - **修复**：`courses.py` 新增 `_to_int()`，在 R2 空值守卫后对 `clazzid`/`courseid` 一并归一化为 int，失败（非数字）时 `continue` 并 `DEBUG` 打印；落盘类型与 dump.py 白名单过滤处保持一致。
-- **位置**：`cx_crawler/courses.py` `fetch_courses()`
+- **位置**：`perception/cx_crawler/courses.py` `fetch_courses()`
 - **现象**：R2 已加 `if clazzid is None or courseid is None: continue` 的空值守卫，且 `courseid` 在白名单过滤处经 `_to_int()` 归一化；但 `clazzid` **未做 `_to_int`/类型校验**。若接口把 `clazzid` 返回为非 int/非 str（如 list、dict 或带单位的字符串），拼进章节 URL（`chapters.py` 的 `NODE_URL`）会出现 `TypeError` 或失真请求，单课静默空跑。
 - **建议**：对 `clazzid` 同样做 `_to_int()` 归一化，并在归一化失败（非数字）时 `continue` 并 `DEBUG` 打印。
 
@@ -86,7 +86,7 @@
 ## 3. 其他观察（非阻断）
 
 - **功能缺口（默认模式）**：后端 `RENDER_JOBS=False` 时，「作业/测验提取 + 心跳分析」实际不可用（见第一轮报告 L1/L2 门控与 `heartbeat.py` 说明）。这是设计取舍，但需在 README 中明确「要拿到 jobid/objectid 必须开启渲染+装 playwright」。
-- **工程规范**：注释与架构优秀；主要短板为「无包结构（`cx_crawler` 为多模块平铺）、`requirements` 写法错误（P2）、JS 重复代码/死代码（第一轮已清 GUARD_REMOVAL、J10 等）」。
+- **工程规范**：注释与架构优秀；主要短板为「无包结构（`perception/cx_crawler` 为多模块平铺）、`requirements` 写法错误（P2）、JS 重复代码/死代码（第一轮已清 GUARD_REMOVAL、J10 等）」。
 - **配置示例齐备**：`bridge_config.example.json`、`cookies.example.json` 已提供，桥配置加载逻辑（`config.py` `_load_bridge_config`，env > json > 默认）正确（第一轮 G3 已确认）。
 
 ---

@@ -3,7 +3,7 @@
 > 脚本：`chaoxing-force-play.user.js`（Tampermonkey / Violentmonkey）
 > 版本区间：v3.7（功能基线）→ v3.15（抗伪暂停 / MSE 断流）
 > 评审来源：第三方 AI 代码审查（14 项逻辑/健壮性审查 + 两轮逐版复核）
-> 另含：跨组件桥接（`cx_crawler/dump.py` + `cx_crawler/bridge.py` + `chaoxing-auto-next.user.js v2.1`）
+> 另含：跨组件桥接（`perception/cx_crawler/dump.py` + `perception/cx_crawler/bridge.py` + `chaoxing-auto-next.user.js v2.1`）
 
 ---
 
@@ -192,7 +192,7 @@
 ## v3.13 — 本地桥接（方案 A，跨组件）
 
 > 背景：浏览器里的 force-play / auto-next 无法读本地磁盘，原续播/跳章依赖页面 DOM 启发式（平台 `finished`/`locked` 类经常缺失/延迟）。
-> 方案 A 在爬虫侧新增本地只读 HTTP 桥（`cx_crawler/bridge.py`），把权威清单（`output/playlist_{cid}.json`）暴露给脚本，使其「跳过已完成章节 + 精确跳到下一个未完成章节」。
+> 方案 A 在爬虫侧新增本地只读 HTTP 桥（`perception/cx_crawler/bridge.py`），把权威清单（`output/playlist_{cid}.json`）暴露给脚本，使其「跳过已完成章节 + 精确跳到下一个未完成章节」。
 
 ### 爬虫侧
 
@@ -200,7 +200,7 @@
 |---|---|
 | `config.py` 新增 `BRIDGE_HOST` / `BRIDGE_PORT` | `127.0.0.1:7531`，仅本机监听 |
 | `dump.py` 新增 `_emit_playlists()` | 导出阶段生成 `playlist_{cid}.json`（逐章 `knowledgeId/completed/unfinishedCount/hasTaskPoints/objectids/jobids`）+ 汇总 `playlist_index.json`，原子写 |
-| 新增 `cx_crawler/bridge.py` | 常驻只读 HTTP 服务；白名单路由 `/ping`、`/playlist/index`、`/playlist/{cid}`；带 `Access-Control-Allow-Origin: *` 与路径穿越防护（正则 + 拼接路径二次校验）；读取编码 `utf-8-sig` 容错 BOM |
+| 新增 `perception/cx_crawler/bridge.py` | 常驻只读 HTTP 服务；白名单路由 `/ping`、`/playlist/index`、`/playlist/{cid}`；带 `Access-Control-Allow-Origin: *` 与路径穿越防护（正则 + 拼接路径二次校验）；读取编码 `utf-8-sig` 容错 BOM |
 
 ### `chaoxing-force-play.user.js` v3.13
 
@@ -231,8 +231,8 @@
 
 | 改动 | 说明 |
 |---|---|
-| `config.py` 新增 `_load_active_course_ids()` + `ACTIVE_COURSE_IDS` | 原写死在 `dump.py` 的 7 个个人课程 cid 集合删除；改为从 `cx_crawler/courses.json` 或环境变量 `CX_COURSE_IDS` 读取，沿用 `bridge_config.json` 的「环境变量 > JSON > 默认」风格 |
-| 新增 `cx_crawler/courses.example.json` | 复制为 `courses.json` 后填本人 cid 即可；`_comment` 字段说明用法（与 `bridge_config.example.json` 一致） |
+| `config.py` 新增 `_load_active_course_ids()` + `ACTIVE_COURSE_IDS` | 原写死在 `dump.py` 的 7 个个人课程 cid 集合删除；改为从 `perception/cx_crawler/courses.json` 或环境变量 `CX_COURSE_IDS` 读取，沿用 `bridge_config.json` 的「环境变量 > JSON > 默认」风格 |
+| 新增 `perception/cx_crawler/courses.example.json` | 复制为 `courses.json` 后填本人 cid 即可；`_comment` 字段说明用法（与 `bridge_config.example.json` 一致） |
 | `dump.py` 白名单为空时的日志 | `courses.json` 与 `CX_COURSE_IDS` 均缺失 → 空集 = 处理全部课程，并打 `WARNING` 明确提示，避免误以为被过滤 |
 | 加载优先级 | `CX_COURSE_IDS="111,222"` > `courses.json`（`course_ids`/`courseIds`/`ids`）> 空（处理全部） |
 
@@ -242,7 +242,7 @@
 |---|---|
 | `_try_seed` 落盘条件上移 | 原每次种子都写 `02_chapter_list_{cid}.html`，但 `best_html` 仅在章节数更多时更新 → 磁盘文件可能与最终解析用的 `best_html` 不一致、误导排错。改为**仅当本响应成为最优（id 更多）时才原子写该文件**，保证磁盘 canonical 文件永远等于 `best_html` |
 
-> 说明：「缺 `requirements.txt`」经核对 `cx_crawler/requirements.txt` 已存在，属误报；`chapters.py` 嵌套节点 split 重叠、`config.py` `with_retry` 重试范围属低风险重构，留待后续。
+> 说明：「缺 `requirements.txt`」经核对 `perception/cx_crawler/requirements.txt` 已存在，属误报；`chapters.py` 嵌套节点 split 重叠、`config.py` `with_retry` 重试范围属低风险重构，留待后续。
 
 ---
 
@@ -332,7 +332,7 @@
 - `ID_PATTERNS` 8 条原始字符串改为 `re.compile(..., re.I)` 预编译；`extract_knowledge_ids` 直接 `p.findall(html_fragment)`，消除热路径上对每条正则的重复编译（阶段5 多路提取每页都会跑）。
 
 ### #14 硬编码桥端口同步注释（chaoxing-force-play.user.js）
-- 默认桥地址 `http://127.0.0.1:7531` 旁加注释，标明须与 `cx_crawler/config.py` 的 `BRIDGE_PORT` 保持一致；改端口时两边同步。脚本无硬编码后端 API 端点（仅本机桥默认地址，且可用 `?cxbridge=` / `localStorage.cx_bridge_base` 覆盖）。
+- 默认桥地址 `http://127.0.0.1:7531` 旁加注释，标明须与 `perception/cx_crawler/config.py` 的 `BRIDGE_PORT` 保持一致；改端口时两边同步。脚本无硬编码后端 API 端点（仅本机桥默认地址，且可用 `?cxbridge=` / `localStorage.cx_bridge_base` 覆盖）。
 
 ### #19 scanVideos 递归深度安全阀（chaoxing-force-play.user.js）
 - `scanVideos` 新增 `depth` 参数与 `MAX_SCAN_DEPTH = 16`；所有递归下钻（Shadow 宿主 / 视频容器 Shadow / 嵌套 Shadow / 同源 iframe / iframe load 补扫）传 `depth + 1`，超过上限直接返回。正常章节页嵌套远小于上限，行为不变；仅在病态嵌套 DOM 下作为主线程保护。
@@ -360,12 +360,12 @@
   - `courses`: `fetch_courses(client, prefetched=None) -> tuple[list[dict], dict | None]`、`_parse(r) -> list[dict]`。
   - `render`: `_pw_cookies(...)`、`render_course_taskpoints(...)`、`infer_type(res) -> str | None`。
   - 注解均为延迟求值（PEP 563），运行时零影响；`py_compile` 四个模块全部通过。
-- 新增 `cx_crawler/tests/test_crawler_units.py`（`unittest`，**无网络 / 无 Playwright 依赖**），覆盖：
+- 新增 `perception/cx_crawler/tests/test_crawler_units.py`（`unittest`，**无网络 / 无 Playwright 依赖**），覆盖：
   - `_to_int` 各种输入（int/数字串/非法 → None）；
   - `atomic_write_json` 原子写中文 + 回读一致；
   - `extract_knowledge_ids` / `extract_seed_chapter_id` 多路正则；
   - `parse_chapter_tasks` 空片段不崩 + 单任务节点结构正确（含 M2 后 `completed` 判定）。
-  - 运行：`python -m unittest discover -s cx_crawler/tests -p "test_*.py"`。
+  - 运行：`python -m unittest discover -s perception/cx_crawler/tests -p "test_*.py"`。
   - 注：本站测试环境 Python 未装 `requests`（爬虫运行时依赖），故测试在本机未实跑；在用户实际装有依赖的环境中可直接运行。测试导入链为 `config`/`chapters`（仅依赖 `requests`），不涉及 `render`/Playwright。
 
 ### 审查后保留（未改动，附理由）

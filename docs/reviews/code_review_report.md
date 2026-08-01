@@ -1,6 +1,6 @@
 # 工作空间代码审查报告
 
-> 审查范围：`cx_crawler/`（Python 只读爬虫 + 本地桥服务）与 9 个浏览器用户脚本（`*.user.js`）。
+> 审查范围：`perception/cx_crawler/`（Python 只读爬虫 + 本地桥服务）与 9 个浏览器用户脚本（`*.user.js`）。
 > 项目本质：一套「超星/学习通」**只读**自动化工具——Python 侧抓取课程任务点快照并暴露本地 HTTP 接口，浏览器侧脚本实现强制续播 / 自动下一章 / 防暂停 / 进度面板等。
 > 说明：行号基于本次审阅的代码版本，部分以「函数名 / 片段」定位以保证准确。
 
@@ -23,7 +23,7 @@
 
 ---
 
-## 二、Python 端问题清单（`cx_crawler/`）
+## 二、Python 端问题清单（`perception/cx_crawler/`）
 
 ### 🔴 严重 / 运行时风险
 
@@ -127,7 +127,7 @@
 - 后果：若用户手动删过 `.runlock`，退出时 `os.remove` 抛 `FileNotFoundError`，在 `atexit` 中打印无关回溯。建议 `release` 内 `try/except FileNotFoundError: pass`。
 
 **G5. 依赖未锁定版本**
-- 位置：`cx_crawler/requirements.txt`（`requests>=2.25.0`、`playwright>=1.40.0`）。
+- 位置：`perception/cx_crawler/requirements.txt`（`requests>=2.25.0`、`playwright>=1.40.0`）。
 - 后果：`>=` 范围在跨环境/时间推移后可能拉到破坏性大版本（尤其 playwright API 变动频繁），复现性弱。建议锁定主版本或给出已知可用版本（如 `playwright==1.4x`）。
 
 ---
