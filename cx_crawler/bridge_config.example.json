@@ -1,0 +1,5 @@
+{
+  "_comment": "桥服务监听配置（方案 A）。复制为同目录 bridge_config.json 后修改即可生效，优先级低于命令行 --host/--port/--config，高于环境变量 CX_BRIDGE_HOST/PORT。浏览器侧 force-play / auto-next 需用 ?cxbridge=端口 或 localStorage.cx_bridge_base 对齐此端口。",
+  "host": "127.0.0.1",
+  "port": 7531
+}

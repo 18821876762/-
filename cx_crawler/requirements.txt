@@ -1,0 +1,13 @@
+# 依赖锁定（审查 G5）：以兼容区间锁定主/次版本，避免跨环境/时间推移后
+# 拉到破坏性大版本（尤其 playwright API 变动频繁）。
+requests>=2.28,<3
+
+# 可选依赖：仅当 config.RENDER_JOBS=True（无头渲染提取 jobid/objectid）时才需要。
+# 默认 RENDER_JOBS=False，无需安装即可运行。安装后还需执行 `playwright install msedge`。
+# 安装命令：pip install "playwright>=1.40,<2" && playwright install msedge
+# 已知可用：playwright==1.47.0（1.4x 稳定线）；<2 上限避免 2.0 破坏性升级。
+# 审查 P2：原写法 `playwright>=1.40,<2; extra == "render"` 的 `extra` environment marker
+# 在普通 requirements.txt 中不被 pip 支持——pip 无「当前 extra」上下文，marker 求值为 False，
+# 导致该依赖被静默排除、实际永远装不上。此处去掉 marker 直接声明；若想完全可选，
+# 可注释掉本行，需要时再单独 `pip install "playwright>=1.40,<2"`。
+playwright>=1.40,<2

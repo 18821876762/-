@@ -1,0 +1,31 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+.vs/
+.DS_Store
+*.log
+
+# CodeBuddy project data
+.codebuddy/
+
+# Secrets / credentials — 切勿提交（含真实学习通会话，误提交即永久泄露）
+cookies.json
+cx_crawler/cookies.json
+
+# Crawler output（含个人课程/进度数据，属轻度 PII）
+cx_crawler/output/
