@@ -1,9 +1,0 @@
-# 用户凭据（绝不入库）
-cookies.json
-
-# 爬虫生成产物
-output/
-
-# Python 缓存
-__pycache__/
-*.pyc
