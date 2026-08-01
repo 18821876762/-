@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         学习通·视频结束系统通知 (副脚本)
+// @name         学习通·视频结束系统通知（副脚本）
 // @namespace    http://cx.local/
 // @version      1.0
 // @author       anon

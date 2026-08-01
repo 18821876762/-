@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         超星学习通 原型篡改报警器（副脚本）
-// @namespace    cx.tamper.guard
+// @name         学习通·原型篡改报警（副脚本）
+// @namespace    http://cx.local/
 // @version      1.0
 // @description  调试/运维：周期性比对 HTMLMediaElement.prototype.pause 与 playbackRate 的 toString 是否仍含 __cxForcePaused 标记，若被平台还原（Object.freeze/重新赋值）则弹窗+红条报警。仅报警，不修改主脚本状态。
 // @author       sub-script
@@ -87,7 +87,7 @@
   try { window.__cxTamperTimer = setInterval(check, 2000); } catch (e) {}
   try { setTimeout(check, 1500); } catch (e) {}   // 主脚本通常已就绪，尽早建立基线
 
-  // ---------- 接入主脚本面板（主从架构）：开关 + 自检（与 auto-next/deceive-api/progress-panel/keyboard-shortcuts 一致） ----------
+  // ---------- 接入主脚本面板（主从架构）：开关 + 自检（与 auto-next/progress-panel/keyboard-shortcuts 一致） ----------
   try {
     (window.__cxAddonQueue = window.__cxAddonQueue || []).push({
       id: 'tamper-guard', type: 'toggle', label: '原型篡改报警',

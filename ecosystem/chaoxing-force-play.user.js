@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         学习通·强制续播 (iframe穿透 + 防暂停 + 防伪暂停 + 防重播)
+// @name         学习通·强制续播（主脚本）
 // @namespace    http://cx.local/
 // @version      4.7
 // @author       anon
@@ -1628,7 +1628,7 @@
     document.addEventListener('keydown', keydownHandler);
   } catch (e) { swallow(e); }
 
-  // 即时接管：任何 video 一开始 play 即立刻 override，无需等 2s 轮询（吸收 browser-media-collector 的 play 捕获思路）。
+  // 即时接管：任何 video 一开始 play 即立刻 override，无需等 2s 轮询（吸收 chaoxing-media-collector 的 play 捕获思路）。
   // 缩短动态插入播放器的接管空窗，使手动暂停开关对"新插入、尚未轮询到"的视频也可靠生效；overrideVideo 自身幂等且
   // 在 __cxUserPaused 时交还原生 pause 提前返回，故对暂停态/已接管视频无副作用。
   // 即时接管 play 事件（修复复审：同源 iframe 内视频的 play 事件不冒泡到顶层 document，需在 iframe 文档内也装一份）
