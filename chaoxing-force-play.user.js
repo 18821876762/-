@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         学习通·强制续播 (iframe穿透 + 防暂停 + 防伪暂停 + 防重播)
 // @namespace    http://cx.local/
-// @version      4.5
+// @version      4.6
 // @author       anon
 // @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 window.attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 window.ananas.pause、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 window.attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。
 // @match        *://*.chaoxing.com/*
@@ -615,7 +615,7 @@
     return false;
   }
   // ===== MODULE: 接管引擎(overrideVideo) =====
-  function overrideVideo(v) {
+  function overrideVideo(v, fg) {
     if (!v) return;
     // 桥避让：爬虫清单标记当前章已完成 → 不覆盖 pause、不强制续播（重进已完成章不重看）
     if (BRIDGE.skipResume) return;
@@ -633,6 +633,18 @@
     if (TARGET.enabled && !videoBelongsToTask(v)) {
       dbg('跳过非任务点视频（广告/插播）');
       releaseVideo(v);   // F-B1：撤销全量阶段已施加的接管，交还平台（否则广告/插播被永久强制续播）
+      return;
+    }
+    // —— 前台门控（修复"多个视频同时播放"）——
+    // 当存在明确前台(可见)视频时，抑制其余视频的强制续播并交还平台、主动压下，
+    // 确保一页只播一个；被用户显式保留(__cxUserKeep)的视频不受影响。
+    // fg 为 undefined 时（play 即时接管 / MO 队列未传入）不施加门控，保留旧行为。
+    if (fg && v !== fg && !v.__cxUserKeep) {
+      if (v.__cxForcePaused) {
+        try { releaseVideo(v); } catch (e) { swallow(e); }
+        // 主动压下：releaseVideo 只还原 pause 不主动停，被释放的隐藏视频可能仍在播，必须压回才能真正停止
+        try { if (!v.paused) (v.__np || NATIVE_PAUSE).call(v); } catch (e2) { swallow(e2); }
+      }
       return;
     }
     // 注：matchedAny 统一在上方 L485（定向判定前、含被暂停视频）置位，本行冗余已删（审查#3 双写）。
@@ -728,6 +740,7 @@
         try { if (v.__np) v.__np(); } catch (e) { swallow(e); }                        // 真正停住（原生 pause）
         v.play = function () { return Promise.resolve(); };              // 覆盖 play 为 no-op，阻断平台主动重播
         try { v.__cxEndedLock = true; } catch (e) { swallow(e); }                     // 持久锁：后续重扫持续维持，不再恢复原生 play
+        try { v.__cxUserKeep = false; } catch (e) { swallow(e); }                     // 播完即清除用户保留标记，避免残留导致门控失效
         try { _markEnded(videoSrcOf(v)); } catch (e) { swallow(e); }                                                  // 登记播放地址，供重建去重
         try { var _iss = videoIframeSrcsOf(v); for (var _i = 0; _i < _iss.length; _i++) _markEnded(_iss[_i]); } catch (e) { swallow(e); }  // 同步登记祖先 iframe src，关掉 src 未就绪的时间窗（吸收评审#3）
         _endedPrune();                                                                                    // 超出上限时淘汰最旧指纹，防止无限增长（吸收评审 JS1-1）
@@ -832,9 +845,10 @@
   }
   // 接管遍历：对每个视频施加强制续播（含宿主 iframe 签名下钻）
   function scanVideos(root) {
+    var fg = foregroundVideo();   // 每轮仅算一次前台，避免 O(n²)；非前台视频在 overrideVideo 内被门控释放
     walkVideos(root, null, 0, function (v, hs) {
       try { if (hs) v.__cxHostSigs = hs; } catch (e) { swallow(e); }
-      overrideVideo(v);
+      overrideVideo(v, fg);
     });
   }
   function allVideos() {
@@ -853,6 +867,7 @@
   function userPause(v) {                         // 用户暂停：真正停住并置锁；按 RESUME_AFTER_MIN 排自动恢复
     if (!v) return;
     v.__cxUserPaused = true;
+    v.__cxUserKeep = false;                       // 用户主动暂停即取消"保留播放"标记（门控可重新管理该视频）
     try { (v.__np ? v.__np : NATIVE_PAUSE || v.pause).call(v); } catch (e) { swallow(e); }   // 原生 pause 真正停住（绕过原型/实例 noop）
     // 播放闸门：脚本此前只拦"暂停"从不拦"播放"，平台播放器自调 video.play() 会把用户暂停的视频拉回播放
     //（实测诊断：状态 playing 而 UserPaused=true 的矛盾态）。在实例上遮蔽 play：用户暂停期间一律拒绝。
@@ -868,6 +883,7 @@
   function userResume(v) {                        // 用户恢复：清锁并续播
     if (!v) return;
     v.__cxUserPaused = false;
+    if (v !== foregroundVideo()) v.__cxUserKeep = true;   // 用户对非前台视频显式恢复：打保留标记，门控不再误回收（修复"其他视频无法开启"）
     v.__cxResumeAt = 0;
     v.__cxWatchMs = 0;                            // 重置自动停止计时，避免恢复后立刻再停
     // 修复复审（低-中危）：恢复续播应能重看已播完视频——清 ended 锁并解除全局黑名单，否则下一轮 overrideVideo 又把 play 设回 no-op 锁死
@@ -920,12 +936,36 @@
     for (var i = 0; i < vs.length; i++) { try { if (vs[i].__cxUserPaused) return vs[i]; } catch (e) { swallow(e); } }
     return vs[0] || null;
   }
+  // ===== MODULE: 前台判定（修复"多个视频同时播放"）=====
+  // 仅在"明确可见且面积最大"的视频上强制续播，其余视频交还平台并主动压下，避免一页多视频同时播放。
+  // 可见性以 getBoundingClientRect 面积判断：display:none / 零尺寸预加载预览会被排除；
+  // 滚动出视口但仍布局的视频面积仍为正，视为前台（不希望因滚动就释放当前任务）。
+  function foregroundVideo() {
+    var vs = allVideos(), best = null, bestScore = -1;
+    for (var i = 0; i < vs.length; i++) {
+      try {
+        var r = vs[i].getBoundingClientRect();
+        var area = (r.width || 0) * (r.height || 0);
+        if (area <= 4) continue;                       // 不可见（隐藏/零尺寸）
+        var score = area + (vs[i].paused ? 0 : 1e7);   // 同面积时优先"正在播放"者
+        if (score > bestScore) { bestScore = score; best = vs[i]; }
+      } catch (e) { swallow(e); }
+    }
+    return best;
+  }
+  function shortSrc(v) {
+    var s = (v && (v.currentSrc || v.src)) || '';
+    if (!s) return '(未知源)';
+    try { s = decodeURIComponent(s); } catch (e) {}
+    return s.length > 76 ? (s.slice(0, 48) + '…' + s.slice(-26)) : s;
+  }
   // ===== MODULE: 悬浮控制面板 =====
   // —— 悬浮控制面板（开关键 = PAUSE_HOTKEY，默认 p）——
   // 集中控制：暂停/恢复、自动停止计时(AUTO_STOP_MIN)、暂停后自动恢复(RESUME_AFTER_MIN)，并实时显示状态。
   // 仅懒创建一次，随状态刷新；不污染页面输入框，Esc/× 关闭。
-  var SCRIPT_VERSION = '4.5';   // 与文件头 @version 保持一致（面板与诊断信息显示用）
+  var SCRIPT_VERSION = '4.6';   // 与文件头 @version 保持一致（面板与诊断信息显示用）
   var _cxPanel = null;
+  var _lastVideoList = [];       // 面板视频列表渲染时缓存的视频引用快照，供点击委托回调定位目标视频（索引稳定）
   // ===== MODULE: 副脚本注册中心 =====
   // —— 副脚本注册中心（v4.0 主脚本架构）——
   // 本脚本为「主脚本」，其余用户脚本作为「副脚本」把自己的开关/按钮挂进本面板，用法（加载顺序无关）：
@@ -1083,6 +1123,10 @@
         '<label style="display:block;margin-bottom:6px;font-size:12px;">暂停后自动恢复 (分钟): <b id="__cxResumeVal">0</b>' +
           '<input id="__cxResume" type="range" min="0" max="60" step="1" value="0" style="width:100%;"></label>' +
         '<label style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxLoop" type="checkbox" style="vertical-align:middle;margin-right:6px;">循环播放（播完从头重播）</label>' +
+        '<div style="border-top:1px solid #3a3f4b;margin-top:8px;padding-top:8px;">' +
+          '<div style="font-size:11px;color:#9aa0a8;margin-bottom:4px;">视频开关（逐个续播/暂停 · ★=前台）</div>' +
+          '<div id="__cxVideoList" style="max-height:190px;overflow-y:auto;"></div>' +   // 超过 5 个视频时滚动兜住（>5 的折叠/分页方案另做打算）
+        '</div>' +
       '</div>' +
       // 区块：副面板（内嵌副脚本 + 副面板）
       '<div id="__cxTab_sub" class="cx-tab">' +
@@ -1139,6 +1183,20 @@
       var v = currentVideo(); if (!v) { toast('无目标视频'); return; }
       if (v.__cxUserPaused) userResume(v); else userPause(v);
       refreshPanelState();
+    });
+    // 视频列表：事件委托，逐个暂停/恢复（修复"多视频下只能控制单个视频"）
+    var vlist = el.querySelector('#__cxVideoList');
+    if (vlist) vlist.addEventListener('click', function (ev) {
+      try {
+        var btn = ev.target && ev.target.closest ? ev.target.closest('[data-vi]') : null;
+        if (!btn) return;
+        if (btn.getAttribute('data-dis')) return;          // 已结束视频的开关禁用，不可点
+        var idx = +btn.getAttribute('data-vi');
+        var vv = (_lastVideoList && _lastVideoList[idx]) || allVideos()[idx];
+        if (!vv) return;
+        if (vv.__cxUserPaused) userResume(vv); else userPause(vv);
+        refreshPanelState();
+      } catch (e) { swallow(e); }
     });
     var auto = el.querySelector('#__cxAuto');
     auto.addEventListener('input', function () { CONFIG.AUTO_STOP_MIN = +auto.value; savePanelCfg(); refreshPanelState(); });
@@ -1236,14 +1294,24 @@
     L.push('桥: ' + (BRIDGE && BRIDGE.base ? ('已连 ' + BRIDGE.base) : '离线') + ' · skipResume=' + !!(BRIDGE && BRIDGE.skipResume) + ' · 章清单=' + !!(BRIDGE && BRIDGE.chapter));
     L.push('定向: enabled=' + (TARGET && TARGET.enabled) + ' matchedAny=' + (TARGET && TARGET.matchedAny) + ' 0命中连击=' + _targetMissStreak + '/' + TARGET_FALLBACK_ROUNDS);
     L.push('CONFIG: AUTO_STOP_MIN=' + CONFIG.AUTO_STOP_MIN + ' RESUME_AFTER_MIN=' + CONFIG.RESUME_AFTER_MIN + ' RESCAN_INTERVAL=' + CONFIG.RESCAN_INTERVAL + ' END_RELEASE_SEC=' + CONFIG.END_RELEASE_SEC + ' LOOP_PLAY=' + CONFIG.LOOP_PLAY + ' PAUSE_HOTKEY=' + CONFIG.PAUSE_HOTKEY + ' DEBUG=' + DEBUG);
-    var v = activeVideo() || currentVideo();
-    if (v) {
-      L.push('--- 当前视频 ---');
-      L.push('src: ' + (v.currentSrc || v.src || ''));
-      L.push('状态: ' + (v.ended ? 'ended' : (v.paused ? 'paused' : 'playing')) + ' · rate=' + v.playbackRate + ' · loop=' + v.loop);
-      L.push('标志: ForcePaused=' + !!v.__cxForcePaused + ' UserPaused=' + !!v.__cxUserPaused + ' AN_hold=' + !!v.__cxAN_hold + ' Released=' + !!v.__cxReleased + ' EndedLock=' + !!v.__cxEndedLock + ' 原生pause=' + !!v.__np + ' EndRel=' + nearEnd(v));
-      L.push('进度: ' + fmtTime(v.currentTime) + (isFinite(v.duration) && v.duration > 0 ? ' / ' + fmtTime(v.duration) : '') + ' · 已看=' + ((v.__cxWatchMs || 0) / 60000).toFixed(1) + 'min · isRebuildFinished=' + isRebuildFinished(v));
-    } else { L.push('当前无视频'); }
+    var fg = foregroundVideo();
+    L.push('前台(可见·面积最大): ' + (fg ? ('#' + (vs.indexOf(fg) + 1)) : '无(无可见视频→本帧不强制续播)'));
+    L.push('=== 视频列表(' + vs.length + ') ===');
+    for (var i = 0; i < vs.length; i++) {
+      try {
+        var v = vs[i];
+        var st = v.ended ? 'ended' : (v.paused ? 'paused' : 'playing');
+        L.push('#' + (i + 1) + (v === fg ? '★前台' : '') + ' ' + st +
+          ' rate=' + v.playbackRate + ' loop=' + v.loop +
+          ' ForcePaused=' + !!v.__cxForcePaused + ' UserPaused=' + !!v.__cxUserPaused +
+          ' Released=' + !!v.__cxReleased + ' EndedLock=' + !!v.__cxEndedLock +
+          ' 原生pause=' + !!v.__np + ' nearEnd=' + nearEnd(v) + ' keep=' + !!v.__cxUserKeep +
+          ' 进度=' + fmtTime(v.currentTime) + (isFinite(v.duration) && v.duration > 0 ? '/' + fmtTime(v.duration) : '') +
+          ' 已看=' + ((v.__cxWatchMs || 0) / 60000).toFixed(1) + 'min' +
+          ' isRebuildFinished=' + isRebuildFinished(v) +
+          ' src=' + shortSrc(v));
+      } catch (e) { swallow(e); }
+    }
     return L.join('\n');
   }
   function copyDiagnostics() {
@@ -1304,6 +1372,35 @@
           '轮询 ' + CONFIG.RESCAN_INTERVAL + 'ms · 热键 P';
       }
     } catch (e) { swallow(e); }
+    renderVideoList();                  // 实时刷新逐视频控制列表
+  }
+  function renderVideoList() {          // 逐视频暂停/恢复：修复"多视频下只能控制单个视频"的缺陷
+    if (!_cxPanel) return;
+    var wrap = _cxPanel.querySelector('#__cxVideoList');
+    if (!wrap) return;
+    var vs = allVideos(), fg = foregroundVideo();
+    _lastVideoList = vs;
+    var html = '';
+    if (!vs.length) html = '<div style="font-size:11px;color:#6b7280;">未发现视频</div>';
+    for (var i = 0; i < vs.length; i++) {
+      try {
+        var v = vs[i];
+        var isEnded = v.ended;
+        var on = !v.__cxUserPaused && !v.paused && !isEnded;   // 开关 ON = 当前处于续播/播放态（蓝）；OFF = 暂停（灰）
+        var star = (v === fg) ? '★' : '';
+        var tag = isEnded ? '[结束]' : (v.__cxUserPaused ? '[暂停]' : (v.__cxForcePaused ? '[续播]' : ''));
+        var trackBg = isEnded ? '#2a2e37' : (on ? '#3b82f6' : '#4b5563');
+        var knobLeft = isEnded ? '2px' : (on ? '16px' : '2px');
+        var cur = isEnded ? 'default' : 'pointer';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin:5px 0;font-size:11px;">' +
+          '<span data-vi="' + i + '"' + (isEnded ? ' data-dis="1"' : '') + ' title="点击切换续播/暂停" style="display:inline-block;width:32px;height:18px;border-radius:9px;position:relative;flex:0 0 auto;cursor:' + cur + ';background:' + trackBg + ';">' +
+            '<span style="position:absolute;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;left:' + knobLeft + ';"></span>' +
+          '</span>' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (star ? 'color:#5ea0ff;' : '') + (isEnded ? 'color:#6b7280;' : '') + '">#' + (i + 1) + star + ' ' + tag + ' ' + shortSrc(v) + '</span>' +
+          '</div>';
+      } catch (e) { swallow(e); }
+    }
+    wrap.innerHTML = html;
   }
   function positionPanel() {                      // 进度面板已内嵌为副面板（progress-panel v3.2 起），不再有独立浮动窗需要避让；保留空壳以维持 showPanel/ensurePanel 调用一致
   }
@@ -1370,7 +1467,7 @@
             var _pv = e.target;
             // 用户暂停期间任何 play 事件（平台绕过闸门直接触发播放）→ 立即压回暂停，保证暂停锁真正锁得住
             if (_pv.__cxUserPaused) { try { (_pv.__np || NATIVE_PAUSE).call(_pv); } catch (e3) { swallow(e3); } return; }
-            overrideVideo(_pv);
+            overrideVideo(_pv, foregroundVideo());   // 传前台，使非前台视频即时接管时被门控释放（修复多视频同播）
           }
         } catch (e2) { swallow(e2); }
       }, true);   // 捕获阶段，最先拿到 play 事件
@@ -1387,7 +1484,8 @@
   function _moFlush() {
     _moScheduled = false;
     var q = _moQueue; _moQueue = [];
-    for (var i = 0; i < q.length; i++) { try { overrideVideo(q[i]); } catch (e) { swallow(e); } }
+    var _fg = foregroundVideo();
+    for (var i = 0; i < q.length; i++) { try { overrideVideo(q[i], _fg); } catch (e) { swallow(e); } }
   }
   // 内存埋点（切屏崩溃观测）：Chrome 专用 performance.memory。仅 DEBUG 时采样，关注 heap 与 _moQueue 长度（泄漏前兆）。
   // 注意：非 Chrome 无 performance.memory，s 显示 n/a；切屏前后各采一次可直接对比后台增长。
