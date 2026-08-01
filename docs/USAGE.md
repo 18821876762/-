@@ -78,11 +78,11 @@ python bridge.py                 # 默认 127.0.0.1:7531，前台常驻，Ctrl+C
 |------|------|----------|
 | `chaoxing-auto-next.user.js`（v3.0） | 播完自动进答题入口 / 跳下一未完成章节（桥优先，DOM 兜底）；插播题遮罩自动暂停 | 「自动下一课」，即时生效（`localStorage.cx_an_on`） |
 | `chaoxing-progress-panel.user.js`（v3.6） | 只读进度面板（课程/章节任务点完成状态） | 内嵌为「副面板」；fetch 失败分级提示；CSS 图表；**本地估算**（课程卡片展示「本机已看 Xmin · 效率≈Y%/min」，数据来自 force-play 按课程聚合的本地已看时长，非平台同步） |
-| `chaoxing-deceive-api.user.js`（v2.0） | JS 级可见性/焦点欺骗（边缘手段，强指纹风险） | 「可见性欺骗」，切换后**刷新页面**生效（`localStorage.cx_spoof_api`） |
+
 
 **其他用途（独立脚本，与学习通无关）**
 
-- `browser-media-collector.user.js`：常驻后台的浏览器媒体采集器（捕获视频/音频源地址、时长等元信息，本地存储、不联网），`@match` 默认仅学习通域与本地文件（隐私收敛，修复#15；采集其它网站媒体需手动在脚本头部追加对应 `@match` 行）。它与本套超星脚本**无依赖、不接入主控面板**，是独立用途工具，按需单独启用，不随本套架构更新。
+- `chaoxing-media-collector.user.js`：常驻后台的媒体采集器（捕获视频/音频源地址、时长等元信息，本地存储、不联网），`@match` 默认仅学习通域与本地文件（隐私收敛，修复#15；采集其它网站媒体需手动在脚本头部追加对应 `@match` 行）。它与本套超星脚本**无依赖、不接入主控面板**，是独立用途工具，按需单独启用，不随本套架构更新。
 
 > 副脚本注册机制：副脚本向 `window.__cxAddonQueue` 推入 `{id,type,label,get,set,onClick,render}` 并调用 `window.__cxRegisterAddon()`，主脚本面板建成后渲染，**加载顺序无关**。`type` 支持 `toggle`(开关)/`button`(按钮)/`subpanel`(内嵌副面板：`render(container)` 把内容渲染进主控面板「副面板」可折叠区，标题栏点击展开/折叠)。调试常量均位于脚本顶部，改完保存即生效。
 

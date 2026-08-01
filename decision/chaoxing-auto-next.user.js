@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         学习通·视频播完自动答题/下一课
+// @name         学习通·视频播完自动答题/下一课（副脚本）
 // @namespace    http://cx.local/
 // @version      3.0
 // @author       anon

@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         学习通进度只读面板 (Chaoxing Progress Panel)
+// @name         学习通·进度只读面板（副脚本）
 // @namespace    http://cx.local/
 // @version      3.6
 // @author       anon

@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         超星学习通 快捷键增强（副脚本）
-// @namespace    cx.keyboard.shortcuts
+// @name         学习通·快捷键增强（副脚本）
+// @namespace    http://cx.local/
 // @version      1.0
 // @description  快捷键：Space 暂停/播放、M 静音。复用主脚本 __cxUserPaused 暂停契约与 v.muted，不破坏续播稳定性；倍速快捷键因会被主脚本周期性覆盖故未纳入。
 // @author       sub-script
@@ -57,21 +57,38 @@
     try { v.play(); } catch (e) {}                      // 主脚本续播循环随后接管续播
   }
 
-  // ---------- 输入焦点避让：聚焦在可交互控件/编辑区时不抢键 ----------
-  function isTyping(el) {
+  // ---------- 输入焦点避让：仅"需要输入空格字符"的场景（文本框/文本域/下拉/可编辑区）放行 Space，让用户输入空格；
+  // 其余（按钮/链接/复选框等）一律由快捷键接管——避免焦点落在面板按钮上时 Space 变成"激活按钮"而非暂停视频（修复"空格不太灵"）----------
+  function isTextEntry(el) {
     if (!el) return false;
-    var t = (el.tagName || '').toLowerCase();
-    if (t === 'input' || t === 'textarea' || t === 'select' || t === 'button' || t === 'a') return true;
     if (el.isContentEditable) return true;
-    try { if (el.getAttribute && el.getAttribute('role') === 'button') return true; } catch (e) {}
-    return false;
+    var t = (el.tagName || '').toLowerCase();
+    if (t === 'textarea' || t === 'select') return true;
+    if (t === 'input') {
+      var ty = ((el.getAttribute && el.getAttribute('type')) || 'text').toLowerCase();
+      return ['text', 'password', 'search', 'email', 'number', 'url', 'tel'].indexOf(ty) >= 0;
+    }
+    return false; // button / a / input[button|checkbox|radio|...] / 其它：Space/M 接管为视频控制
+  }
+
+  // 页面内提示（主脚本 toast 未挂全局，自实现；与其它副脚本风格一致）
+  function hintToast(msg) {
+    try {
+      var el = document.createElement('div');
+      el.textContent = '[快捷键] ' + msg;
+      el.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);' +
+        'z-index:2147483647;background:#1565c0;color:#fff;padding:8px 14px;border-radius:6px;' +
+        'font:13px/1.4 sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3);max-width:90vw;';
+      (document.body || document.documentElement).appendChild(el);
+      setTimeout(function () { try { el.remove(); } catch (_) {} }, 6000);
+    } catch (e) {}
   }
 
   // ---------- 按键处理 ----------
   function onKey(e) {
     if (!getOpt()) return;
     if (e.altKey || e.ctrlKey || e.metaKey) return;     // 不抢组合键（保留平台/主脚本快捷键）
-    if (isTyping(e.target)) return;                     // 输入框、按钮、链接等不抢键
+    if (isTextEntry(e.target)) return;                  // 仅文本框/文本域/下拉/可编辑区放行 Space（让用户输入空格）
     var v = activeVideo();
     if (!v) return;
     var k = (e.key || '').toLowerCase();
@@ -89,13 +106,16 @@
   window.__cxKbStarted = true;
   try { document.addEventListener('keydown', onKey, true); } catch (e) {}
 
-  // ---------- 接入主脚本面板（主从架构）：开关 + 自检（与 auto-next/deceive-api/progress-panel 一致） ----------
+  // ---------- 接入主脚本面板（主从架构）：开关 + 自检（与 auto-next/progress-panel 一致） ----------
   try {
     (window.__cxAddonQueue = window.__cxAddonQueue || []).push({
       id: 'keyboard-shortcuts', type: 'toggle', label: '快捷键增强 (Space/M)',
-      note: 'Space 暂停/播放 · M 静音（复用主脚本 __cxUserPaused 契约）',
+      note: 'Space=暂停/播放，M=静音；聚焦在文本框内时不拦截（复用主脚本 __cxUserPaused 契约）',
       get: getOpt,
-      set: setOpt
+      set: function (v) {
+        setOpt(v);
+        if (v) hintToast('已开启：Space 暂停/播放 · M 静音（文本框内不拦截；激活按钮请用 Enter）');
+      }
     });
     if (typeof window.__cxRegisterAddon === 'function') {
       window.__cxRegisterAddon();

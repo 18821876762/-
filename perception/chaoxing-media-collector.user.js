@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         浏览器媒体采集器（本地化 · 常驻后台）
-// @namespace    http://local.collect/
+// @name         学习通·媒体采集器（通用工具）
+// @namespace    http://cx.local/
 // @version      1.2
 // @description  常驻后台，捕获你在浏览器中打开/播放的视频与音频，记录源地址、页面、时长等元信息；数据仅存本地（Tampermonkey 存储 + 可一键导出到下载文件夹），不发起任何网络请求、不外传。【v1.1 修复】UI 延迟初始化崩溃、GM 共享存储多 tab/frame 互覆、blob 导出改 <a download>、innerHTML 改 textContent 防 XSS、MAX_RECORDS 5000、周期+可见性落盘、换源重记、仅顶层建 UI。【v1.2 架构修复】顶层聚合架构：frame 经 window.top.postMessage 上报、顶层统一持久化与展示(根治 iframe 采集不实时入面板 + frame 内存/写入放大)；清空令牌 epoch(根治跨 tab/frame 清空失效)；@match 补齐裸域名/file:// 盲区；空 src 跳记；mount 时序修正；读改写注释如实说明极小竞态窗口。
 // @match        https://*.chaoxing.com/*
