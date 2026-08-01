@@ -3,7 +3,7 @@
 // @namespace    http://cx.local/
 // @version      1.0
 // @author       anon
-// @description  【副脚本·接入主控面板】视频播放到结束后，通过浏览器 Notification API 弹出系统级通知（即"浏览器外弹窗"，标签页后台也能收到）。监听原生 ended 事件，不干预主脚本续播状态机。默认关闭，需授权通知权限。开关挂入 chaoxing-force-play(4.0) 主控面板（按 P 呼出 → 副脚本区）。
+// @description  【副脚本·接入主控面板】视频播放到结束后提醒。已授权通知权限→弹系统级通知；未授权→标签页标题闪烁+图标红点（无需权限，Edge 后台标签页在任务栏也可见），等效"浏览器外弹窗"。监听原生 ended 事件，不干预主脚本续播状态机。默认关闭。开关挂入 chaoxing-force-play(4.0) 主控面板（按 P 呼出 → 副脚本区）。
 // @match        *://*.chaoxing.com/*
 // @match        *://*.edu.cn/*
 // @run-at       document-idle
@@ -40,24 +40,73 @@
     } catch (e) { swallow(e); }
   }
 
+  // ===== 无权限时的「浏览器外」提醒：标题闪烁 + 图标红点 + 页面内提示 =====
+  // 不需任何权限；只要 Edge 窗口开着（含后台标签页），任务栏里的标题/图标即可见，等效"浏览器外弹窗"。
+  var _origTitle = null, _flashTimer = null, _origIconHref = null;
+  function attention(title, body) {
+    try {
+      fallbackToast(title + (body ? ('：' + body) : ''));
+      // 1) 标题闪烁（后台标签页在任务栏也可见）
+      if (_origTitle === null) _origTitle = document.title;
+      if (_flashTimer) clearInterval(_flashTimer);
+      var on = false;
+      _flashTimer = setInterval(function () {
+        document.title = on ? _origTitle : ('🔔 ' + title);
+        on = !on;
+      }, 1000);
+      setTimeout(function () {
+        if (_flashTimer) { clearInterval(_flashTimer); _flashTimer = null; }
+        try { document.title = _origTitle; } catch (e) {}
+      }, 20000);
+      // 2) favicon 红点徽标
+      try {
+        if (_origIconHref === null) {
+          var ex = document.querySelector("link[rel~='icon']");
+          _origIconHref = ex ? (ex.href || '') : '';
+        }
+        var c = document.createElement('canvas');
+        c.width = c.height = 32;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#e53935';
+        ctx.beginPath(); ctx.arc(16, 16, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('!', 16, 18);
+        var link = document.querySelector("link[rel~='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          (document.head || document.documentElement).appendChild(link);
+        }
+        link.href = c.toDataURL('image/png');
+        setTimeout(function () {
+          try { if (link && _origIconHref) link.href = _origIconHref; } catch (e) {}
+        }, 20000);
+      } catch (e) { swallow(e); }
+    } catch (e) { swallow(e); }
+  }
+
   // ===== 系统通知 =====
   function showNotify(title, body) {
     try {
-      if (!('Notification' in window)) { fallbackToast(title + (body ? ('：' + body) : '')); return; }
+      if (!('Notification' in window)) { attention(title, body); return; }
       if (Notification.permission === 'granted') {
         new Notification(title, { body: body || '', tag: 'cx-ended', requireInteraction: false });
-      } else if (Notification.permission === 'default') {
-        // 非手势场景下可能弹不出授权框，降级提示
+        return;
+      }
+      if (Notification.permission === 'default') {
+        // 非手势场景下可能弹不出授权框，降级为标题/图标提醒
         Notification.requestPermission().then(function (p) {
           if (p === 'granted') new Notification(title, { body: body || '', tag: 'cx-ended' });
-          else fallbackToast(title + (body ? ('：' + body) : ''));
-        }).catch(function () { fallbackToast(title + (body ? ('：' + body) : '')); });
-      } else {
-        // denied：权限被拒，降级为页面内提示
-        fallbackToast(title + (body ? ('：' + body) : ''));
+          else attention(title, body);
+        }).catch(function () { attention(title, body); });
+        return;
       }
+      // denied：权限被拒，用标题闪烁 + 图标红点提醒（无需权限）
+      attention(title, body);
     } catch (e) {
-      fallbackToast(title + (body ? ('：' + body) : ''));
+      attention(title, body);
     }
   }
 
@@ -134,7 +183,7 @@
     id: 'video-ended-notify',
     type: 'toggle',
     label: '视频结束系统通知',
-    note: '结束后弹系统通知（需授权通知权限）',
+    note: '结束后提醒：已授权→系统通知；未授权→标签页标题闪烁+图标红点（无需权限，后台也可见）',
     get: function () {
       try { return localStorage.getItem('cx_ended_notify') === '1'; } catch (e) { return false; }
     },
@@ -145,7 +194,7 @@
       if (val && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(function () {});
       } else if (val && !('Notification' in window)) {
-        fallbackToast('当前浏览器不支持系统通知，已降级为页面内提示');
+        attention('已开启', '当前浏览器不支持系统通知，已用标签页标题/图标提醒');
       }
     }
   });
