@@ -2,7 +2,7 @@
 
 本仓库包含两部分：
 
-1. **爬虫（`cx_crawler/`，Python）**：读取优先、绝不提交/修改平台数据；产物落盘到 `cx_crawler/output/`。
+1. **爬虫（`perception/cx_crawler/`，Python）**：读取优先、绝不提交/修改平台数据；产物落盘到 `perception/cx_crawler/output/`。
 2. **浏览器用户脚本（`*.user.js`，Tampermonkey）**：在学习通网页内运行，负责强制续播、自动下一章等。
 
 两者通过**本地桥（方案 A）**衔接：爬虫把逐章清单写到本地文件，再由 `bridge.py` 以只读 HTTP（`127.0.0.1`）暴露，浏览器脚本用 `fetch` 拉取。
@@ -13,7 +13,7 @@
 
 ## 1. 环境准备
 
-- Python 3.8+，并 `pip install -r cx_crawler/requirements.txt`。
+- Python 3.8+，并 `pip install -r perception/cx_crawler/requirements.txt`。
 - 浏览器安装 [Tampermonkey](https://www.tampermonkey.net/)（或同类管理器）。
 - （可选）若需爬虫回填任务点 `objectid`/`jobid`（让白名单更精确），需 `pip install playwright && playwright install msedge`，并把 `config.py` 的 `RENDER_JOBS` 设为 `True`。
 
@@ -24,7 +24,7 @@
 ### 2.1 先生成清单
 
 ```bash
-cd cx_crawler
+cd perception/cx_crawler
 python dump.py
 ```
 
@@ -35,7 +35,7 @@ python dump.py
 ### 2.2 启动只读桥服务
 
 ```bash
-cd cx_crawler
+cd perception/cx_crawler
 python bridge.py                 # 默认 127.0.0.1:7531，前台常驻，Ctrl+C 退出
 ```
 
@@ -53,7 +53,7 @@ python bridge.py                 # 默认 127.0.0.1:7531，前台常驻，Ctrl+C
 
 1. 命令行（最高）：`python bridge.py --host 0.0.0.0 --port 7532` ；或 `--config bridge_config.json`
 2. 环境变量：`CX_BRIDGE_HOST` / `CX_BRIDGE_PORT`
-3. 同目录配置文件 `cx_crawler/bridge_config.json`：`{"host":"127.0.0.1","port":7531}`（模板见 `bridge_config.example.json`）
+3. 同目录配置文件 `perception/cx_crawler/bridge_config.json`：`{"host":"127.0.0.1","port":7531}`（模板见 `bridge_config.example.json`）
 4. 默认值：`127.0.0.1:7531`
 
 > **保持本机地址 `127.0.0.1`**：`127.0.0.1` 属 potentially-trustworthy origin，https 页面可直接 `fetch`，无混合内容拦截。对外暴露 `0.0.0.0` 仅在你明确需要跨设备访问时设置。
@@ -171,7 +171,7 @@ CX_DEBUG=1 python dump.py       # 开启详细结构化日志（含 trace_id）
 
 ```bash
 # 1) 爬虫：抓课程 + 生成清单（必要时开 RENDER_JOBS 回填 objectids）
-cd cx_crawler
+cd perception/cx_crawler
 CX_DEBUG=1 python dump.py
 
 # 2) 常驻桥（可用 --port 自定义）
@@ -183,4 +183,4 @@ python bridge.py --port 7531
 
 > 安全红线：限速优先于对抗（单域最小请求间隔见 `config.py` 的 `MIN_INTERVAL`），且爬虫只读不写，避免触发风控。
 
-> **凭证安全（修复#26）**：`session.save_cookies` 会把登录态**明文**写入 `cx_crawler/cookies.json`。请务必：① 不要将该文件提交到 git 或任何公开位置；② 在共享/公共电脑上使用后及时删除；③ 脚本已对 `cookies.json` 施加 `0o600` 权限（类 Unix 下仅属主可读写，Windows 尽力而为）作为额外防护，但这不能替代前两条习惯。
+> **凭证安全（修复#26）**：`session.save_cookies` 会把登录态**明文**写入 `perception/cx_crawler/cookies.json`。请务必：① 不要将该文件提交到 git 或任何公开位置；② 在共享/公共电脑上使用后及时删除；③ 脚本已对 `cookies.json` 施加 `0o600` 权限（类 Unix 下仅属主可读写，Windows 尽力而为）作为额外防护，但这不能替代前两条习惯。

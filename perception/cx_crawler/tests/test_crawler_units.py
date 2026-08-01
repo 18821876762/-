@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """单元测试：仅覆盖纯函数 / 解析逻辑，不触达网络、Playwright 或浏览器。
 
-运行方式（在 cx_crawler 父目录）：
-    python -m unittest discover -s cx_crawler/tests -p "test_*.py"
+运行方式（在 perception/cx_crawler 父目录）：
+    python -m unittest discover -s perception/cx_crawler/tests -p "test_*.py"
 或
-    python -m unittest cx_crawler.tests.test_crawler_units -v
+    python -m unittest perception/cx_crawler.tests.test_crawler_units -v
 """
 import json
 import os
@@ -12,9 +12,9 @@ import sys
 import tempfile
 import unittest
 
-# 测试文件位于 cx_crawler/tests/，而被测模块（config.py / chapters.py 等）在
-# cx_crawler/ 顶层。unittest discover 只会把 tests/ 目录加入 sys.path，
-# 导致 `from config import ...` 找不到模块。这里把 cx_crawler/ 加入路径，
+# 测试文件位于 perception/cx_crawler/tests/，而被测模块（config.py / chapters.py 等）在
+# perception/cx_crawler/ 顶层。unittest discover 只会把 tests/ 目录加入 sys.path，
+# 导致 `from config import ...` 找不到模块。这里把 perception/cx_crawler/ 加入路径，
 # 使测试与运行时的当前工作目录（CWD）无关、可直接 `python -m unittest` 运行。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

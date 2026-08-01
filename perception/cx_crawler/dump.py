@@ -41,7 +41,7 @@ def _import_render():
     return _render_mod
 
 # 活跃课程白名单已外置到 config.ACTIVE_COURSE_IDS（审查#1）：
-# 由 cx_crawler/courses.json（或从 courses.example.json 复制改名）或环境变量 CX_COURSE_IDS 提供，
+# 由 perception/cx_crawler/courses.json（或从 courses.example.json 复制改名）或环境变量 CX_COURSE_IDS 提供，
 # 不再写死在源码里。空集合 = 处理全部课程。
 
 
@@ -162,7 +162,7 @@ def main():
                if _to_int(c.get("courseid")) in ACTIVE_COURSE_IDS]
     # 审查#1：白名单为空（courses.json / CX_COURSE_IDS 均缺失）时处理全部课程，明确提示避免误以为被过滤
     if not ACTIVE_COURSE_IDS:
-        logger.warning("[filter] 未配置课程白名单（cx_crawler/courses.json 与 环境变量 CX_COURSE_IDS 均缺失），"
+        logger.warning("[filter] 未配置课程白名单（perception/cx_crawler/courses.json 与 环境变量 CX_COURSE_IDS 均缺失），"
                        "将处理全部课程")
     logger.info(f"[filter] 共扫描 {len(all_courses)} 门课，筛选出 {len(courses)} 门活跃课程")
 
@@ -372,7 +372,7 @@ def _is_quiz_type(t):
 def _write_readme(courses, tasks):
     lines = []
     lines.append("# 学习通只读爬取结果\n")
-    lines.append("> 本目录由 cx_crawler 生成，仅含你本人学习数据的**只读快照**，未提交/修改任何平台状态。\n")
+    lines.append("> 本目录由 perception/cx_crawler 生成，仅含你本人学习数据的**只读快照**，未提交/修改任何平台状态。\n")
     lines.append(f"- 活跃课程数: {len(courses)}")
     lines.append(f"- 任务点章节总数: {len(tasks)}")
     completed = sum(1 for t in tasks if t.get("completed"))

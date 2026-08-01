@@ -1,6 +1,6 @@
 # 工作空间代码审查报告（全量）
 
-> 审查范围：`chaoxing-force-play.user.js`、`chaoxing-auto-next.user.js`、`chaoxing-deceive-api.user.js`、`chaoxing-progress-panel.user.js`、`browser-media-collector.user.js`，以及 `cx_crawler/` 下全部 Python 模块（`config / api_client / session / courses / chapters / heartbeat / quizzes / dump / render / bridge`）。
+> 审查范围：`chaoxing-force-play.user.js`、`chaoxing-auto-next.user.js`、`chaoxing-deceive-api.user.js`、`chaoxing-progress-panel.user.js`、`browser-media-collector.user.js`，以及 `perception/cx_crawler/` 下全部 Python 模块（`config / api_client / session / courses / chapters / heartbeat / quizzes / dump / render / bridge`）。
 >
 > 说明：本仓库是一套「学习通自动播放/跳章/采集 + 本地爬虫」工具链，浏览器端 5 个脚本与 Python 爬虫通过本地 HTTP 桥（`bridge.py`）协作。整体代码**防御性较强**（大量 try/catch、一次性挂钩 `v.__cx` 去重、`{once:true}` 监听、原子写盘），但存在若干可量化缺陷。
 
@@ -23,7 +23,7 @@
 ### 🔴 高（会导致特性失效或异常）
 
 #### H1. `quizzes.py` — `_extract_questions` 对「`data` 为数组」的响应会抛 `AttributeError`
-- **位置**：`cx_crawler/quizzes.py` 中 `_extract_questions` 的候选列表：
+- **位置**：`perception/cx_crawler/quizzes.py` 中 `_extract_questions` 的候选列表：
   ```python
   (data.get("data") or {}).get("questions"),
   (data.get("data") or {}).get("list"),
@@ -62,7 +62,7 @@
 ### 🟠 中（稳健性/性能/可维护性隐患）
 
 #### M1. `config.py` — `with_retry` 捕获 `(Exception,)` 重试范围过宽
-- **位置**：`cx_crawler/config.py` 的 `with_retry` 装饰器默认 `exceptions=(Exception,)`。
+- **位置**：`perception/cx_crawler/config.py` 的 `with_retry` 装饰器默认 `exceptions=(Exception,)`。
 - **表现**：任何异常（含 `KeyError`、`TypeError`、`ValueError`、解析错误等**非瞬态编程错误**）都会被重试 3 次。例如 H1/H2 的 `AttributeError`/`KeyError` 会被重试 3 次后才失败，既**掩盖真实 bug**，又让单次失败从「立即暴露」变成「约 3×超时」才暴露。
 - **建议**：将默认异常收窄为网络/HTTP 类，例如 `exceptions=(requests.exceptions.RequestException,)`，并在需要时单独为解析层加 `try`。可在装饰器参数保留可覆盖性，但默认不应吞掉所有异常。
 

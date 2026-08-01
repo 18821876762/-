@@ -3,7 +3,7 @@
 > 综合 `code_review_report.md`（27 项 #1-#27）与第二份逐行审查报告（H1-H3 / M1-M5），
 > 并对每个被点名的源文件做**实际代码核查**后得出。
 >
-> 核查方法：直接读取 `cx_crawler/*.py` 与 `.user.js` 源码，按报告给出的位置逐行确认，
+> 核查方法：直接读取 `perception/cx_crawler/*.py` 与 `.user.js` 源码，按报告给出的位置逐行确认，
 > 而非采信报告自身的结论。结果暴露出两份报告均含**已修复项**与**误报项**——
 > 当前代码已带大量 `审查#/R3/Lx` 修复标记，比报告描述更健壮。
 >
@@ -64,7 +64,7 @@
 - **M3 media-collector O(n) 读写**：⏸ 审查后认为已缓解——`flush` 顶部 `if (!dirty) return` + 1.5s 节流已避免空转；跨 tab/frame 的读改写合并 O(n) 是去重正确性所需（注释已如实说明极小竞态），`loadAll` 仅在 dirty 时触发，5000 条上限下可接受，不动。
 
 ### 阶段四：架构级（技术债，非必需不动）—— 部分落地（2026-07-30）
-- **#27 类型注解与测试**：✅ 已落地（核心收益项）。`config.py` / `chapters.py` / `courses.py` / `render.py` 为纯函数与关键签名补充类型注解（`from __future__ import annotations` + 现代泛型语法，运行时零影响）；新增 `cx_crawler/tests/test_crawler_units.py`（unittest，无网络/Playwright 依赖，覆盖 `_to_int` / `atomic_write_json` / `extract_knowledge_ids` / `extract_seed_chapter_id` / `parse_chapter_tasks`）。运行：`python -m unittest discover -s cx_crawler/tests -p "test_*.py"`。
+- **#27 类型注解与测试**：✅ 已落地（核心收益项）。`config.py` / `chapters.py` / `courses.py` / `render.py` 为纯函数与关键签名补充类型注解（`from __future__ import annotations` + 现代泛型语法，运行时零影响）；新增 `perception/cx_crawler/tests/test_crawler_units.py`（unittest，无网络/Playwright 依赖，覆盖 `_to_int` / `atomic_write_json` / `extract_knowledge_ids` / `extract_seed_chapter_id` / `parse_chapter_tasks`）。运行：`python -m unittest discover -s perception/cx_crawler/tests -p "test_*.py"`。
 - **#9 render 页面池**：⏸ 审查后认为已缓解——`render.py` 已复用「单浏览器实例 + 单 context + cookie 注入一次」，逐 kid 仅 `new_page/close`（相对浏览器启动开销可忽略）；进一步 page 复用需重置 per-page 响应监听、易引入泄漏，边际收益低，保持。
 - **#24 配置共享 / #25 桥版本管理**：⏸ 部分已由阶段二/三覆盖（#14 桥端口同步注释、M5 桥版本展示）。完整的「Python↔JS 共享配置 / 协议版本门禁」需引入配置注入机制，超出必要范围，保持。
 - **#10 config 拆分 / #22 force-play 拆分 / M4 桥逻辑去重（×3）**：⏸ 大型重构，涉及跨模块 import 重排 / Tampermonkey `@require` 多文件装配，回归风险高且无测试覆盖护航，按「非必需不动」保留。若未来确需拆分，建议在具备集成测试后再做。

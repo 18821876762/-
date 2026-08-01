@@ -1,7 +1,7 @@
 # 聚焦复盘：学习通·强制续播 (force-play) 及其相关代码
 
 > 中心文件：`chaoxing-force-play.user.js`（v3.15）
-> 相关/契约文件：`chaoxing-auto-next.user.js`（跨脚本契约 `__cxAN_hold` / `__cxForcePaused` / `__np`）、`chaoxing-no-pause.user.js`、`chaoxing-visibility-resume.user.js`（重叠的暂停/续播逻辑）、`cx_crawler/dump.py`（`_emit_playlists` 生成桥数据）、`cx_crawler/bridge.py`（HTTP 服务）、`cx_crawler/config.py`（`RENDER_JOBS` 决定 `objectids` 是否填充）。
+> 相关/契约文件：`chaoxing-auto-next.user.js`（跨脚本契约 `__cxAN_hold` / `__cxForcePaused` / `__np`）、`chaoxing-no-pause.user.js`、`chaoxing-visibility-resume.user.js`（重叠的暂停/续播逻辑）、`perception/cx_crawler/dump.py`（`_emit_playlists` 生成桥数据）、`perception/cx_crawler/bridge.py`（HTTP 服务）、`perception/cx_crawler/config.py`（`RENDER_JOBS` 决定 `objectids` 是否填充）。
 
 ---
 

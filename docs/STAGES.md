@@ -145,7 +145,7 @@
 ## 3. 运行方式
 
 ```bash
-cd cx_crawler
+cd perception/cx_crawler
 # 1. 浏览器导出超星 Cookie 到 cookies.json（参考 cookies.example.json 的三种格式）
 python dump.py        # 主流程：①~⑤ 全链路只读快照
 ```
