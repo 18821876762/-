@@ -1,0 +1,38 @@
+[
+  {
+    "issue_id": 1,
+    "exists": true,
+    "severity": "critical",
+    "reasoning": "经代码搜索确认，AuthExpiredError 类在整个项目中从未定义。api_client.py L61/L78 两处 raise AuthExpiredError，但该文件无 class AuthExpiredError 声明；dump.py L19 'from api_client import AuthExpiredError' 在模块加载阶段就会抛出 ImportError/NameError；cx_crawler/__init__.py 文件不存在，也无法通过包导出提供。任何触发 401/403 响应或 import dump.py 的路径都会立即崩溃，属于严重的启动/运行时崩溃级错误。"
+  },
+  {
+    "issue_id": 2,
+    "exists": true,
+    "severity": "critical",
+    "reasoning": "chaoxing-auto-next.user.js L15 声明 'use strict' 严格模式。经全文件搜索 var/let/const 声明，确认以下变量均未声明：1) L658 的 _obs（直接赋值给未声明标识符）；2) L675 的 obs（注意此处变量名与 L658 的 _obs 还不一致，是另一个未声明变量，甚至可能意图引用 _obs 却写错名字）；3) L684 的 _checkTimer（直接赋值）；4) L688 再次读取 _checkTimer 和 _obs。严格模式下向未声明变量赋值会立即抛出 ReferenceError，导致 observe() 函数与 cleanupListeners() 在执行时崩溃，MutationObserver 无法注册、遮罩轮询无法启动、清理逻辑也无法运行，属于严重的运行时崩溃级问题。"
+  },
+  {
+    "issue_id": 3,
+    "exists": true,
+    "severity": "major",
+    "reasoning": "字段名不匹配问题真实存在。heartbeat.py L21-22 使用 task.get('jobid')（单数）和 task.get('objectId')（单数驼峰）；但 dump.py L291-292 渲染回填时写入的是 t['jobids']（复数）与 t['objectids']（复数），_emit_playlists L346-347 同样输出复数键名 jobids/objectids，且值类型均为 list。heartbeat.py L24 的守卫 `if not jobid or not objectid` 永远为真（因为 task 里只有 jobids/objectids 复数键，单数键值恒为 None），导致心跳探测始终被 L24 跳过，analyze_heartbeat_params() 始终直接 return None，功能完全失效且静默无报错，属于主要功能性缺陷。"
+  },
+  {
+    "issue_id": 4,
+    "exists": true,
+    "severity": "major",
+    "reasoning": "IntersectionObserver Proxy 的 Illegal Invocation 问题真实存在。chaoxing-deceive-api.user.js L97-107 的 handler.get 只对 p==='observe' 做了包装并返回绑定到正确 this 的闭包；其余属性名（如 'disconnect'、'unobserve'、'takeRecords'）直接返回 t[p]，即原生 IntersectionObserver 实例上的方法引用。当外部代码调用 proxy.disconnect() / proxy.unobserve() / proxy.takeRecords() 时，这些原生方法的 this 会绑定到 Proxy 对象而非原生实例 t。浏览器对 DOM API 原生方法有严格的内部插槽（internal slot）校验，this 不是合法的 IntersectionObserver 原生实例时会抛出 TypeError: Illegal invocation。该错误未被本地 try-catch 包裹（只有 observe 的包装闭包有 try-catch），会直接传播到调用方，导致依赖这些方法的第三方代码或平台逻辑崩溃。"
+  },
+  {
+    "issue_id": 5,
+    "exists": true,
+    "severity": "medium",
+    "reasoning": "courses.py 的返回类型注解与实际返回值不匹配。L11 声明 fetch_courses() 返回 tuple[list[dict], dict | None]，但实际执行路径只有 L123 一处 return，返回的是 courses（L66 初始化为空列表 []，后续 append dict 元素，类型为 list[dict]），并未返回任何 tuple。调用方 dump.py L153 将返回值直接赋给 all_courses，L161 以列表方式迭代 all_courses，也说明实际契约是 list 而非 tuple。该不一致在运行时不会直接崩溃（Python 不强制类型校验），但会误导类型检查工具（mypy/pyright）与后续维护者，若未来有人依赖 tuple 解包（如 courses_list, resp = fetch_courses(...)）则会在解构时报 ValueError: too many values to unpack，属于中等严重的类型注解/API 契约错误。"
+  },
+  {
+    "issue_id": 6,
+    "exists": true,
+    "severity": "medium",
+    "reasoning": "跨域 postMessage 安全性问题部分存在，需分两方面评估：1) 数据注入风险（存在）：L109 frame → top 的 postMessage 使用 targetOrigin='*'，L116-118 顶层接收端仅校验 `d.__bmc && d.rec`，完全不校验 ev.origin。这意味着任意第三方 iframe（如页面中嵌入的恶意广告/第三方资源 iframe）均可向顶层发送带 __bmc 标记的消息，注入任意伪造的采集记录（假 site/src/pageUrl 等），污染 TM 存储并被导出为 JSON/CSV，数据可信度被破坏。2) XSS 风险（不存在）：检查数据展示 renderList() L183-195，清空 list 后所有内容均通过 createElement + textContent 方式构建（L190 t.textContent、L191 a.textContent、L192 s.textContent），未使用 innerHTML 写入外部可控字段，因此即便记录被污染也不会在 UI 层触发 XSS。综合评估：无直接 XSS，但数据注入/污染真实存在且可被跨域利用，属于中等严重度安全缺陷。"
+  }
+]
