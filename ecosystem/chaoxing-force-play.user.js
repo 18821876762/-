@@ -953,6 +953,12 @@
     }
     return best;
   }
+  // HTML 转义：防止动态内容经 innerHTML 注入（XSS）。与 progress-panel.escapeHTML 实现一致。
+  function escapeHTML(s) {
+    return ('' + (s == null ? '' : s)).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
   function shortSrc(v) {
     var s = (v && (v.currentSrc || v.src)) || '';
     if (!s) return '(未知源)';
@@ -1428,7 +1434,7 @@
           '<span data-vi="' + i + '"' + (isEnded ? ' data-dis="1"' : '') + ' title="点击切换续播/暂停" style="display:inline-block;width:32px;height:18px;border-radius:9px;position:relative;flex:0 0 auto;cursor:' + cur + ';background:' + trackBg + ';">' +
             '<span style="position:absolute;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;left:' + knobLeft + ';"></span>' +
           '</span>' +
-          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (star ? 'color:#5ea0ff;' : '') + (isEnded ? 'color:#6b7280;' : '') + '">#' + (i + 1) + star + ' ' + tag + ' ' + shortSrc(v) + '</span>' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (star ? 'color:#5ea0ff;' : '') + (isEnded ? 'color:#6b7280;' : '') + '">#' + (i + 1) + star + ' ' + tag + ' ' + escapeHTML(shortSrc(v)) + '</span>' +
           '</div>';
       } catch (e) { swallow(e); }
     }
@@ -1557,9 +1563,9 @@
       var c = list[i];
       html += '<div data-ci="' + i + '" style="padding:6px 8px;cursor:pointer;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
         (i === hi ? 'background:#2d6cdf;color:#fff;' : 'color:#e8e8e8;') + '"' +
-        ' title="' + (c.desc || ('/' + c.name)) + '">' +
-        '<b>/' + c.name + '</b>' + (c.args ? ' …' : '') +
-        (c.desc ? ' <span style="color:' + (i === hi ? '#dbeafe' : '#8b93a1') + ';">— ' + c.desc + '</span>' : '') +
+        ' title="' + escapeHTML(c.desc || ('/' + c.name)) + '">' +
+        '<b>/' + escapeHTML(c.name) + '</b>' + (c.args ? ' …' : '') +
+        (c.desc ? ' <span style="color:' + (i === hi ? '#dbeafe' : '#8b93a1') + ';">— ' + escapeHTML(c.desc) + '</span>' : '') +
         '</div>';
     }
     box.innerHTML = html; box.style.display = 'block';
