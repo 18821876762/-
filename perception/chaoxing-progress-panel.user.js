@@ -387,6 +387,16 @@
       note: '课程列表 / 章节任务点完成状态',
       render: function (container) { try { renderProgressContent(container); } catch (e) { dbg('render err', e); } }
     });
-    if (window.__cxRegisterAddon) window.__cxRegisterAddon();
+    // 自检：探测主脚本契约（force-play 暴露的 __cxRegisterAddon）。
+    // 立即缺失可能是「副脚本先于主脚本执行」所致，故延迟 3s 复核，确实缺失再告警，避免误报。
+    if (typeof window.__cxRegisterAddon === 'function') {
+      window.__cxRegisterAddon();
+    } else {
+      setTimeout(function () {
+        if (typeof window.__cxRegisterAddon !== 'function') {
+          try { console.warn('[progress-panel] 未检测到 chaoxing-force-play 主脚本(__cxRegisterAddon 缺失)，本副脚本不会生效；请确认主脚本已安装且与本脚本在相同的 @match 下运行。'); } catch (e) { swallow(e); }
+        }
+      }, 3000);
+    }
   } catch (e) { swallow(e); }
 })();

@@ -1,0 +1,111 @@
+// ==UserScript==
+// @name         超星学习通 快捷键增强（副脚本）
+// @namespace    cx.keyboard.shortcuts
+// @version      1.0
+// @description  快捷键：Space 暂停/播放、M 静音。复用主脚本 __cxUserPaused 暂停契约与 v.muted，不破坏续播稳定性；倍速快捷键因会被主脚本周期性覆盖故未纳入。
+// @author       sub-script
+// @match        *://*.chaoxing.com/*
+// @match        *://*.edu.cn/*
+// @grant        none
+// @run-at       document-idle
+// ==/UserScript==
+(function () {
+  'use strict';
+
+  // ---------- 配置（localStorage 持久化，面板开关控制） ----------
+  var KEY_OPT = 'cx_kb_on';
+  function getOpt() { try { return localStorage.getItem(KEY_OPT) !== '0'; } catch (e) { return true; } }
+  function setOpt(v) { try { localStorage.setItem(KEY_OPT, v ? '1' : '0'); } catch (e) {} }
+
+  // ---------- 前台视频选择：模仿主脚本 foregroundVideo（可见面积最大者），避免误控隐藏/预加载预览 ----------
+  function activeVideo() {
+    var vs = document.querySelectorAll('video');
+    var best = null, bestScore = -1;
+    for (var i = 0; i < vs.length; i++) {
+      try {
+        var v = vs[i];
+        var r = v.getBoundingClientRect();
+        var score = r.width * r.height;
+        if (score <= 0) continue;                       // 零尺寸/隐藏排除
+        if (v.paused && !v.ended) score *= 0.5;         // 略偏好正在播放者
+        if (score > bestScore) { bestScore = score; best = v; }
+      } catch (e) {}
+    }
+    return best;
+  }
+
+  // ---------- 暂停/恢复：复刻主脚本 __cxUserPaused 契约（稳定，不碰 __cxForcePaused/__cxEndedLock/__cxAN_hold） ----------
+  function userPause(v) {
+    try { v.__cxUserPaused = true; } catch (e) {}
+    try { v.__cxUserKeep = false; } catch (e) {}
+    try { if (v.__np) v.pause = v.__np; } catch (e) {}  // 还原原生 pause（绕过原型/实例 noop 覆盖）
+    try { (v.__np ? v.__np : HTMLMediaElement.prototype.pause).call(v); } catch (e) { try { v.pause(); } catch (e2) {} }
+    // 播放闸门：用户暂停期间，平台自调 video.play() 不会拉回（与主脚本 userPause 一致）
+    try {
+      Object.defineProperty(v, 'play', {
+        configurable: true, writable: true,
+        value: function () { if (this.__cxUserPaused) return Promise.resolve(); return HTMLMediaElement.prototype.play.apply(this, arguments); }
+      });
+    } catch (e) {}
+    try { v.__cxResumeAt = 0; } catch (e) {}            // 禁用自动恢复：快捷键暂停保持到再次按键（主脚本 RESUME_AFTER_MIN 仅面板暂停生效）
+  }
+  function userResume(v) {
+    try { v.__cxUserPaused = false; } catch (e) {}
+    try { v.__cxResumeAt = 0; } catch (e) {}
+    try { v.__cxWatchMs = 0; } catch (e) {}             // 重置自动停止计时，避免恢复后立刻再停
+    try { delete v.play; } catch (e) {}                // 拆除播放闸门，还原原型 play
+    try { v.play(); } catch (e) {}                      // 主脚本续播循环随后接管续播
+  }
+
+  // ---------- 输入焦点避让：聚焦在可交互控件/编辑区时不抢键 ----------
+  function isTyping(el) {
+    if (!el) return false;
+    var t = (el.tagName || '').toLowerCase();
+    if (t === 'input' || t === 'textarea' || t === 'select' || t === 'button' || t === 'a') return true;
+    if (el.isContentEditable) return true;
+    try { if (el.getAttribute && el.getAttribute('role') === 'button') return true; } catch (e) {}
+    return false;
+  }
+
+  // ---------- 按键处理 ----------
+  function onKey(e) {
+    if (!getOpt()) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;     // 不抢组合键（保留平台/主脚本快捷键）
+    if (isTyping(e.target)) return;                     // 输入框、按钮、链接等不抢键
+    var v = activeVideo();
+    if (!v) return;
+    var k = (e.key || '').toLowerCase();
+    if (e.code === 'Space' || k === ' ') {
+      if (v.paused) userResume(v); else userPause(v);
+      e.preventDefault();                               // 阻止页面滚动
+    } else if (k === 'm') {
+      v.muted = !v.muted;                               // 静音：主脚本从不触碰 v.muted，稳定
+      e.preventDefault();
+    }
+  }
+
+  // ---------- 幂等守卫：避免脚本被多次注入时叠加监听 ----------
+  if (window.__cxKbStarted) return;
+  window.__cxKbStarted = true;
+  try { document.addEventListener('keydown', onKey, true); } catch (e) {}
+
+  // ---------- 接入主脚本面板（主从架构）：开关 + 自检（与 auto-next/deceive-api/progress-panel 一致） ----------
+  try {
+    (window.__cxAddonQueue = window.__cxAddonQueue || []).push({
+      id: 'keyboard-shortcuts', type: 'toggle', label: '快捷键增强 (Space/M)',
+      note: 'Space 暂停/播放 · M 静音（复用主脚本 __cxUserPaused 契约）',
+      get: getOpt,
+      set: setOpt
+    });
+    if (typeof window.__cxRegisterAddon === 'function') {
+      window.__cxRegisterAddon();
+    } else {
+      // 自检：主脚本契约暂未就绪，可能是副脚本先于主脚本执行；延迟 3s 复核，确实缺失再告警，避免误报
+      setTimeout(function () {
+        if (typeof window.__cxRegisterAddon !== 'function') {
+          try { console.warn('[keyboard-shortcuts] 未检测到 chaoxing-force-play 主脚本(__cxRegisterAddon 缺失)，面板开关不会显示；快捷键仍按默认开启工作。'); } catch (e2) {}
+        }
+      }, 3000);
+    }
+  } catch (e) {}
+})();
