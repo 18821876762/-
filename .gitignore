@@ -29,3 +29,10 @@ perception/cx_crawler/cookies.json
 
 # Crawler output（含个人课程/进度数据，属轻度 PII）
 perception/cx_crawler/output/
+
+# 绿色版 Node（本地语法校验用，非运行时依赖，随环境安装）
+node_home/
+node-v*-win-x64.zip
+
+# 依赖安装产物（_sim 等模拟用例的 npm 依赖，非源码，勿入版本库）
+node_modules/
