@@ -40,3 +40,6 @@ node_modules/
 # 可重新生成的临时产物（调查 diff 转储、jsdom 回归比对输出，勿入版本库）
 .tmp_*.diff
 ecosystem/_sim/out-*-NEW.txt
+
+# git bundle 交付物（便携仓库副本，用于离线搬运，勿入版本库）
+*.bundle
