@@ -36,3 +36,7 @@ node-v*-win-x64.zip
 
 # 依赖安装产物（_sim 等模拟用例的 npm 依赖，非源码，勿入版本库）
 node_modules/
+
+# 可重新生成的临时产物（调查 diff 转储、jsdom 回归比对输出，勿入版本库）
+.tmp_*.diff
+ecosystem/_sim/out-*-NEW.txt
