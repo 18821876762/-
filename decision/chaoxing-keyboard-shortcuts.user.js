@@ -40,7 +40,10 @@
     try { v.__cxUserKeep = false; } catch (e) {}
     try { if (v.__np) v.pause = v.__np; } catch (e) {}  // 还原原生 pause（绕过原型/实例 noop 覆盖）
     try { (v.__np ? v.__np : HTMLMediaElement.prototype.pause).call(v); } catch (e) { try { v.pause(); } catch (e2) {} }
-    // 播放闸门：用户暂停期间，平台自调 video.play() 不会拉回（与主脚本 userPause 一致）
+    // 播放闸门：用户暂停期间，平台自调 video.play() 不会拉回（与主脚本 userPause 一致）。
+    // 【跨脚本契约·注意】此处在 video 实例上覆盖 play，主脚本 force-play 也会对同一 video 设置 play 闸门；
+    // 下方 userResume 用 delete v.play 还原原型 play，可能一并拆除主脚本设置的实例闸门。两者对同一 video 的
+    // play 存在共享/竞争，依赖「主脚本先置 v.__np」「续播接管发生在 userResume 之后」的时序约定，勿擅自改动此处。
     try {
       Object.defineProperty(v, 'play', {
         configurable: true, writable: true,
