@@ -84,7 +84,7 @@
   // ---------- 幂等守卫 + 周期比对（2s，与主脚本轮询同频；检查本身仅 toString+indexOf，无重 DOM） ----------
   if (window.__cxTamperGuardStarted) return;
   window.__cxTamperGuardStarted = true;
-  try { window.__cxTamperTimer = setInterval(check, 2000); } catch (e) {}
+  try { setInterval(check, 2000); } catch (e) {}   // 计时器 id 不再挂到 window（避免额外全局；脚本随页面寿命存活，无需句柄清理）
   try { setTimeout(check, 1500); } catch (e) {}   // 主脚本通常已就绪，尽早建立基线
 
   // ---------- 接入主脚本面板（主从架构）：开关 + 自检（与 auto-next/progress-panel/keyboard-shortcuts 一致） ----------
