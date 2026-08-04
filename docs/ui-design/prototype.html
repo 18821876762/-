@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主控面板 UI 设计稿 · force-play v5</title>
+<style>
+  :root{
+    /* ===== 设计令牌（与方案 §3 一致） ===== */
+    --bg: rgba(20,22,28,.96);
+    --surface: #1a1d24;
+    --surface-2: rgba(0,0,0,.25);
+    --border: #3a3f4b;
+    --text: #e8e8e8;
+    --text-2: #9aa0a8;
+    --text-3: #6b7280;
+    --primary: #2d6cdf;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --idle: #4b5563;
+    --page-bg: #0e1014;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    background:var(--page-bg); color:var(--text);
+    font:13px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    padding:32px 24px 80px;
+  }
+  .wrap{ max-width:1120px; margin:0 auto; }
+  header.doc{ margin-bottom:32px; }
+  header.doc h1{ font-size:22px; margin-bottom:6px; }
+  header.doc p{ color:var(--text-2); font-size:13px; }
+  header.doc .meta{ margin-top:8px; font-size:11px; color:var(--text-3); }
+  header.doc .meta code{ background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1px 6px; }
+
+  section{ margin-bottom:44px; }
+  h2{ font-size:15px; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+  h2::before{ content:""; width:4px; height:14px; background:var(--primary); border-radius:2px; }
+  .sec-desc{ color:var(--text-2); font-size:12px; margin-bottom:16px; }
+
+  /* ===== 色板 ===== */
+  .swatches{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
+  .swatch{ background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .swatch .color{ height:44px; }
+  .swatch .info{ padding:6px 8px; }
+  .swatch .name{ font-size:11px; font-weight:600; }
+  .swatch .hex{ font-size:10px; color:var(--text-3); font-family:Consolas,monospace; }
+
+  /* ===== 字阶 ===== */
+  .typescale{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+  .typescale .row{ display:flex; align-items:baseline; gap:14px; padding:5px 0; border-bottom:1px dashed var(--border); }
+  .typescale .row:last-child{ border-bottom:0; }
+  .typescale .tag{ width:88px; flex:0 0 auto; font-size:10px; color:var(--text-3); font-family:Consolas,monospace; }
+
+  /* ===== 组件舞台 ===== */
+  .stage{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:18px; }
+  .stage + .stage{ margin-top:12px; }
+  .stage h3{ font-size:11px; color:var(--text-3); font-weight:600; margin-bottom:12px; letter-spacing:.04em; }
+  .btnrow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+  .btn{ border:0; border-radius:6px; cursor:pointer; font-size:12px; padding:0 16px; height:28px; color:var(--text); }
+  .btn-primary{ background:var(--primary); color:#fff; height:36px; font-size:13px; font-weight:600; padding:0 20px; }
+  .btn-secondary{ background:var(--border); }
+  .btn-ghost{ background:transparent; border:1px solid var(--primary); color:#93c5fd; }
+  .btn-danger{ background:transparent; border:1px solid var(--danger); color:var(--danger); }
+  .btn[disabled]{ background:var(--idle); color:#c9ced6; cursor:not-allowed; opacity:.55; }
+
+  .badge-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; vertical-align:middle; margin-right:6px; }
+  .badge-item{ display:inline-flex; align-items:center; margin-right:18px; font-size:12px; color:var(--text-2); }
+
+  .toast-demo{ display:flex; flex-direction:column; gap:8px; max-width:340px; }
+  .toast{ background:rgba(0,0,0,.82); color:#fff; padding:6px 10px; border-radius:6px; font-size:13px; border-left:3px solid transparent; }
+  .toast.success{ border-left-color:var(--success); }
+  .toast.warn{ border-left-color:var(--warning); }
+  .toast.error{ border-left-color:var(--danger); }
+
+  .slider-demo{ max-width:340px; }
+  .slider-demo label{ display:block; font-size:12px; margin-bottom:10px; color:var(--text); }
+  .slider-demo b{ color:var(--text); }
+  .slider-demo input[type=range]{ width:100%; accent-color:var(--primary); height:18px; }
+
+  .check-demo label{ display:inline-flex; align-items:center; gap:6px; font-size:12px; margin-right:20px; cursor:pointer; }
+  .check-demo input{ accent-color:var(--primary); }
+
+  /* ===== 面板 mockup（1:1 还原结构） ===== */
+  .mockgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; align-items:start; }
+  .mockcap{ font-size:11px; color:var(--text-3); margin-top:8px; text-align:center; }
+  .panel{
+    width:288px; margin:0 auto; background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 6px 24px rgba(0,0,0,.45); padding:12px; user-select:none;
+    backdrop-filter:blur(2px);
+  }
+  .p-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .p-title{ display:flex; align-items:center; gap:6px; font-size:14px; font-weight:700; }
+  .p-title .ver{ color:var(--text-3); font-weight:400; font-size:11px; }
+  .p-rate{ font-size:11px; color:var(--text-2); margin-left:auto; margin-right:8px; font-family:Consolas,monospace; }
+  .p-close{ cursor:pointer; padding:0 6px; font-size:18px; line-height:1; color:var(--text-2); }
+  .p-cmd{ width:100%; padding:6px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none; margin-bottom:8px; }
+  .p-cmd::placeholder{ color:var(--text-3); }
+  .p-nav{ display:flex; gap:4px; margin-bottom:10px; }
+  .p-nav button{ flex:1; padding:6px 0; background:var(--border); color:var(--text); border:0; border-radius:6px; cursor:pointer; font-size:12px; }
+  .p-nav button.on{ background:var(--primary); color:#fff; font-weight:600; }
+
+  .p-main-btn{ width:100%; height:36px; background:var(--primary); color:#fff; border:0; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; margin-bottom:10px; }
+  .p-block{ border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
+  .p-block-title{ font-size:11px; color:var(--text-2); margin-bottom:6px; }
+  .p-quick{ display:flex; gap:4px; margin-bottom:6px; }
+  .p-quick .btn{ flex:1; height:24px; font-size:11px; padding:0; }
+  .p-vlist{ max-height:190px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; background:var(--surface-2); }
+  .p-vitem{ display:flex; align-items:center; gap:6px; padding:6px 8px; font-size:12px; border-bottom:1px solid rgba(58,63,75,.5); cursor:pointer; }
+  .p-vitem:last-child{ border-bottom:0; }
+  .p-vitem .idx{ width:16px; color:var(--text-3); font-size:10px; flex:0 0 auto; }
+  .p-vitem .star{ color:var(--warning); flex:0 0 auto; }
+  .p-vitem .st{ flex:0 0 auto; }
+  .p-vitem .name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .p-vitem .prog{ color:var(--text-3); font-size:10px; font-family:Consolas,monospace; flex:0 0 auto; }
+  .p-vitem.paused{ opacity:.62; }
+  .p-empty{ padding:16px 8px; text-align:center; font-size:12px; color:var(--text-3); }
+
+  .p-slider{ display:block; font-size:12px; margin-bottom:8px; }
+  .p-slider input{ width:100%; accent-color:var(--primary); }
+  .p-check{ display:block; font-size:12px; margin-bottom:6px; cursor:pointer; }
+  .p-check input{ accent-color:var(--primary); vertical-align:middle; margin-right:6px; }
+  .p-rate-row{ display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:8px; }
+  .p-rate-row select{ background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px; padding:2px 4px; margin-left:6px; }
+
+  /* 仪表盘 */
+  .p-dash{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .p-dash .cell{ background:var(--surface-2); border-radius:4px; padding:6px; }
+  .p-dash .lab{ font-size:9px; color:var(--text-3); margin-bottom:3px; }
+  .p-dash .val{ font-size:13px; font-weight:700; }
+  .spark{ display:flex; align-items:flex-end; gap:2px; height:20px; }
+  .spark i{ flex:1; background:var(--primary); border-radius:1px; opacity:.85; }
+  .ledrow{ display:flex; align-items:center; gap:4px; font-size:9px; color:var(--text-3); margin-bottom:3px; }
+  .ledrow:last-child{ margin-bottom:0; }
+  .ledrow b{ margin-left:auto; font-size:11px; color:var(--text); }
+  .led{ width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+  .diag{ margin-top:8px; background:var(--surface-2); border-radius:4px; padding:6px 8px; font-size:11px; color:var(--text-2); white-space:pre-line; }
+  .diag .warnline{ color:var(--warning); }
+
+  /* addon 行 */
+  .p-addon{ display:flex; align-items:center; gap:6px; font-size:12px; padding:5px 0; border-bottom:1px dashed var(--border); }
+  .p-addon:last-child{ border-bottom:0; }
+  .p-addon .note{ margin-left:auto; font-size:10px; color:var(--text-3); }
+
+  /* Ninja 窄条 */
+  .panel.ninja{ width:60px; min-width:60px; height:132px; overflow:hidden; padding:10px 8px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .panel.ninja .vert{ writing-mode:vertical-rl; font-size:10px; color:var(--text-3); letter-spacing:2px; }
+
+  /* 移动版 */
+  .panel.mobile{ width:100%; max-width:360px; }
+
+  /* 反馈矩阵表 */
+  table.matrix{ width:100%; border-collapse:collapse; font-size:12px; }
+  table.matrix th, table.matrix td{ border:1px solid var(--border); padding:7px 10px; text-align:left; }
+  table.matrix th{ background:var(--surface); color:var(--text-2); font-weight:600; }
+  table.matrix td{ color:var(--text); }
+  table.matrix tr td:first-child{ color:var(--text-2); }
+
+  .kbd{ display:inline-block; background:var(--surface); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px; padding:0 6px; font:11px Consolas,monospace; color:var(--text); }
+  footer{ margin-top:48px; font-size:11px; color:var(--text-3); text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <h1>学习通·主控面板 UI 设计稿</h1>
+    <p>force-play v5 · 深色主题 · 设计令牌 / 组件规范 / 面板三形态 / 反馈分级</p>
+    <div class="meta">配套方案文档：<code>docs/ui-design-main-panel.md</code> · 本页所有组件均用 §3 令牌渲染，所见即所得</div>
+  </header>
+
+  <!-- ========== 1. 设计令牌 ========== -->
+  <section>
+    <h2>1 · 设计令牌 — 色板</h2>
+    <p class="sec-desc">单一事实源：<code>STYLES.T</code>（config.js）。相对现状仅新增 <b>--danger</b>，其余为收敛与语义命名。</p>
+    <div class="swatches">
+      <div class="swatch"><div class="color" style="background:#14161c"></div><div class="info"><div class="name">--bg</div><div class="hex">rgba(20,22,28,.96)</div></div></div>
+      <div class="swatch"><div class="color" style="background:#1a1d24"></div><div class="info"><div class="name">--surface</div><div class="hex">#1a1d24</div></div></div>
+      <div class="swatch"><div class="color" style="background:#3a3f4b"></div><div class="info"><div class="name">--border</div><div class="hex">#3a3f4b</div></div></div>
+      <div class="swatch"><div class="color" style="background:#e8e8e8"></div><div class="info"><div class="name">--text</div><div class="hex">#e8e8e8</div></div></div>
+      <div class="swatch"><div class="color" style="background:#9aa0a8"></div><div class="info"><div class="name">--text-2</div><div class="hex">#9aa0a8</div></div></div>
+      <div class="swatch"><div class="color" style="background:#6b7280"></div><div class="info"><div class="name">--text-3</div><div class="hex">#6b7280</div></div></div>
+      <div class="swatch"><div class="color" style="background:#2d6cdf"></div><div class="info"><div class="name">--primary</div><div class="hex">#2d6cdf</div></div></div>
+      <div class="swatch"><div class="color" style="background:#22c55e"></div><div class="info"><div class="name">--success</div><div class="hex">#22c55e</div></div></div>
+      <div class="swatch"><div class="color" style="background:#f59e0b"></div><div class="info"><div class="name">--warning</div><div class="hex">#f59e0b</div></div></div>
+      <div class="swatch"><div class="color" style="background:#ef4444"></div><div class="info"><div class="name">--danger（新增）</div><div class="hex">#ef4444</div></div></div>
+      <div class="swatch"><div class="color" style="background:#4b5563"></div><div class="info"><div class="name">--idle（仅状态色）</div><div class="hex">#4b5563</div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · 设计令牌 — 字阶与圆角</h2>
+    <p class="sec-desc">字号五级阶梯，禁止 10px（现状散值归并）；圆角三级 4 / 6 / 8。</p>
+    <div class="typescale">
+      <div class="row"><span class="tag">9px · 仪表盘</span><span style="font-size:9px">MO队列 命中率 续播成功率</span></div>
+      <div class="row"><span class="tag">11px · 辅助</span><span style="font-size:11px">视频开关（逐个续播/暂停 · ★=前台）</span></div>
+      <div class="row"><span class="tag">12px · 正文</span><span style="font-size:12px">自动停止计时 (分钟)：30</span></div>
+      <div class="row"><span class="tag">13px · 主按钮</span><span style="font-size:13px;font-weight:600">暂停 / 恢复</span></div>
+      <div class="row"><span class="tag">14px · 标题</span><span style="font-size:14px;font-weight:700">学习通·主控面板</span></div>
+    </div>
+  </section>
+
+  <!-- ========== 2. 组件库 ========== -->
+  <section>
+    <h2>3 · 组件 — 按钮四级制</h2>
+    <p class="sec-desc">收敛现状 4 种混乱按钮样式：每 tab 仅一个 Primary；--idle 不再作按钮底色（改作禁用态）。</p>
+    <div class="stage">
+      <h3>BUTTONS</h3>
+      <div class="btnrow">
+        <button class="btn btn-primary">Primary · 暂停/恢复</button>
+        <button class="btn btn-secondary">Secondary · 全部续播</button>
+        <button class="btn btn-ghost">Ghost · 导出日志</button>
+        <button class="btn btn-danger">Danger · 清空黑匣子</button>
+        <button class="btn" disabled>Disabled</button>
+      </div>
+    </div>
+    <div class="stage">
+      <h3>状态徽章（语义成文：绿=运行 / 黄=暂停 / 灰=空闲 / 红=错误）</h3>
+      <span class="badge-item"><i class="badge-dot" style="background:var(--success)"></i>运行中</span>
+      <span class="badge-item"><i class="badge-dot" style="background:var(--warning)"></i>已暂停续播</span>
+      <span class="badge-item"><i class="badge-dot" style="background:var(--idle)"></i>空闲 / 桥离线</span>
+      <span class="badge-item"><i class="badge-dot" style="background:var(--danger)"></i>近期有错误</span>
+    </div>
+    <div class="stage">
+      <h3>Toast 分级（新增 level 参数）</h3>
+      <div class="toast-demo">
+        <div class="toast">info · 已暂停视频（默认黑，1.5s 自动消失）</div>
+        <div class="toast success">success · 已恢复续播</div>
+        <div class="toast warn">warn · 单视频模式已开：仅前台播放</div>
+        <div class="toast error">error · 命令执行出错: /rate（同时写入近期错误）</div>
+      </div>
+    </div>
+    <div class="stage">
+      <h3>滑块 / 复选（统一「标签: 值」格式）</h3>
+      <div class="slider-demo">
+        <label>自动停止计时 (分钟): <b>30</b><input type="range" min="0" max="120" value="30"></label>
+        <label>暂停后自动恢复 (分钟): <b>10</b><input type="range" min="0" max="60" value="10"></label>
+      </div>
+      <div class="check-demo" style="margin-top:6px">
+        <label><input type="checkbox" checked>循环播放</label>
+        <label><input type="checkbox">锁定前台</label>
+        <label><input type="checkbox">调试日志</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 3. 面板 mockup ========== -->
+  <section>
+    <h2>4 · 面板 Mockup — 新 IA 四 Tab</h2>
+    <p class="sec-desc">Tab 重定义：<b>主控</b>（播放控制）/ <b>自动化</b>（计时器+速率+副脚本开关）/ <b>洞察</b>（仪表盘+诊断+副面板）/ <b>系统</b>（低频设置+反馈）。标题栏新增当前速率速览。</p>
+    <div class="mockgrid">
+
+      <!-- 主控 tab -->
+      <div>
+        <div class="panel">
+          <div class="p-head">
+            <div class="p-title"><i class="badge-dot" style="background:var(--success);margin:0"></i>学习通·主控面板 <span class="ver">v5.0</span></div>
+            <span class="p-rate">1.5x</span><span class="p-close">×</span>
+          </div>
+          <input class="p-cmd" placeholder="输入 / 唤起命令…">
+          <div class="p-nav">
+            <button class="on">主控</button><button>自动化</button><button>洞察</button><button>系统</button>
+          </div>
+          <button class="p-main-btn">⏸ 暂停 / ▶ 恢复</button>
+          <div class="p-block" style="border-top:0;margin-top:0;padding-top:0">
+            <div class="p-block-title">视频开关（逐个续播/暂停 · ★=前台）</div>
+            <div class="p-quick">
+              <button class="btn btn-secondary">仅播此轨</button>
+              <button class="btn btn-secondary">全部续播</button>
+            </div>
+            <div class="p-vlist">
+              <div class="p-vitem"><span class="idx">1</span><span class="star">★</span><span class="st" style="color:var(--success)">▶</span><span class="name">任务点视频 · 第3章 计算机组成</span><span class="prog">12:34/45:00</span></div>
+              <div class="p-vitem paused"><span class="idx">2</span><span class="st" style="color:var(--warning)">⏸</span><span class="name">插播 · 章节测验引导</span><span class="prog">00:30/01:00</span></div>
+              <div class="p-vitem paused"><span class="idx">3</span><span class="st" style="color:var(--idle)">■</span><span class="name">已结束（防重播锁定）</span><span class="prog">58:12/58:12</span></div>
+            </div>
+          </div>
+          <label class="p-check" style="margin-top:8px"><input type="checkbox">锁定前台（滚动不丢失前台资格）</label>
+        </div>
+        <div class="mockcap">主控 tab · 标准态 288px</div>
+      </div>
+
+      <!-- 自动化 tab -->
+      <div>
+        <div class="panel">
+          <div class="p-head">
+            <div class="p-title"><i class="badge-dot" style="background:var(--success);margin:0"></i>学习通·主控面板 <span class="ver">v5.0</span></div>
+            <span class="p-rate">1.5x</span><span class="p-close">×</span>
+          </div>
+          <input class="p-cmd" placeholder="输入 / 唤起命令…">
+          <div class="p-nav">
+            <button>主控</button><button class="on">自动化</button><button>洞察</button><button>系统</button>
+          </div>
+          <label class="p-slider">自动停止计时 (分钟): <b>30</b><input type="range" min="0" max="120" value="30"></label>
+          <label class="p-slider">暂停后自动恢复 (分钟): <b>10</b><input type="range" min="0" max="60" value="10"></label>
+          <label class="p-check"><input type="checkbox" checked>循环播放（播完从头重播）</label>
+          <div class="p-rate-row"><span>播放速率</span><span><b>1.5x</b><select><option>0.5x</option><option>1x</option><option selected>1.5x</option><option>2x</option></select></span></div>
+          <div class="p-block">
+            <div class="p-block-title">副脚本（已接入主面板）</div>
+            <div class="p-addon"><input type="checkbox" checked style="accent-color:var(--primary)">自动下一课<span class="note">decision/auto-next</span></div>
+            <div class="p-addon"><input type="checkbox" style="accent-color:var(--primary)">播完提醒<span class="note">video-ended-notify</span></div>
+          </div>
+        </div>
+        <div class="mockcap">自动化 tab · 速率已从「高级」提到这里（≤2 次点击）</div>
+      </div>
+
+      <!-- 洞察 tab -->
+      <div>
+        <div class="panel">
+          <div class="p-head">
+            <div class="p-title"><i class="badge-dot" style="background:var(--warning);margin:0"></i>学习通·主控面板 <span class="ver">v5.0</span></div>
+            <span class="p-rate">1.5x</span><span class="p-close">×</span>
+          </div>
+          <input class="p-cmd" placeholder="输入 / 唤起命令…">
+          <div class="p-nav">
+            <button>主控</button><button>自动化</button><button class="on">洞察</button><button>系统</button>
+          </div>
+          <div class="p-dash">
+            <div class="cell">
+              <div class="lab">MO队列</div>
+              <div class="spark"><i style="height:30%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:70%"></i><i style="height:50%"></i><i style="height:85%"></i><i style="height:60%"></i><i style="height:45%"></i></div>
+            </div>
+            <div class="cell">
+              <div class="ledrow"><i class="led" style="background:var(--success)"></i>命中率<b>92%</b></div>
+              <div class="ledrow"><i class="led" style="background:var(--success)"></i>续播成功率<b>99%</b></div>
+            </div>
+          </div>
+          <div class="diag"><span class="warnline">桥离线 · DOM 兜底中</span>
+当前: 任务点视频 · 前台 · 续播中
+已看 47min · 错误累计 0</div>
+          <div class="p-block">
+            <div class="p-block-title">副面板（内嵌，可折叠）</div>
+            <div class="p-addon" style="cursor:pointer">▸ 课程进度面板<span class="note">progress-panel</span></div>
+          </div>
+        </div>
+        <div class="mockcap">洞察 tab · 桥离线时徽章变黄 + 诊断首行黄字提示</div>
+      </div>
+
+      <!-- 系统 tab -->
+      <div>
+        <div class="panel">
+          <div class="p-head">
+            <div class="p-title"><i class="badge-dot" style="background:var(--success);margin:0"></i>学习通·主控面板 <span class="ver">v5.0</span></div>
+            <span class="p-rate">1.5x</span><span class="p-close">×</span>
+          </div>
+          <input class="p-cmd" placeholder="输入 / 唤起命令…">
+          <div class="p-nav">
+            <button>主控</button><button>自动化</button><button>洞察</button><button class="on">系统</button>
+          </div>
+          <label class="p-slider">轮询间隔 (ms): <b>2000</b><input type="range" min="500" max="5000" step="500" value="2000"></label>
+          <label class="p-check"><input type="checkbox">只播放一个视频（仅前台）</label>
+          <label class="p-check"><input type="checkbox">Ninja 模式（缩成窄条）</label>
+          <label class="p-check"><input type="checkbox">调试日志 (DEBUG → 控制台)</label>
+          <div class="p-block">
+            <button class="btn btn-secondary" style="width:100%;margin-bottom:6px">复制诊断信息（反馈用）</button>
+            <button class="btn btn-ghost" style="width:100%;margin-bottom:6px">导出最近操作日志（黑匣子）</button>
+            <button class="btn btn-danger" style="width:100%">清空黑匣子</button>
+            <div style="font-size:11px;color:var(--text-3);margin-top:8px">按 <span class="kbd">P</span> 开关面板 · <span class="kbd">Esc</span> 关闭 · 0 = 禁用</div>
+          </div>
+        </div>
+        <div class="mockcap">系统 tab · 月操收纳 + Danger 按钮（清空需二次确认）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 4. 三形态 ========== -->
+  <section>
+    <h2>5 · 显示模式 — 三形态</h2>
+    <p class="sec-desc">Ninja 窄条新增状态徽章（现状窄条把徽章也隐藏，违背"一眼知状态"）；移动版 ≤480px 全宽自适应。</p>
+    <div class="mockgrid">
+      <div>
+        <div class="panel ninja">
+          <i class="badge-dot" style="background:var(--success);margin:0"></i>
+          <span class="vert">主控面板</span>
+          <span style="font-size:10px;color:var(--text-3);font-family:Consolas,monospace">1.5x</span>
+        </div>
+        <div class="mockcap">Ninja 模式 · 60px 窄条（悬停展开）</div>
+      </div>
+      <div>
+        <div class="panel mobile">
+          <div class="p-head">
+            <div class="p-title"><i class="badge-dot" style="background:var(--success);margin:0"></i>学习通·主控面板 <span class="ver">v5.0</span></div>
+            <span class="p-close">×</span>
+          </div>
+          <input class="p-cmd" placeholder="输入 / 唤起命令…">
+          <div class="p-nav">
+            <button class="on">主控</button><button>自动化</button><button>洞察</button><button>系统</button>
+          </div>
+          <button class="p-main-btn" style="height:44px">⏸ 暂停 / ▶ 恢复</button>
+          <div class="p-vlist">
+            <div class="p-vitem"><span class="idx">1</span><span class="star">★</span><span class="st" style="color:var(--success)">▶</span><span class="name">任务点视频</span><span class="prog">12:34/45:00</span></div>
+          </div>
+        </div>
+        <div class="mockcap">移动版 · 全宽自适应，点按区 ≥36px</div>
+      </div>
+      <div>
+        <div class="panel">
+          <div class="p-head">
+            <div class="p-title"><i class="badge-dot" style="background:var(--idle);margin:0"></i>学习通·主控面板 <span class="ver">v5.0</span></div>
+            <span class="p-close">×</span>
+          </div>
+          <input class="p-cmd" placeholder="输入 / 唤起命令…">
+          <div class="p-nav">
+            <button class="on">主控</button><button>自动化</button><button>洞察</button><button>系统</button>
+          </div>
+          <button class="p-main-btn">⏸ 暂停 / ▶ 恢复</button>
+          <div class="p-vlist"><div class="p-empty">未检测到视频</div></div>
+        </div>
+        <div class="mockcap">空态 · 页面无视频（不再显示空白列表）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 5. 反馈矩阵 & 快捷键 ========== -->
+  <section>
+    <h2>6 · 反馈分级矩阵</h2>
+    <p class="sec-desc">解决"操作反馈全靠 toast 刷屏"：状态类变化只更新常驻 UI，不再发 toast。</p>
+    <table class="matrix">
+      <tr><th>操作后果</th><th>反馈渠道</th><th>实例</th></tr>
+      <tr><td>即时可逆的小操作</td><td>toast info · 1.5s</td><td>暂停成功、速率已设</td></tr>
+      <tr><td>状态持续变化</td><td>常驻 UI 自更新，不弹 toast</td><td>视频列表翻转、滑块显值</td></tr>
+      <tr><td>影响后续流程</td><td>toast warn + 状态区落一行</td><td>单视频模式已开</td></tr>
+      <tr><td>失败 / 异常</td><td>toast error + 写入近期错误</td><td>命令执行出错</td></tr>
+      <tr><td>破坏性操作</td><td>confirm 二次确认</td><td>清空黑匣子、重置配置</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>7 · 快捷键（成文化）</h2>
+    <table class="matrix">
+      <tr><th>键</th><th>作用</th><th>条件</th></tr>
+      <tr><td><span class="kbd">P</span></td><td>开关面板</td><td>非输入框聚焦</td></tr>
+      <tr><td><span class="kbd">Esc</span></td><td>先关命令下拉，再关面板</td><td>分层关闭</td></tr>
+      <tr><td><span class="kbd">/</span></td><td>聚焦命令栏</td><td>面板可见时</td></tr>
+      <tr><td><span class="kbd">↑</span><span class="kbd">↓</span> <span class="kbd">Tab</span> <span class="kbd">Enter</span></td><td>命令选择 / 补全 / 执行</td><td>命令栏聚焦</td></tr>
+    </table>
+  </section>
+
+  <footer>学习通自动化套件 · 主控面板 UI 设计方案 · 落地分 P5a 令牌化 → P5b IA 重组 → P5c 组件化三阶段（详见方案文档 §10）</footer>
+
+</div>
+</body>
+</html>
