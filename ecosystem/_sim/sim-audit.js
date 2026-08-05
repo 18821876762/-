@@ -17,7 +17,7 @@ const artifact = fs.readFileSync(path.join(__dirname, '..', 'chaoxing-force-play
 
 const dom = new JSDOM('<!DOCTYPE html><html><head></head><body><video id="v1"></video></body></html>', {
   runScripts: 'outside-only',
-  url: 'https://example.com/',
+  url: 'https://mooc1.chaoxing.com/learn/abc',
   pretendToBeVisual: true,
 });
 const { window } = dom;

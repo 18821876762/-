@@ -31,6 +31,9 @@
 - **`panel-core.js` 位置策略（原 v4.9 修订）**：禁用拖拽、面板恒居 CSS 右上角安全位。旧版拖拽会把"Ninja 窄态 40px 坐标"套到"退出后 460px 宽态面板"上，导致 `left` 不变、右侧大半被屏幕右缘裁掉。
 - **`config.js` 面板宽度（原注）**：宽度走 CSS 变量 `--cx-panel-w`（默认 380px）单一事实源；旧版固定 288px 与 Ninja 展开宽度恰好相等，退出 n 模式后用户仍见窄面板，误以为"没退出 n 模式"。
 - **`meta.js @description` 演进**：描述串含 `v3.9 健壮性`/`v3.10 健壮性`/`v3.15 抗伪暂停/MSE 断流` 等历史特性标记，属元数据叙事，已由 `CHANGELOG.md` 完整覆盖；描述末尾已补 `v4.x 面板化`/`v4.9 位置策略` 摘要。
+- **本地 Node 运行位置（工具链沿革）**：本机 `PATH`/WSL/`install_binary` 均取不到 Node，但工作区自带 `node_home/node-v20.19.0-win-x64/node.exe`（不在 PATH）。任何本地验证（构建、`node --check`、`tools/check-build-size.js`、`tests/pure.test.js`、`_sim/*.js`——后者需 `jsdom`，工作区可用）都必须显式用完整路径调用：
+  `c:/Users/24033_1dhcyji/CodeBuddy/20260723173246/node_home/node-v20.19.0-win-x64/node.exe <脚本>`。
+  此事实因 AI 曾误判"本机无 node"而记录，避免后续再次漏用。CI（GitHub Actions）环境自带 Node，走 `ci.yml` 即可。
 
 ---
 

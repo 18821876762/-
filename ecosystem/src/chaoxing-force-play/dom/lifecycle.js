@@ -59,20 +59,11 @@
     try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
     try { document.removeEventListener('keydown', keydownHandler); } catch (e) { swallow(e); }
     try { document.removeEventListener('visibilitychange', visibilityHandler, true); } catch (e) { swallow(e); }
-    // ① 还原 HTMLMediaElement.prototype.pause（优先按原始属性描述符还原，与 playbackRate 还原一致；
-    //    描述符不可用时退回函数引用写回。仅当被本脚本 noop 包装时才还原，避免误改其他脚本的覆盖）
-    try {
-      if (typeof HTMLMediaElement !== 'undefined' && NATIVE_PAUSE && HTMLMediaElement.prototype.pause !== NATIVE_PAUSE) {
-        if (NATIVE_PAUSE_DESC) Object.defineProperty(HTMLMediaElement.prototype, 'pause', NATIVE_PAUSE_DESC);
-        else HTMLMediaElement.prototype.pause = NATIVE_PAUSE;
-      }
-    } catch (e) { swallow(e); }
-    // ② 还原 HTMLMediaElement.prototype.playbackRate setter（还原为注入前的原始属性描述符）
-    try {
-      if (typeof HTMLMediaElement !== 'undefined' && NATIVE_RATE_DESC) {
-        Object.defineProperty(HTMLMediaElement.prototype, 'playbackRate', NATIVE_RATE_DESC);
-      }
-    } catch (e) { swallow(e); }
+    // ① 还原 HTMLMediaElement.prototype.pause —— 复用 config.js 的 restorePrototypePause 原语（与运行期切换 INTRUSION_MODE 同一套还原逻辑，单一事实源，避免两套还原漂移导致残留）。
+    //    该原语内部仅当本脚本已装(_protoPauseInstalled)才还原为 NATIVE_PAUSE_DESC，未装则跳过（不误改其他脚本的覆盖），语义等价原内联守卫。
+    try { if (typeof restorePrototypePause === 'function') restorePrototypePause(); } catch (e) { swallow(e); }
+    // ② 还原 HTMLMediaElement.prototype.playbackRate setter —— 同样复用 config.js 的 restorePrototypeRate 原语
+    try { if (typeof restorePrototypeRate === 'function') restorePrototypeRate(); } catch (e) { swallow(e); }
     // ③ 还原 window.attachments（审查中优先级#5）：脚本自建 accessor 仅当 window 无自有属性时才安装；
     //    先移除 accessor，再以数据属性还原钩子期间平台最后写入的取值（_attachStore.value），避免 drop 直接丢失
     //    平台数据——即便卸载多在页面卸载时发生，仍保证「注入前语义」可恢复，而非回到裸 undefined。

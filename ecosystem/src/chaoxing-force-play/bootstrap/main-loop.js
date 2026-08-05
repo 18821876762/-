@@ -32,12 +32,27 @@
   try { refreshTargets(); } catch (e) { swallow(e); }
   try { scanVideos(document); neutralizeGlobalPause(window); } catch (e) { swallow(e); }
 
+  var _tamperAlarmed = false;   // #1 原型还原报警去抖（跨轮保持）
   // 低频全量重扫：应对平台重定义 pause / 原型硬调用 / DOM 换血（间隔由 CONFIG.RESCAN_INTERVAL 控制，面板可实时调整）
   function _loopTick() {                            // 提取为命名函数：使面板改 RESCAN_INTERVAL 时能 clearInterval 后重启立即生效
     try { refreshTargets(); } catch (e) { swallow(e); }                 // 重置 matchedAny 并重建任务点 id 集
     try { scanVideos(document); neutralizeGlobalPause(window); } catch (e) { swallow(e); }
     // 【易误判·诊断#六】此处每轮重装是 F-B4 刻意设计（防 use strict 下描述符被平台还原绕过），切勿改为"仅首装幂等"，否则还原该缺陷。
-    try { installPrototypePauseNeutralize(); } catch (e) { swallow(e); }   // F-B4：每轮重新 neutralize 原型 pause，防个别页 use strict 下描述符被平台还原绕过
+    // #1 行为探测还原检测：F-B4 重装前比对原型 pause/playbackRate 是否仍引用我们装上的中性化函数（probePauseNeutralized/probeRateNeutralized）；
+    //   若被平台还原（Object.freeze/重新赋值绕过）→ 报警一次（去抖），随后 F-B4 重装自愈。温和模式(未装原型)探测返回 null，跳过。
+    try {
+      if (typeof probePauseNeutralized === 'function' && typeof probeRateNeutralized === 'function') {
+        var _pn = probePauseNeutralized(), _rn = probeRateNeutralized();
+        if (_pn === false || _rn === false) {
+          if (!_tamperAlarmed) {
+            _tamperAlarmed = true;
+            dbg('原型 pause/playbackRate 中性化被平台还原，触发重装');
+            try { if (typeof window !== 'undefined' && window.Store && window.Store.emit) window.Store.emit('ui:toast', '⚠ 检测到原型被平台还原，已自动重装续播守卫'); } catch (e2) {}
+          }
+        } else { _tamperAlarmed = false; }
+      }
+    } catch (e) { swallow(e); }
+    try { if (usePrototypeNeutralize()) installPrototypePauseNeutralize(); } catch (e) { swallow(e); }   // F-B4：每轮重新 neutralize 原型 pause，防个别页 use strict 下描述符被平台还原绕过；#1 温和模式下跳过（usePrototypeNeutralize 据 INTRUSION_MODE 决策）
     // 定向启用但本轮无任何 video 命中：不在本轮回退（避免章节切换间隙 / 视频延迟渲染的瞬时空窗触发
     // 定向↔全量横跳、误强播广告/插播）。连续 N 轮稳定 0 命中才判定"白名单失效"回退全量（专项诊断#三，迟滞）。
     try {
@@ -55,6 +70,11 @@
   }
   var _loopTimer = null;
   try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+
+  // #1 温和/礼貌模式：全模块加载、站点识别(SITE)已就绪后，按 INTRUSION_MODE 收敛原型中性化装/卸。
+  // 加载期(config.js 早于 site-router.js)usePrototypeNeutralize 保守返回 true 已先装原型；
+  // 此处对 'auto' 做精确站点解析、对持久化 'gentle' 执行卸载降级，使刷新后的设置即时生效。
+  try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
 
   // P1 状态集中：将核心业务状态镜像进 Store.state（与全局变量同一对象引用，零行为回归）
   Store.state.TARGET = TARGET;
