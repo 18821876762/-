@@ -1,7 +1,7 @@
   // ===== 站点适配 / 页面路由 =====
-  // 站点检测与路由分发：当前聚焦超星学习通(chaoxing)；预留智慧树网(zhihuishu)等兼容点。
+  // 站点检测与路由分发：支持超星学习通(chaoxing) 与 智慧树网(zhihuishu)；平台私有全局/选择器集中到 SITES 映射。
   // 路由结果可用于驱动白名单抽取 / 接管策略的差异（不同站点的 attachments 字段、播放器容器不同）。
-  // 当前为骨架：detectSite() 识别站点，routeBySite() 预留分支；默认走既有 chaoxing 逻辑，不改动现有行为。
+  // 站点配置经 currentSiteCfg() 按 detectSite() 实时分发；未知/未配置域回退超星基线，不改动既有 chaoxing 行为。
   function detectSite() {
     try {
       var h = (window.location && window.location.hostname) || '';
@@ -15,17 +15,45 @@
     return 'unknown';
   }
   function routeBySite() {
-    var site = detectSite();
-    // TODO: 智慧树网适配分支（白名单抽取 / 播放器容器 / 续播策略差异）在此扩展
-    return site; // 业务模块可据此分支
+    return detectSite(); // 业务模块可据此分支；站点配置经 currentSiteCfg() 实时分发
   }
 
-  // P4：平台适配收口——把站点私有全局/选择器集中于此，平台改版只改这里。
-  // chaoxing 的定向白名单挂全局 window.attachments；属性名亦收口，便于 defineProperty 钩子与读取统一切换。
-  function siteAttachments() { try { return window.attachments; } catch (e) { return undefined; } }
-  function siteAttachmentsKey() { return 'attachments'; }
-  // chaoxing 的全局暂停封装挂在 window.ananas（跨 iframe 需按窗口取，缺省回退顶层）。
-  function siteAnanas(win) { try { return (win && win.ananas) || window.ananas; } catch (e) { return null; } }
-  // 任务点播放器容器选择器（chaoxing 用 .ans-attach-ct）。
-  function siteTaskContainerSel() { return SELECTORS.TASK_CONTAINER; }
+  // P4 + 智慧树适配：站点私有全局/选择器集中到 SITES 映射，按 detectSite() 实时分发；平台改版只改这里。
+  // chaoxing：定向白名单挂 window.attachments，全局暂停封装挂 window.ananas（超星专属）。
+  // zhihuishu（智慧树/知到）：与超星结构不同——无 window.attachments 白名单、无 window.ananas 私有暂停封装。
+  //   attachmentsKey/ananasKey 置空：① siteAttachments() 回退 undefined → 定向续播自动回退全量（targeting 已有兜底）；
+  //   ② hookAttachments 见空键跳过 defineProperty 钩子（targeting.js 空键守卫）→ 退回轮询/全量；③ 仅原型级 pause 拦截生效。
+  //   taskContainerSel 为 best-effort 猜测，需在本站实测校准（TODO）。
+  var SITES = {
+    chaoxing: {
+      attachmentsKey: 'attachments',                 // 播放页 AJAX 渲染后顶层 window.attachments = 任务点数组（含 objectid）
+      ananasKey: 'ananas',                            // 超星私有全局暂停封装 window.ananas.pause
+      taskContainerSel: SELECTORS.TASK_CONTAINER      // .ans-attach-ct
+    },
+    zhihuishu: {
+      attachmentsKey: '',                            // TODO 真实站点验证：智慧树无此白名单全局 → 定向回退全量
+      ananasKey: '',                                 // TODO 真实站点验证：智慧树无 window.ananas 私有暂停封装
+      taskContainerSel: '.video-container, .player, #video, .tk-container' // TODO 真实站点验证：best-effort 播放器容器
+    }
+  };
+  // 站点配置按 detectSite() 实时解析（脚本单页单站，性价比最高且无需启动期缓存）；未知/未配置域回退超星基线以免崩溃。
+  function currentSiteCfg() {
+    var s = detectSite();
+    return SITES[s] || SITES.chaoxing;
+  }
+
+  function siteAttachments() {
+    var k = currentSiteCfg().attachmentsKey;
+    if (!k) return undefined;
+    try { return window[k]; } catch (e) { return undefined; }
+  }
+  function siteAttachmentsKey() { return currentSiteCfg().attachmentsKey; }
+  // 平台自定义全局暂停封装：返回该 window 的私有暂停对象，无则 null（智慧树无 ananasKey → null，仅原型级拦截生效）
+  function siteAnanas(win) {
+    var k = currentSiteCfg().ananasKey;
+    if (!k) return null;
+    try { return (win && win[k]) || window[k]; } catch (e) { return null; }
+  }
+  // 任务点播放器容器选择器（MO 钻入 iframe/容器用）
+  function siteTaskContainerSel() { return currentSiteCfg().taskContainerSel; }
 

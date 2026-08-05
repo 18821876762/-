@@ -135,4 +135,5 @@ console.log('--- 场景4: *.edu.cn 视为超星 auto→aggressive 加载即中�
 }
 
 console.log('结论: ' + (fail === 0 ? 'PASS' : fail + ' FAIL') + ' — INTRUSION_MODE 运行期切换闭环(还原→重装,无残留)');
+process.exit(fail ? 1 : 0);
 process.exit(fail === 0 ? 0 : 1);
