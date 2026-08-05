@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (full history for git SHA injection)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build user script
+        shell: pwsh
+        run: |
+          cd ecosystem
+          pwsh -ExecutionPolicy Bypass -File build-force-play.ps1
+
+      - name: Syntax check built artifact (node --check)
+        shell: pwsh
+        run: |
+          cd ecosystem
+          # 源模块是 IIFE 碎片（core.js 仅 opener、main-loop.js 仅 closer），不能单独 --check；
+          # 语法正确性由完整构建产物（单一 IIFE）代表，对其做 node --check。
+          node --check chaoxing-force-play.user.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Host "syntax check: built artifact OK"
+
+      - name: Module size gate
+        shell: pwsh
+        run: |
+          cd ecosystem
+          pwsh -ExecutionPolicy Bypass -File check-module-size.ps1
+
+      - name: Built artifact size gate
+        shell: pwsh
+        run: |
+          cd ecosystem
+          node tools/check-build-size.js
+
+      - name: Pure-function unit tests
+        shell: pwsh
+        run: |
+          cd ecosystem
+          node tests/pure.test.js
+
+      - name: Upload built user script
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaoxing-force-play.user.js
+          path: ecosystem/chaoxing-force-play.user.js

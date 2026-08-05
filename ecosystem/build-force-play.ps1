@@ -14,19 +14,39 @@
     → ui/{addons,panel,panel-template,panel-core,panel-drag,diagnostics,dashboard,commands}  （界面域：副脚本/面板编排/模板/装配/拖拽/诊断/仪表盘/命令）
     → bootstrap/main-loop                                  （自启动 + 主循环）
 
+  .PARAMETER SrcDir
+    源目录（含 meta.js / bootstrap / 各域模块）。默认 ./src/chaoxing-force-play。CI 或本地可用备用路径。
+
+  .PARAMETER OutFile
+    输出产物路径。默认 ./chaoxing-force-play.user.js。
+
+  .PARAMETER Minify
+    可选紧凑产物：折叠连续空行（不去 // 注释，避免误伤 https:// 等）。生产级 minify 仍需 terser。
+
+  .PARAMETER DryRun
+    只打印将写入的字符数，不落盘。
+
   .EXAMPLE
   powershell -ExecutionPolicy Bypass -File build-force-play.ps1
+  powershell -ExecutionPolicy Bypass -File build-force-play.ps1 -Minify -OutFile .\dist\chaoxing-force-play.min.user.js
 #>
+[CmdletBinding()]
+param(
+  [string]$srcDir,
+  [string]$outFile,
+  [switch]$minify,
+  [switch]$dryRun
+)
 $ErrorActionPreference = 'Stop'
-$root    = $PSScriptRoot
-$srcDir  = Join-Path $root 'src\chaoxing-force-play'
-$out     = Join-Path $root 'chaoxing-force-play.user.js'
+$root = $PSScriptRoot
+if (-not $srcDir)  { $srcDir  = Join-Path $root 'src\chaoxing-force-play' }
+if (-not $outFile) { $outFile = Join-Path $root 'chaoxing-force-play.user.js' }
+$out = $outFile
 
-if (-not (Test-Path (Join-Path $srcDir 'meta.js')))            { throw 'meta.js missing' }
-if (-not (Test-Path (Join-Path $srcDir 'bootstrap\core.js')))  { throw 'bootstrap/core.js missing' }
-
-$meta = [IO.File]::ReadAllText((Join-Path $srcDir 'meta.js')).TrimEnd()
-$core = [IO.File]::ReadAllText((Join-Path $srcDir 'bootstrap\core.js')).TrimEnd()
+# 入口 + 域模块缺失文件聚合检查：一次性列出全部缺失，避免逐个 throw 反复重试
+$missing = @()
+if (-not (Test-Path (Join-Path $srcDir 'meta.js')))            { $missing += 'meta.js' }
+if (-not (Test-Path (Join-Path $srcDir 'bootstrap\core.js')))  { $missing += 'bootstrap/core.js' }
 
 # 各域模块：按依赖/执行顺序显式列出（同处一个 IIFE 闭包，函数声明 hoist，顺序仅影响极少顶层即时语句）
 # 分层：基础(⑦utils/state/config/storage/site) → 业务(biz/*) → 接管引擎(dom) → 界面(ui/*) → 自启动(bootstrap/main-loop)
@@ -62,7 +82,11 @@ $domainRel = @(
 )
 
 $domainFiles = $domainRel | ForEach-Object { Join-Path $srcDir $_ }
-foreach ($f in $domainFiles) { if (-not (Test-Path $f)) { throw "missing domain file: $f" } }
+foreach ($f in $domainFiles) { if (-not (Test-Path $f)) { $missing += $f } }
+if ($missing.Count -gt 0) {
+  $list = $missing | ForEach-Object { '  - ' + $_ }
+  throw ("Build aborted: '$srcDir' is missing required file(s):`n" + ($list -join "`n"))
+}
 
 # 反向校验（防"代码拆分后无人维护"的静默漂移）：源树里任何 .js 必须属于以下三类之一，
 #   (a) 强制入口 meta.js / bootstrap/core.js
@@ -79,11 +103,44 @@ Get-ChildItem -Path $srcDir -Recurse -Filter *.js | ForEach-Object {
   }
 }
 
-$chunks = @($meta, '', $core)
-foreach ($f in $domainFiles) { $chunks += [IO.File]::ReadAllText($f).TrimEnd() }
+$meta = [IO.File]::ReadAllText((Join-Path $srcDir 'meta.js'))
+$core = [IO.File]::ReadAllText((Join-Path $srcDir 'bootstrap\core.js'))
+
+# 规范化：统一为 LF 行尾并去除每行尾随空白（跨 OS 一致产物）
+function Normalize-Chunk([string]$t) {
+  return ((($t -replace "`r`n", "`n") -replace "`r", "`n") -split "`n" | ForEach-Object { $_.TrimEnd() }) -join "`n"
+}
+$meta = Normalize-Chunk $meta
+$core = Normalize-Chunk $core
+
+# 注入构建元数据（置于 // ==/UserScript== 之后，不影响 Tampermonkey 元数据块解析）
+$gitSha = ''
+try { $gitSha = (git rev-parse --short HEAD 2>$null).Trim() } catch {}
+if (-not $gitSha) { $gitSha = 'unknown' }
+$builtAt = Get-Date -Format 'yyyy-MM-ddTHH:mm:sszzz'
+$buildMeta = "// Built: $builtAt  commit: $gitSha  minify: $(if ($minify) { 'on' } else { 'off' })"
+
+$chunks = @($meta, '', $buildMeta, '', $core)
+foreach ($f in $domainFiles) { $chunks += Normalize-Chunk ([IO.File]::ReadAllText($f)) }
 
 $body = ($chunks -join "`n").TrimEnd() + "`n`n})();`n"
-[IO.File]::WriteAllText($out, $body, (New-Object Text.UTF8Encoding($false)))
 
-Write-Host "build done -> $out"
+# 可选 Minify：安全压缩（折叠连续空行；不去 // 注释以免误伤 https:// 等）。生产 minify 需 terser。
+if ($minify) {
+  $body = (($body -split "`n") | Where-Object { $_.Trim().Length -gt 0 }) -join "`n" + "`n"
+}
+
+# 构建后冒烟校验：元数据块 + IIFE 闭合必须存在，否则产物损坏直接失败
+$smokeErr = $null
+if ($body -notmatch '// ==UserScript==') { $smokeErr = 'metadata block (// ==UserScript==) missing at top' }
+elseif ($body -notmatch '// ==/UserScript==') { $smokeErr = 'metadata block not closed (// ==/UserScript==) missing' }
+elseif ($body.TrimEnd() -notmatch '\}\)\(\);\s*$') { $smokeErr = 'IIFE closing "})();" missing at end' }
+if ($smokeErr) { throw ("Build smoke check FAILED: $smokeErr") }
+
+if ($dryRun) {
+  Write-Host "[DryRun] would write $($body.Length) chars to $out"
+} else {
+  [IO.File]::WriteAllText($out, $body, (New-Object Text.UTF8Encoding($false)))
+  Write-Host "build done -> $out"
+}
 Write-Host ('domains (' + $domainFiles.Count + '): ' + ($domainRel -join '  '))
