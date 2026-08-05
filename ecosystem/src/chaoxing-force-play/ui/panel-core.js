@@ -269,29 +269,8 @@
         Store.emit('panel:refresh');
       });
     }
-    // #1 温和/礼貌模式：入侵模式选择（原型中性化策略）
-    var intr = el.querySelector('#__cxIntrusion');
-    if (intr) {
-      try { intr.value = CONFIG.INTRUSION_MODE || 'auto'; } catch (e) { swallow(e); }
-      intr.addEventListener('change', function () {
-        CONFIG.INTRUSION_MODE = intr.value;
-        savePanelCfg();
-        try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
-        try { Store.emit('ui:toast', '入侵模式 → ' + intr.value + (intr.value === 'gentle' ? '（超星可能偶发漏拦）' : '')); } catch (e) { swallow(e); }
-        Store.emit('panel:refresh');
-      });
-    }
-    // #1 礼貌模式开关（抗检测：pause.toString 伪装）
-    var polite = el.querySelector('#__cxPolite');
-    if (polite) {
-      try { polite.checked = !!CONFIG.POLITE_MODE; } catch (e) { swallow(e); }
-      polite.addEventListener('change', function () {
-        CONFIG.POLITE_MODE = !!polite.checked;
-        savePanelCfg();
-        try { Store.emit('ui:toast', CONFIG.POLITE_MODE ? '礼貌模式已开（抗检测）' : '礼貌模式已关'); } catch (e) { swallow(e); }
-        Store.emit('panel:refresh');
-      });
-    }
+    // #1 温和/礼貌模式 + 黑匣子：控制区事件绑定抽到 ui/panel-controls.js（行数红线合规）
+    bindPanelControlEvents(el);
     // —— 主从式导航：切换下方内容区块（localStorage 记住当前 tab）——
     function switchTab(name) {
       if (!_cxPanel) return;
@@ -319,45 +298,6 @@
     // 安全审计（建议#10）：刷新「洞察」页侵入点清单
     var btnAudit = el.querySelector('#__cxBtnAudit');
     if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
-    // 黑匣子导出按钮
-    var btnExport = el.querySelector('#__cxBtnExport');
-    if (btnExport) btnExport.addEventListener('click', function () {
-      try {
-        var lines = [];
-        var now = Date.now();
-        lines.push('=== 黑匣子日志 ===');
-        lines.push('导出时间: ' + new Date().toLocaleString());
-        lines.push('记录条数: ' + _bxBuffer.length + ' / ' + _bxCap + ' 条');
-        lines.push('最近1分钟: ' + _bxBuffer.filter(function(e) { return (now - e.ts) <= 60000; }).length + ' 条');
-        lines.push('');
-        for (var i = 0; i < _bxBuffer.length; i++) {
-          var e = _bxBuffer[i];
-          var age = Math.round((now - e.ts) / 1000) + 's前';
-          var time = new Date(e.ts).toLocaleTimeString();
-          lines.push('[' + time + ' | -' + age + '] ' + e.action + (e.detail ? '  ' + e.detail : ''));
-        }
-        var text = lines.join('\n');
-        try {
-          navigator.clipboard.writeText(text).then(function () {
-            Store.emit('ui:toast', '已复制 ' + _bxBuffer.length + ' 条日志到剪贴板');
-          }, function () { alert(text); });
-        } catch (e2) {
-          // Fallback: 弹窗显示
-          var w = window.open('', '_blank', 'width=700,height=500');
-          if (w) { w.document.write('<pre>' + text.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>'); }
-          else alert(text);
-        }
-      } catch (e) { swallow(e); }
-    }, false);
-    // 清空黑匣子（Danger 级：破坏性操作，confirm 二次确认，设计 §6.1）
-    var btnClearBx = el.querySelector('#__cxBtnClearBx');
-    if (btnClearBx) btnClearBx.addEventListener('click', function () {
-      try {
-        if (!confirm('确认清空黑匣子日志？（' + _bxBuffer.length + ' 条，清空后不可恢复）')) return;
-        _bxBuffer.length = 0;
-        Store.emit('ui:toast', '黑匣子日志已清空', 'warn');
-      } catch (e) { swallow(e); }
-    });
     _cxPanel = el;
     syncPanelInputs();
     drainAddonQueue();   // 面板建成后渲染已注册的副脚本开关（含晚于本脚本注册的）
