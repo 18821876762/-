@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T14:22:27+08:00  commit: df6130e  minify: off
+// Built: 2026-08-05T14:27:35+08:00  commit: c9de693  minify: off
 
 
 (function () {
@@ -372,6 +372,7 @@
   //   'gentle'     → 仅实例级(v.pause=pauseNoop，dom.js:_ovEnforce 已做)+事件，绝不碰原型（超星有覆盖窗口，已知）；
   //   'auto'（默认）→ 运行时按站点识别：仅检测为超星(chaoxing)才激进；其余(含 'unknown' / 智慧树TODO)降级温和。
   // 注：detectSite() 返回 'chaoxing' | 'zhihuishu' | 'unknown'（见 site-router.js），并不依赖任何 SITE 枚举；
+  //   其中 'chaoxing' 含 *.chaoxing.com 与 *.edu.cn（高校承载超星，#1 已覆盖），故 auto 模式在这两类域均激进中性化；
   //   其函数体只读 window.location，故 config.js 加载期(早于 site-router.js 文本位置，但函数已提升)即可正确调用，
   //   无需保守兜底——仅在 detectSite 不可用/抛错时回落激进，保证核心续播不丢。
   function usePrototypeNeutralize() {
@@ -440,6 +441,7 @@
     _ns.getRateNeutralized = getRateNeutralized;
     _ns.restorePrototypeNeutralization = restorePrototypeNeutralization;   // 暴露统一还原原语：运行期切换与全卸(cleanupListeners)共用
     _ns.CONFIG = CONFIG;                  // 暴露配置引用（副脚本 tamper-guard 读取 POLITE_MODE 以切换探测方式）
+    _ns.detectSite = detectSite;          // 暴露站点识别（#1 回归需断言 edu.cn 视为 chaoxing；UI/审计亦可复用）
     _ns._pauseNeutralized = _pauseNeutralized;
     _ns._rateNeutralized = _rateNeutralized;
   } catch (e) { swallow(e); }
@@ -719,6 +721,10 @@
       var h = (window.location && window.location.hostname) || '';
       if (/chaoxing\.com$/i.test(h)) return 'chaoxing';
       if (/zhihuishu\.com$/i.test(h)) return 'zhihuishu';
+      // #1 开放问题落地：脚本 @match 仅 *.chaoxing.com + *.edu.cn；高校超星学习通常承载于 *.edu.cn（如 mooc.xxx.edu.cn），
+      // 该域运行脚本即超星上下文，须与 chaoxing 同一接管策略（auto 模式激进原型中性化），否则会被误判 unknown→温和漏拦。
+      // 注意：智慧树(知到)域为 zhihuishu.com，不落 edu.cn，故此规则不会误伤智慧树。
+      if (/edu\.cn$/i.test(h)) return 'chaoxing';
     } catch (e) { swallow(e); }
     return 'unknown';
   }
