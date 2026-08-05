@@ -5,7 +5,9 @@
 #   - <= SOFT             -> OK
 $ErrorActionPreference = 'Stop'
 
-$root = 'c:/Users/24033_1dhcyji/CodeBuddy/20260723173246/ecosystem/src/chaoxing-force-play'
+# 基于脚本自身位置解析，避免硬编码本机绝对路径导致 CI(云端)路径不存在而报错。
+# 本脚本位于 ecosystem/，目标模块树为 ecosystem/src/chaoxing-force-play。
+$root = Join-Path $PSScriptRoot 'src/chaoxing-force-play'
 $SOFT = 300
 $HARD = 350
 
