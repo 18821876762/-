@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T11:44:14+08:00  commit: ce6fd96  minify: off
+// Built: 2026-08-05T11:59:09+08:00  commit: fe1d3b2  minify: off
 
 
 (function () {
@@ -1315,6 +1315,12 @@
       // MediaSession 劫持提到最前面：所有状态都执行（含 ended），应对锁屏界面续播。
       try {
         if (navigator.mediaSession) {
+          // 懒保存注入前原始 pause handler 与 playbackState（仅首次），供 cleanupListeners ④ 还原（审查高优先级#3）。
+          if (!_mediaSessionSaved) {
+            try { _origMediaSessionPause = (typeof navigator.mediaSession.getActionHandler === 'function') ? navigator.mediaSession.getActionHandler('pause') : null; } catch (e) { _origMediaSessionPause = null; }
+            try { _origMediaSessionState = navigator.mediaSession.playbackState; } catch (e) { _origMediaSessionState = null; }
+            _mediaSessionSaved = true;
+          }
           navigator.mediaSession.setActionHandler('pause', function () {});
           navigator.mediaSession.playbackState = 'playing';   // 视频实则在播，状态标 playing 与"劫持 pause 为 no-op"语义一致，锁屏不误发暂停
         }
@@ -1702,17 +1708,27 @@
   // 写入方是 main-loop.js 的 installPlayWatch，读取方是下方 cleanupListeners，二者均在运行时执行。
   var _playWatchDocs = [];
 
+  // 还原清单：navigator.mediaSession 注入前的原始 pause handler / playbackState（仅首次 _ovEnforce 时懒保存一次），
+  // 供 cleanupListeners ④ 还原为注入前语义，避免盲目置 null 破坏站点既有媒体按键交互。
+  // 写入方是 dom.js 的 _ovEnforce（首次接管视频时保存）；读取方是下方 cleanupListeners ④。同处 IIFE 顶层，引用安全。
+  var _origMediaSessionPause = null;
+  var _origMediaSessionState = null;
+  var _mediaSessionSaved = false;
+
   // 幂等守卫：pagehide 与 beforeunload 在多数浏览器会先后各触发一次，若无守卫则整个还原流程被执行两遍
   // （重复 defineProperty / setActionHandler）。还原是一次性终态操作，二次执行无意义。
   var _cleaned = false;
 
   // 监听器清理 + 侵入性还原（审查 JS1-2 / 侵入性治理）：页面卸载时断开 MutationObserver、清除轮询定时器、
   // 移除全局监听器，并撤销脚本对宿主页面的侵入性 Hook，避免页面软卸载/bfcache 后残留死 Hook，使页面回到注入前状态。
-  // 还原清单（八项，新增侵入点必须同步登记，否则 uninstall 语义即失真）：
+  // 还原清单（十一项，新增侵入点必须同步登记，否则 uninstall 语义即失真）：
   //   ① HTMLMediaElement.prototype.pause      ② prototype.playbackRate 描述符
-  //   ③ window.attachments setter             ④ navigator.mediaSession 暂停处理
-  //   ⑤ window.ananas.pause 中和              ⑥ play 即时接管监听（顶层 + iframe 文档）
+  //   ③ window.attachments setter             ④ navigator.mediaSession 暂停处理（含原始 handler 还原）
+  //   ⑤ window.ananas.pause 中和（含残留元数据清除）  ⑥ play 即时接管监听（顶层 + iframe 文档）
   //   ⑦ window error 诊断监听                 ⑧ pagehide/beforeunload 钩子自身
+  //   ⑨ 撤销 window 全局导出符号（__cxRegisterAddon/Command/__cxUI/__cxAddonQueue）
+  //   ⑩ 移除注入的 DOM/样式（面板 + 三个 style + Toast）
+  //   ⑪ 删除本脚本命名空间 window.__CX_FORCE_PLAY（终结完全回到注入前全局态）
   // 注：@grant none 脚本无法感知 Tampermonkey 的"热禁用"事件，最干净的还原仍需刷新页面；此处还原在
   // pagehide/beforeunload 触发，另暴露 window.__CX_FORCE_PLAY.uninstall 供手动/副脚本触发干净还原。
   function cleanupListeners() {
@@ -1740,17 +1756,20 @@
     try {
       if (_attachHooked && typeof siteAttachmentsKey === 'function') { delete window[siteAttachmentsKey()]; _attachHooked = false; }
     } catch (e) { swallow(e); }
-    // ④ 还原 navigator.mediaSession 暂停处理（清除 no-op 劫持）
+    // ④ 还原 navigator.mediaSession 暂停处理：还原为注入前的原始 handler 与 playbackState，
+    //    而非盲目 setActionHandler('pause', null)——若页面原本设有 pause handler，盲目置 null 会破坏站点媒体按键交互（审查高优先级#3）。
     try {
       if (navigator.mediaSession && typeof navigator.mediaSession.setActionHandler === 'function') {
-        navigator.mediaSession.setActionHandler('pause', null);
+        try { navigator.mediaSession.setActionHandler('pause', _origMediaSessionPause != null ? _origMediaSessionPause : null); } catch (e2) { swallow(e2); }
+        if (_origMediaSessionState != null) { try { navigator.mediaSession.playbackState = _origMediaSessionState; } catch (e3) { swallow(e3); } }
       }
     } catch (e) { swallow(e); }
-    // ⑤ 还原 window.ananas.pause 中和（逐个 frame 的 ananas 全局暂停封装还原为注入前真原生，清除全局死 Hook）
+    // ⑤ 还原 window.ananas.pause 中和（逐个 frame 的 ananas 全局暂停封装还原为注入前真原生，清除全局死 Hook），
+    //    并删除残留元数据 __cxAnanasNativePause，避免向宿主全局泄漏脚本内部标记（审查中优先级#4）。
     try {
       for (var _ai = 0; _ai < _ananasNeutralized.length; _ai++) {
         var _a = _ananasNeutralized[_ai];
-        if (_a && _a.__cxAnanasNativePause) { try { _a.pause = _a.__cxAnanasNativePause; } catch (e) { swallow(e); } }
+        if (_a && _a.__cxAnanasNativePause) { try { _a.pause = _a.__cxAnanasNativePause; } catch (e) { swallow(e); } try { delete _a.__cxAnanasNativePause; } catch (e) { swallow(e); } }
       }
       _ananasNeutralized.length = 0;
     } catch (e) { swallow(e); }
@@ -1768,6 +1787,25 @@
     // ⑧ 摘除卸载钩子自身：手动 uninstall() 后页面继续存活时，不留残余监听（页面真卸载时本项无副作用）
     try { window.removeEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
     try { window.removeEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+    // ⑨ 撤销命名空间导出：删除脚本在 window 上新增的全部全局符号（含副脚本注册契约），回到注入前全局态（审查高优先级#1）。
+    //    若其它脚本已读取/缓存这些引用，不影响其既有行为；但卸载后不应再暴露可调用/可覆盖的接口。
+    try { delete window.__cxRegisterAddon; } catch (e) { swallow(e); }
+    try { delete window.__cxRegisterCommand; } catch (e) { swallow(e); }
+    try { delete window.__cxUI; } catch (e) { swallow(e); }
+    try { delete window.__cxAddonQueue; } catch (e) { swallow(e); }
+    // ⑩ 移除注入的 DOM/样式：面板、Toast 与全部脚本 style 节点（审查高优先级#2）。
+    //    面板/样式注入到 window.top.document（全站唯一），Toast 注入到 document.body；两处都尝试摘除以防残留 UI/内存泄漏。
+    try {
+      var _pd = (window.top && window.top.document) ? window.top.document : document;
+      var _cxDomIds = ['__cxPanel', '__cxPanelNinjaStyle', '__cxPanelAnimStyle', '__cxPanelMobileStyle', '__cxToast'];
+      for (var _di = 0; _di < _cxDomIds.length; _di++) {
+        try { var _n = _pd.getElementById(_cxDomIds[_di]); if (_n && _n.parentNode) _n.parentNode.removeChild(_n); } catch (e) { swallow(e); }
+        try { var _n2 = document.getElementById(_cxDomIds[_di]); if (_n2 && _n2.parentNode) _n2.parentNode.removeChild(_n2); } catch (e) { swallow(e); }
+      }
+    } catch (e) { swallow(e); }
+    // ⑪ 终态：删除本脚本命名空间对象本身（含 uninstall 钩子）。_cleaned 守卫已保证幂等；
+    //    删除后页面全局即完全回到注入前状态（仅遗留配置类 localStorage，可由 /cleardata 命令主动清除）。
+    try { delete window.__CX_FORCE_PLAY; } catch (e) { swallow(e); }
   }
   try { window.addEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
   try { window.addEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
@@ -2871,6 +2909,16 @@
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
       try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
       syncPanelInputs(); Store.emit('panel:refresh'); Store.emit('ui:toast', '轮询 ' + CONFIG.RESCAN_INTERVAL + 'ms');
+    });
+    registerCommand('cleardata', '彻底清除脚本写入的 localStorage(cx_* 键)', false, function () {
+      try {
+        var n = 0;
+        for (var i = localStorage.length - 1; i >= 0; i--) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('cx_') === 0) { try { localStorage.removeItem(k); n++; } catch (e2) { swallow(e2); } }
+        }
+        Store.emit('ui:toast', '已清除 ' + n + ' 个 cx_* 键（刷新后配置/统计归零）', 'success');
+      } catch (e) { swallow(e); Store.emit('ui:toast', '清除失败', 'error'); }
     });
     registerCommand('help', '显示命令帮助', false, function () {
       var names = _cxCommands.map(function (c) { return '/' + c.name + (c.args ? ' …' : ''); }).join('  ');
