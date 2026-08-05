@@ -15,6 +15,9 @@
 // ==/UserScript==
 
 
+// Built: 2026-08-05T11:44:14+08:00  commit: ce6fd96  minify: off
+
+
 (function () {
   'use strict';
 
@@ -36,6 +39,8 @@
   // 注意：不在此处整体 return 掉同源 iframe 副本——超星播放器常嵌在同源 iframe 内，若直接退出则视频页里本脚本整段不执行、
   // 控制面板无法创建（用户反馈"有视频的页面打不开面板，无视频页可开"）。视频接管本身已被 __cxForcePaused 等标志幂等保护、
   // 顶层实例也会下钻同源 iframe 处理其视频，重复注入不会崩溃；桥/定时器重复开销极小且幂等，故每个匹配 frame 都完整运行以保证面板可见。
+
+
   // ===== 工具库（副程序）=====
   // 全局通用工具：调试日志 dbg / 静默容错 swallow。
   // 通用工具层：供核心与各功能模块（含副脚本 SDK）共享同一套日志/容错语义。
@@ -119,6 +124,7 @@
   }
 
   // 接管策略开关（forcePlayEnabled / cxVideoOptOut）已迁至 biz/policy.js（业务·策略域），本文件不再持有。
+
   // ===== DOMAIN: utils/url (URL parsing helpers) =====
   // ===== MODULE: URL 解析 =====
   // 域：基础工具层 —— 与页面结构无关的纯 URL 解析，供定向(targeting)与本地桥(bridge)复用。
@@ -142,6 +148,7 @@
     }
     return null;
   }
+
   // ===== MODULE: 事件总线 + 状态镜像（原 P1「状态集中」）=====
   // ⚠️ 名实校准（架构审查）：本模块**当前的实际角色是事件总线**，而非名副其实的「状态集中层」。
   //   · 真正在用的能力：emit / onEv —— 如 bootstrap/main-loop.js 每轮发 'videos:scanned'、ui 层订阅刷新。
@@ -167,6 +174,7 @@
     function onEv(ev, fn) { on('__ev:' + ev, fn); }
     return { state: state, get: get, set: set, on: on, emit: emit, onEv: onEv };
   })();
+
   // ===== MODULE: 运维指标与黑匣子（可观测性状态层）=====
   // 域：诊断 / 可观测性状态 —— 与续播业务逻辑无关，仅供面板仪表盘与黑匣子读取展示。
   // 归属说明（架构·作用域）：这些变量原先寄居在 biz/targeting.js 顶层，属于「诊断状态声明在业务模块」的
@@ -203,6 +211,7 @@
   var _errCount = 0;         // 累计被吞错误数（含 DEBUG 关闭时的静默错误）
   function recentErrors(n) { try { return _errBuf.slice(-(n || 10)); } catch (e) { return []; } }
   function errorCount() { return _errCount; }
+
   // ===== MODULE: 配置 =====
   // 层级：元信息与配置区 —— 定义 CONFIG 默认配置与 DEBUG 开关，安装原型 pause/rate neutralize 防暂停/防伪暂停，提供倍速/循环施加。调试工具(dbg/swallow)与持久化已分别归入 utils / storage 层。
   // ===== 配置 =====
@@ -355,6 +364,7 @@
       }
     } catch (e) { swallow(e); }
   }
+
   // ===== DOMAIN: ui/styles (design tokens + injected CSS) =====
   // ===== MODULE: 样式/设计令牌 =====
   // 域：UI 层 —— 面板与通知相关的全部 CSS 字符串（设计令牌 + 注入样式），纯数据、无控制流。
@@ -529,6 +539,7 @@
   STYLES.BTN_DANGER    = 'background:transparent;color:' + STYLES.T.danger + ';border:1px solid ' + STYLES.T.danger + ';border-radius:' + STYLES.T.r6 + ';cursor:pointer;';
   // 副脚本 UI 接入导出（设计 §5.3：addon 引用令牌保持视觉同构）
   try { window.__cxUI = STYLES; } catch (e) { swallow(e); }
+
   // ===== 存储与 API 通讯 =====
   // 面板配置持久化（localStorage: cx_panel_cfg）。爬虫桥的 fetch 类 API 通讯仍在其业务模块(bridge)，
   // 此处集中「本地存储」基础能力；后续看播统计等本地存储也可统一收口到此。
@@ -577,6 +588,7 @@
       clampCfg();
     } catch (e) { swallow(e); }
   }
+
   // ===== 站点适配 / 页面路由 =====
   // 站点检测与路由分发：当前聚焦超星学习通(chaoxing)；预留智慧树网(zhihuishu)等兼容点。
   // 路由结果可用于驱动白名单抽取 / 接管策略的差异（不同站点的 attachments 字段、播放器容器不同）。
@@ -603,6 +615,8 @@
   function siteAnanas(win) { try { return (win && win.ananas) || window.ananas; } catch (e) { return null; } }
   // 任务点播放器容器选择器（chaoxing 用 .ans-attach-ct）。
   function siteTaskContainerSel() { return SELECTORS.TASK_CONTAINER; }
+
+
   // ===== MODULE: 接管策略开关（biz/policy）=====
   // 域：业务·策略 —— 是否接管视频的「开关判定」，与通用工具解耦（原先错置于 utils/utils.js 顶层）。
   //   页面级 opt-out：?cxforce=off 或 localStorage.cx_force_off='1' → 全局停用（含原型 neutralize 与扫描接管）。
@@ -627,6 +641,7 @@
     } catch (e) { swallow(e); }
     return false;
   }
+
   // ===== DOMAIN: biz/bridge (local crawler bridge client) =====
   // ===== MODULE: 本地桥客户端 =====
   // 域：核心业务模块 —— 本地桥客户端，对接爬虫端清单。
@@ -773,6 +788,7 @@
       } catch (e) { swallow(e); }
     } catch (e) { swallow(e); }
   }
+
   // ===== DOMAIN: biz/targeting (targeting whitelist) =====
   // ===== MODULE: 定向/白名单 =====
   // 域：核心业务模块 —— 定向/白名单，驱动续播范围与回退策略。
@@ -947,6 +963,7 @@
     } catch (e) { swallow(e); }
     return false; // 定向模式但无任何白名单 id 命中 → 视为广告/插播 → 跳过
   }
+
   // ===== DOMAIN: biz/dedup (replay hardening / dedup) =====
   // ===== MODULE: 重播加固(去重) =====
   // 域：核心业务模块 —— 重播加固(去重)。
@@ -1029,6 +1046,7 @@
     for (var i = 0; i < iss.length; i++) { if (iss[i] && ENDED_SRCS[iss[i]]) return true; }
     return false;
   }
+
   // ===== DOMAIN: biz/playback (playback primitives / takeover helpers) =====
   // 覆盖后的 pause：平台任何暂停指令都被忽略（no-op）
   var pauseNoop = function () { return; };
@@ -1089,6 +1107,7 @@
     } catch (e) { swallow(e); }
     return false;
   }
+
   // ===== DOMAIN: biz/stats (watch stats, local estimate) =====
   // ===== MODULE: 看播统计 =====
   // 域：核心业务模块 —— 看播统计/进度本地估算。
@@ -1127,6 +1146,7 @@
       try { localStorage.setItem('cx_watch_stats', JSON.stringify(_watchStats)); } catch (e3) { swallow(e3); }
     }
   }
+
   // ===== DOMAIN: biz/foreground (foreground detection + display helpers) =====
   // ===== MODULE: 用户暂停开关 =====
   // 域：核心业务模块 —— 用户暂停开关闸门。
@@ -1175,6 +1195,7 @@
     try { s = decodeURIComponent(s); } catch (e) {}
     return s.length > 76 ? (s.slice(0, 48) + '…' + s.slice(-26)) : s;
   }
+
   // ===== DOMAIN: dom module-08-10-15 =====
   // ===== MODULE: 接管引擎(overrideVideo) =====
   // 域：DOM监听与注入层 —— 接管引擎(overrideVideo)。
@@ -1540,6 +1561,9 @@
 
   // 【内聚性收敛】卸载还原（_ananasNeutralized / _playWatchDocs / cleanupListeners / pagehide 钩子 / uninstall 导出）
   //   已迁至 dom/lifecycle.js —— 接管引擎负责「加 Hook」，lifecycle 负责「拆 Hook」，职责相反故分离。
+
+
+
   // ===== DOMAIN: biz session =====
   // ===== MODULE: 观看会话（用户暂停/恢复 + 计时器） =====
   // 域：业务层 —— 「用户意图」与「观看时长」的会话状态管理。
@@ -1619,6 +1643,7 @@
       if (v[FLAGS.userPaused] && cxState(v).resumeAt && Date.now() >= cxState(v).resumeAt) userResume(v);
     } catch (e) { swallow(e); } }
   }
+
   // ===== DOMAIN: ui toast =====
   // ===== MODULE: 轻提示组件(toast) =====
   // 域：界面层 —— 全局轻提示（反馈分级）。
@@ -1645,6 +1670,7 @@
       clearTimeout(cxState(t).timer); cxState(t).timer = setTimeout(function () { if (t) t.style.display = 'none'; }, 1500);
     } catch (e) { swallow(e); }
   }
+
   // ===== DOMAIN: dom lifecycle =====
   // ===== MODULE: 卸载还原与生命周期(cleanupListeners) =====
   // 域：DOM监听与注入层 —— 页面卸载时的侵入性还原（uninstall 语义的唯一实现处）。
@@ -1746,6 +1772,7 @@
   try { window.addEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
   try { window.addEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
   try { window.__CX_FORCE_PLAY.uninstall = cleanupListeners; } catch (e) { swallow(e); }   // 暴露手动卸载还原钩子（应对热禁用）
+
   // ===== DOMAIN: ui/addons (addon registry) =====
   // ===== MODULE: 副脚本注册中心 =====
   // 域：核心业务模块 —— 副脚本注册中心 + 主循环 _loopTick 调度。
@@ -1858,6 +1885,7 @@
   drainAddonQueue();   // 排空先于主脚本加载的副脚本注册（此时面板未建，仅入册，建面板时渲染）
   // 命令面板：暴露注册入口供副脚本扩展命令（initBuiltinCommands 在 MODULE 内、_cxCommands 初始化后调用，避免执行顺序问题）
   try { window.__cxRegisterCommand = registerCommand; } catch (e) { swallow(e); }
+
   // ===== DOMAIN: ui/panel (floating control panel) =====
   // ===== MODULE: 悬浮控制面板 =====
   // 域：UI/面板模块 —— 悬浮控制面板。
@@ -1966,6 +1994,8 @@
     document.addEventListener('pause', syncNinjaGlyph, true);
     Store.onEv('panel:refresh', syncNinjaGlyph);   // 扫描刷新时兜底同步
   } catch (e) { swallow(e); }
+
+
   // ===== DOMAIN: ui/panel-template (panel HTML view) =====
   // Panel HTML template (view layer): returns the floating panel skeleton string, injected by ensurePanel.
   // Depends only on STYLES and the passed _inFrame flag (cross-origin iframe fallback marker).
@@ -2093,6 +2123,7 @@
       '</div>'
     );
   }
+
   // ===== DOMAIN: ui/panel-core (panel assembly + event binding) =====
   // Panel assembly: create DOM, inject styles, bind all control events and navigation.
   function ensurePanel() {
@@ -2434,6 +2465,7 @@
     positionPanel();   // 适配 progress-panel：若其已挂载，则下沉避让避免同角重叠
     return el;
   }
+
   // ===== DOMAIN: ui/panel-drag (panel drag + ninja side) =====
   // Panel dragging (compositor-layer optimization) and Ninja strip side detection.
   // 拖拽移动面板（修复 Ninja 模式无法上下/左右移动）：标题栏空白、卡片间隙、折叠态呼吸灯条均可拖动；
@@ -2500,6 +2532,7 @@
   }
 
   // Ninja 已改为圆形悬浮钮（对称，任意位置观感一致），无需左/右贴边判定；位置由 PANEL_POS 自由落点决定
+
   // ===== DOMAIN: ui/diagnostics (diagnostics + blackbox) =====
   function buildDiagnostics() {                    // 一键反馈：汇总共全部状态/开关/标志为文本
     var L = [];
@@ -2549,6 +2582,7 @@
       Store.emit('ui:toast', '已复制诊断信息');
     } catch (e2) { Store.emit('ui:toast', '复制失败，请手动复制'); }
   }
+
   // ===== DOMAIN: ui/dashboard (state refresh + badge + dashboard + video list) =====
   function fmtTime(sec) {                          // 秒 → m:ss / h:mm:ss
     if (!isFinite(sec) || sec < 0) sec = 0;
@@ -2757,6 +2791,7 @@
     }
     wrap.innerHTML = html;
   }
+
   // ===== DOMAIN: ui/commands (command palette) =====
   // ===== MODULE: 命令面板 =====
   // 域：UI/面板模块 —— 命令面板。
@@ -2973,6 +3008,7 @@
   function _cxCmdOnBlur() { hideCmdList(); }
   // _cxCommands 已在本 MODULE 顶部初始化完毕，此处调用 initBuiltinCommands 注册内置命令（执行顺序正确，不会被 var 初始化覆盖）
   try { initBuiltinCommands(); } catch (e) { swallow(e); }
+
   // ===== DOMAIN: bootstrap/main-loop (startup + main loop scheduler) =====
   // 即时接管：任何 video 一开始 play 即立刻 override，无需等 2s 轮询（吸收 chaoxing-media-collector 的 play 捕获思路）。
   // 缩短动态插入播放器的接管空窗，使手动暂停开关对"新插入、尚未轮询到"的视频也可靠生效；overrideVideo 自身幂等且
