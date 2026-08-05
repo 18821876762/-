@@ -91,6 +91,7 @@
         try { navigator.mediaSession.setActionHandler('pause', _origMediaSessionPause != null ? _origMediaSessionPause : null); } catch (e2) { swallow(e2); }
         if (_origMediaSessionState != null) { try { navigator.mediaSession.playbackState = _origMediaSessionState; } catch (e3) { swallow(e3); } }
       }
+      try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._mediaSessionHooked = false; } catch (e) { swallow(e); }   // 安全审计(建议#10)：接管已还原，更新盘点标志
     } catch (e) { swallow(e); }
     // ⑤ 还原 window.ananas.pause 中和（逐个 frame 的 ananas 全局暂停封装还原为注入前真原生，清除全局死 Hook），
     //    并删除残留元数据 __cxAnanasNativePause，避免向宿主全局泄漏脚本内部标记（审查中优先级#4）。
@@ -115,6 +116,7 @@
     // ⑧ 摘除卸载钩子自身：手动 uninstall() 后页面继续存活时，不留残余监听（页面真卸载时本项无副作用）
     try { window.removeEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
     try { window.removeEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+    try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._uninstallHooked = false; } catch (e) { swallow(e); }   // 安全审计(建议#10)：卸载钩子已摘除
     // ⑨ 撤销命名空间导出：删除脚本在 window 上新增的全部全局符号（含副脚本注册契约），回到注入前全局态（审查高优先级#1）。
     //    若其它脚本已读取/缓存这些引用，不影响其既有行为；但卸载后不应再暴露可调用/可覆盖的接口。
     try { delete window.__cxRegisterAddon; } catch (e) { swallow(e); }
@@ -137,4 +139,5 @@
   }
   try { window.addEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
   try { window.addEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+  try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._uninstallHooked = true; } catch (e) { swallow(e); }   // 安全审计(建议#10)：标记卸载钩子已装
   try { window.__CX_FORCE_PLAY.uninstall = cleanupListeners; } catch (e) { swallow(e); }   // 暴露手动卸载还原钩子（应对热禁用）

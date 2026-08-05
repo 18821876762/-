@@ -47,3 +47,52 @@
       Store.emit('ui:toast', '已复制诊断信息');
     } catch (e2) { Store.emit('ui:toast', '复制失败，请手动复制'); }
   }
+
+  // ===== 安全审计（建议#10）：实时侵入点盘点 =====
+  // 仅读取可观测事实（全局符号 / 注入 DOM id / prototype 包装特征 / mediaSession 钩子标志 / localStorage），
+  // 不修改任何运行状态。供面板「系统」页透明展示脚本当前的全局侵入面，落实审计透明化诉求。
+  var _CX_AUDIT_GLOBALS = ['__CX_FORCE_PLAY', '__cxRegisterAddon', '__cxRegisterCommand', '__cxUI', '__cxAddonQueue'];
+  var _CX_AUDIT_DOM_IDS = ['__cxPanel', '__cxPanelNinjaStyle', '__cxPanelAnimStyle', '__cxPanelMobileStyle', '__cxToast'];
+  function _cxAuditDomPresent(id) {
+    try {
+      if (document.getElementById(id)) return true;
+      if (window.top && window.top !== window && window.top.document && window.top.document.getElementById(id)) return true;
+    } catch (e) { swallow(e); }
+    return false;
+  }
+  function _cxAuditProtoPause() {   // 包装函数体内引用了 __cxForcePaused 标记（属性名不被压缩，可稳定探测）
+    try { return String(HTMLMediaElement.prototype.pause).indexOf('__cxForcePaused') >= 0; } catch (e) { return false; }
+  }
+  function _cxAuditProtoRate() {
+    try { var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate'); return !!(d && d.set && String(d.set).indexOf('__cxForcePaused') >= 0); } catch (e) { return false; }
+  }
+  function _cxAuditMediaSession() {
+    try { return !!(window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY._mediaSessionHooked); } catch (e) { return false; }
+  }
+  function _cxAuditUninstallHook() {
+    try { return !!(window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY._uninstallHooked); } catch (e) { return false; }
+  }
+  function _cxAuditLsKeys() {
+    var ks = [];
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('cx_') === 0) ks.push(k); } } catch (e) { swallow(e); }
+    return ks;
+  }
+  // 返回结构化清单：[{area, item, on, detail}] —— on=true 表示当前已侵入/已接管
+  function buildInvasionReport() {
+    var rows = [];
+    function add(area, item, on, detail) { rows.push({ area: area, item: item, on: !!on, detail: detail || (on ? item : '未启用/已还原') }); }
+    var g = [], i;
+    for (i = 0; i < _CX_AUDIT_GLOBALS.length; i++) { try { if (typeof window[_CX_AUDIT_GLOBALS[i]] !== 'undefined') g.push(_CX_AUDIT_GLOBALS[i]); } catch (e) { swallow(e); } }
+    add('全局符号', 'window 导出(namespace+副脚本契约)', g.length > 0, g.length ? g.join(', ') : '无');
+    var d = [];
+    for (i = 0; i < _CX_AUDIT_DOM_IDS.length; i++) { if (_cxAuditDomPresent(_CX_AUDIT_DOM_IDS[i])) d.push(_CX_AUDIT_DOM_IDS[i]); }
+    add('注入 DOM', '面板/style/Toast 节点', d.length > 0, d.length ? d.join(', ') : '无');
+    add('prototype.pause', 'HTMLMediaElement.prototype.pause 包装(抗平台还原)', _cxAuditProtoPause());
+    add('prototype.playbackRate', 'playbackRate setter 包装', _cxAuditProtoRate());
+    add('navigator.mediaSession', 'pause handler 已接管(卸载还原)', _cxAuditMediaSession());
+    add('事件监听', 'pagehide/beforeunload 卸载钩子', _cxAuditUninstallHook());
+    var ls = _cxAuditLsKeys();
+    add('localStorage', 'cx_* 配置键(' + ls.length + ')', ls.length > 0, ls.length ? ls.slice(0, 8).join(', ') + (ls.length > 8 ? ' …' : '') : '无');
+    return rows;
+  }
+  try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.buildInvasionReport = buildInvasionReport; } catch (e) { swallow(e); }   // 暴露为公开 API（面板审计/测试可调用）

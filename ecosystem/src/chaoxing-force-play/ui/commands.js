@@ -72,6 +72,7 @@
     });
     registerCommand('copy', '复制诊断信息', false, function () { copyDiagnostics(); });
     registerCommand('refresh', '立即重扫视频与状态', false, function () { try { Store.emit('cmd:scan'); } catch (e) { swallow(e); } Store.emit('panel:refresh'); Store.emit('ui:toast', '已重扫'); });
+    registerCommand('audit', '刷新安全审计清单(系统页)', false, function () { try { Store.emit('ui:switchTab', 'system'); showPanel(); Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     registerCommand('rescan', '重启轮询(ms)，如 /rescan 1000', true, function (raw, arg) {
       var ms = parseInt(arg, 10); if (isNaN(ms)) { Store.emit('ui:toast', '用法: /rescan 500~5000'); return; } CONFIG.RESCAN_INTERVAL = ms; clampCfg(); savePanelCfg();
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }

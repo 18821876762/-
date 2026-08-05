@@ -293,6 +293,9 @@
       (function (b) { b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); }); })(navBtns[ni]);
     }
     el.querySelector('#__cxBtnCopy').addEventListener('click', copyDiagnostics);
+    // 安全审计（建议#10）：刷新「系统」页侵入点清单
+    var btnAudit = el.querySelector('#__cxBtnAudit');
+    if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     // 黑匣子导出按钮
     var btnExport = el.querySelector('#__cxBtnExport');
     if (btnExport) btnExport.addEventListener('click', function () {
