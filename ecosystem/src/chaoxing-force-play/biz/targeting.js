@@ -40,17 +40,20 @@
   //    ②refreshTargets 退化时优先用桥清单 objectids（爬虫侧权威、早于 AJAX 渲染），保证白名单不空窗；
   //    ③保留轮询兜底，应对 setter 被平台劫持/描述符受限写不进的极端情况。
   var _attachHooked = false;
+  // 钩子安装时捕获的 window.attachments 取值容器（跨模块供 cleanupListeners ③ 还原使用）；
+  // 仅当 window 无自有属性时本钩子才会安装，故容器内即「注入前语义」的快照，cleanup 据此还原以免 delete 丢失平台数据。
+  var _attachStore = null;
   function hookAttachments() {
     if (_attachHooked) return;
     try {
       if (Object.getOwnPropertyDescriptor(window, siteAttachmentsKey())) return;  // 已被平台定义（不可重定义）→ 退回轮询兜底
-      var _store = { value: siteAttachments() };
+      _attachStore = { value: siteAttachments() };
       Object.defineProperty(window, siteAttachmentsKey(), {
         configurable: true,
         enumerable: true,
-        get: function () { return _store.value; },
+        get: function () { return _attachStore.value; },
         set: function (v) {
-          _store.value = v;
+          _attachStore.value = v;
           try { refreshTargets(); } catch (e) { swallow(e); }   // 即时重建白名单，无需等下一个 2s 周期
         }
       });

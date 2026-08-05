@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T12:09:38+08:00  commit: 72bef36  minify: off
+// Built: 2026-08-05T12:30:12+08:00  commit: cfc31b8  minify: off
 
 
 (function () {
@@ -831,17 +831,20 @@
   //    ②refreshTargets 退化时优先用桥清单 objectids（爬虫侧权威、早于 AJAX 渲染），保证白名单不空窗；
   //    ③保留轮询兜底，应对 setter 被平台劫持/描述符受限写不进的极端情况。
   var _attachHooked = false;
+  // 钩子安装时捕获的 window.attachments 取值容器（跨模块供 cleanupListeners ③ 还原使用）；
+  // 仅当 window 无自有属性时本钩子才会安装，故容器内即「注入前语义」的快照，cleanup 据此还原以免 delete 丢失平台数据。
+  var _attachStore = null;
   function hookAttachments() {
     if (_attachHooked) return;
     try {
       if (Object.getOwnPropertyDescriptor(window, siteAttachmentsKey())) return;  // 已被平台定义（不可重定义）→ 退回轮询兜底
-      var _store = { value: siteAttachments() };
+      _attachStore = { value: siteAttachments() };
       Object.defineProperty(window, siteAttachmentsKey(), {
         configurable: true,
         enumerable: true,
-        get: function () { return _store.value; },
+        get: function () { return _attachStore.value; },
         set: function (v) {
-          _store.value = v;
+          _attachStore.value = v;
           try { refreshTargets(); } catch (e) { swallow(e); }   // 即时重建白名单，无需等下一个 2s 周期
         }
       });
@@ -1752,9 +1755,16 @@
         Object.defineProperty(HTMLMediaElement.prototype, 'playbackRate', NATIVE_RATE_DESC);
       }
     } catch (e) { swallow(e); }
-    // ③ 还原 window.attachments setter（脚本自建钩子，configurable:true 可删除，回到注入前"未定义"状态）
+    // ③ 还原 window.attachments（审查中优先级#5）：脚本自建 accessor 仅当 window 无自有属性时才安装；
+    //    先移除 accessor，再以数据属性还原钩子期间平台最后写入的取值（_attachStore.value），避免 drop 直接丢失
+    //    平台数据——即便卸载多在页面卸载时发生，仍保证「注入前语义」可恢复，而非回到裸 undefined。
     try {
-      if (_attachHooked && typeof siteAttachmentsKey === 'function') { delete window[siteAttachmentsKey()]; _attachHooked = false; }
+      if (_attachHooked && typeof siteAttachmentsKey === 'function') {
+        var _ak = siteAttachmentsKey();
+        try { delete window[_ak]; } catch (e) { swallow(e); }
+        try { Object.defineProperty(window, _ak, { configurable: true, enumerable: true, writable: true, value: _attachStore ? _attachStore.value : undefined }); } catch (e) { swallow(e); }
+        _attachHooked = false;
+      }
     } catch (e) { swallow(e); }
     // ④ 还原 navigator.mediaSession 暂停处理：还原为注入前的原始 handler 与 playbackState，
     //    而非盲目 setActionHandler('pause', null)——若页面原本设有 pause handler，盲目置 null 会破坏站点媒体按键交互（审查高优先级#3）。
