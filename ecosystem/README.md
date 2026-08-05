@@ -40,7 +40,7 @@ node tests/pure.test.js        # 纯函数单测：escapeHTML / fmtTime / signat
 ```
 纯函数单测不改动 src：用 `vm` 沙箱加载各 src 模块片段捕获函数声明后断言，确保与源码同源、不会随改动失步。
 
-卸载/可卸载性：脚本在 `pagehide` / `beforeunload` 以及 `window.__CX_FORCE_PLAY.uninstall()` 触发 `cleanupListeners()`，撤销全部侵入——包括还原原型方法、ananas 中和、`play` 监听、mediaSession 原 handler，并**删除**脚本在 `window` 上新增的全部全局导出（`__cxRegisterAddon` / `__cxRegisterCommand` / `__cxUI` / `__cxAddonQueue`）与注入的 DOM/样式（`#__cxPanel` 及三个 `*Style`、`#__cxToast`），最终 `delete window.__CX_FORCE_PLAY` 使页面全局回到注入前状态。命令 `/cleardata` 可主动清除脚本写入的 `cx_*` localStorage 键。回归见 `ecosystem/_sim/sim-lifecycle.js`。
+卸载/可卸载性：脚本在 `pagehide` / `beforeunload` 以及 `window.__CX_FORCE_PLAY.uninstall()` 触发 `cleanupListeners()`，撤销全部侵入——包括还原原型方法、ananas 中和、`play` 监听、mediaSession 原 handler，并**删除**脚本在 `window` 上新增的全部全局导出（`__cxRegisterAddon` / `__cxRegisterCommand` / `__cxUI` / `__cxAddonQueue`）与注入的 DOM/样式（`#__cxPanel` 及三个 `*Style`、`#__cxToast`），最终 `delete window.__CX_FORCE_PLAY` 使页面全局回到注入前状态。命令 `/cleardata` 可主动清除脚本写入的 `cx_*` localStorage 键。回归见 `ecosystem/_sim/sim-lifecycle.js`（全局符号/命名空间撤销 5/5）与 `ecosystem/_sim/sim-mediasession.js`（mediaSession 原 handler 保存→劫持→卸载还原契约 6/6，以模拟 mediaSession 闭环，无须真实浏览器实机回归）。
 
 ### 体积门禁
 - `check-module-size.ps1`：单文件行数红线（软 300 / 硬 350，超硬且不在白名单即失败）。

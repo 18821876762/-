@@ -1,8 +1,8 @@
 // 卸载清理回归：在 jsdom 中加载完整产物，触发 uninstall()，断言脚本对外暴露的
 // 全局符号与注入 DOM 已被撤销（对应沙箱独立性审查高优先级 #1/#2/#3）。
-// 注意：jsdom 不支持 iframe 跨 frame、navigator.mediaSession、真实视频元素，
-// 故仅验证「全局符号删除 + 命名空间终态」这一类不依赖真实页面的断言；mediaSession
-// 原 handler 还原需真实浏览器实机回归（jsdom 中 navigator.mediaSession 为 undefined，分支被跳过）。
+// 注意：jsdom 不支持 iframe 跨 frame、真实视频元素，故仅验证「全局符号删除 + 命名空间终态」这一类
+// 不依赖真实页面的断言；mediaSession 原 handler 还原的保存/还原契约已由同目录 sim-mediasession.js
+// 通过模拟 navigator.mediaSession 闭环覆盖（纯 JS 逻辑等价真实浏览器，不再依赖真实浏览器实机回归）。
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
