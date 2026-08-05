@@ -55,7 +55,9 @@
   // targets:updated / video:state（核心观测信号，本步未订阅刷新以免与 videos:scanned 重复渲染）；cmd:scan（UI 触发重扫）。
   try { Store.onEv('ui:toast', toast); } catch (e) { swallow(e); }
   try { Store.onEv('panel:refresh', refreshPanelState); } catch (e) { swallow(e); }
-  try { Store.onEv('videos:scanned', refreshPanelState); } catch (e) { swallow(e); }
+  // videos:scanned 由主循环高频触发，刷新面板属重 DOM 操作；节流到 ~150ms 一帧（尾沿兜底），
+  // 避免主线程被反复全量重绘拖慢。panel:refresh 为用户主动操作（开关面板/改设置），保持即时刷新。
+  try { Store.onEv('videos:scanned', throttle(refreshPanelState, 150)); } catch (e) { swallow(e); }
   try { Store.onEv('cmd:scan', function () { try { _loopTick(); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }
   function togglePanel() { if (_cxPanel && _cxPanel.style.display !== 'none') hidePanel(); else showPanel(); }
   // 一键退出/进入 Ninja 模式：卡在窄条、够不到「系统」勾选框时的逃生通道（键盘 N / 面板内「退出 n 模式」按钮共用）

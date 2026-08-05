@@ -49,10 +49,12 @@
     try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
     try { document.removeEventListener('keydown', keydownHandler); } catch (e) { swallow(e); }
     try { document.removeEventListener('visibilitychange', visibilityHandler, true); } catch (e) { swallow(e); }
-    // ① 还原 HTMLMediaElement.prototype.pause（仅当被本脚本 noop 包装时才写回原生实现）
+    // ① 还原 HTMLMediaElement.prototype.pause（优先按原始属性描述符还原，与 playbackRate 还原一致；
+    //    描述符不可用时退回函数引用写回。仅当被本脚本 noop 包装时才还原，避免误改其他脚本的覆盖）
     try {
       if (typeof HTMLMediaElement !== 'undefined' && NATIVE_PAUSE && HTMLMediaElement.prototype.pause !== NATIVE_PAUSE) {
-        HTMLMediaElement.prototype.pause = NATIVE_PAUSE;
+        if (NATIVE_PAUSE_DESC) Object.defineProperty(HTMLMediaElement.prototype, 'pause', NATIVE_PAUSE_DESC);
+        else HTMLMediaElement.prototype.pause = NATIVE_PAUSE;
       }
     } catch (e) { swallow(e); }
     // ② 还原 HTMLMediaElement.prototype.playbackRate setter（还原为注入前的原始属性描述符）
