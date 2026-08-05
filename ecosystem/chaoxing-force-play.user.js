@@ -77,6 +77,47 @@
     return s;
   }
 
+  // ===== 错误容错收口（safeCall）=====
+  // 把遍布全脚本的「try { fn(); } catch (e) { swallow(e); }」样板收口到一处：集中诊断、调用点更干净。
+  // 返回 fn 的执行结果；异常已被 swallow 记录，调用点无需再包 try/catch。
+  function safeCall(fn, tag) {
+    try { return fn(); } catch (e) { swallow(e, tag || 'safeCall'); }
+  }
+
+  // ===== 频率控制（throttle / debounce）=====
+  // 重 DOM 刷新（如 refreshPanelState）在高频事件（videos:scanned / panel:refresh / MutationObserver 兜底）下
+  // 反复全量重绘会拖慢主线程。throttle 限频为「至少 wait ms 执行一次」并尾沿兜底补最后一帧；
+  // debounce 则「停止触发 wait ms 后才执行」，适合输入类（搜索/滑块）场景。两者均不抛错（异常走 safeCall→swallow）。
+  function throttle(fn, wait) {
+    var last = 0, timer = null, ctxA = null, argsA = null;
+    return function () {
+      var now = Date.now(), ctx = this, args = arguments;
+      var remaining = wait - (now - last);
+      if (remaining <= 0) {
+        if (timer) { clearTimeout(timer); timer = null; }
+        last = now;
+        safeCall(function () { fn.apply(ctx, args); }, 'throttle');
+      } else if (!timer) {
+        ctxA = ctx; argsA = args;
+        timer = setTimeout(function () {
+          last = Date.now(); timer = null;
+          safeCall(function () { fn.apply(ctxA, argsA); }, 'throttle');
+        }, remaining);
+      }
+    };
+  }
+  function debounce(fn, wait) {
+    var timer = null;
+    return function () {
+      var ctx = this, args = arguments;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        timer = null;
+        safeCall(function () { fn.apply(ctx, args); }, 'debounce');
+      }, wait);
+    };
+  }
+
   // 接管策略开关（forcePlayEnabled / cxVideoOptOut）已迁至 biz/policy.js（业务·策略域），本文件不再持有。
   // ===== DOMAIN: utils/url (URL parsing helpers) =====
   // ===== MODULE: URL 解析 =====
@@ -237,6 +278,10 @@
   //   auto-next 的 hold 暂停通过原生备份 NATIVE_PAUSE(经 v.__np)绕过拦截真正暂停，不受影响。
   var NATIVE_PAUSE = (typeof HTMLMediaElement !== 'undefined' && HTMLMediaElement.prototype && HTMLMediaElement.prototype.pause)
     ? HTMLMediaElement.prototype.pause : null;
+  // 原生 pause 属性描述符备份：与 NATIVE_RATE_DESC 对称。卸载还原时优先按描述符 defineProperty 写回，
+  // 以正确处理 pause 原为 getter/访问器或被其他脚本定义为非 writable 的情况（函数引用写回仅覆盖最常见情形）。
+  var NATIVE_PAUSE_DESC = (typeof HTMLMediaElement !== 'undefined' && HTMLMediaElement.prototype)
+    ? Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'pause') : null;
   var NATIVE_PLAY = (typeof HTMLMediaElement !== 'undefined' && HTMLMediaElement.prototype && HTMLMediaElement.prototype.play)
     ? HTMLMediaElement.prototype.play : null;   // 原生 play 备份：用户暂停闸门放行时经此播放，绕过实例级覆盖
   function installPrototypePauseNeutralize() {
@@ -1651,10 +1696,12 @@
     try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
     try { document.removeEventListener('keydown', keydownHandler); } catch (e) { swallow(e); }
     try { document.removeEventListener('visibilitychange', visibilityHandler, true); } catch (e) { swallow(e); }
-    // ① 还原 HTMLMediaElement.prototype.pause（仅当被本脚本 noop 包装时才写回原生实现）
+    // ① 还原 HTMLMediaElement.prototype.pause（优先按原始属性描述符还原，与 playbackRate 还原一致；
+    //    描述符不可用时退回函数引用写回。仅当被本脚本 noop 包装时才还原，避免误改其他脚本的覆盖）
     try {
       if (typeof HTMLMediaElement !== 'undefined' && NATIVE_PAUSE && HTMLMediaElement.prototype.pause !== NATIVE_PAUSE) {
-        HTMLMediaElement.prototype.pause = NATIVE_PAUSE;
+        if (NATIVE_PAUSE_DESC) Object.defineProperty(HTMLMediaElement.prototype, 'pause', NATIVE_PAUSE_DESC);
+        else HTMLMediaElement.prototype.pause = NATIVE_PAUSE;
       }
     } catch (e) { swallow(e); }
     // ② 还原 HTMLMediaElement.prototype.playbackRate setter（还原为注入前的原始属性描述符）
@@ -1868,7 +1915,9 @@
   // targets:updated / video:state（核心观测信号，本步未订阅刷新以免与 videos:scanned 重复渲染）；cmd:scan（UI 触发重扫）。
   try { Store.onEv('ui:toast', toast); } catch (e) { swallow(e); }
   try { Store.onEv('panel:refresh', refreshPanelState); } catch (e) { swallow(e); }
-  try { Store.onEv('videos:scanned', refreshPanelState); } catch (e) { swallow(e); }
+  // videos:scanned 由主循环高频触发，刷新面板属重 DOM 操作；节流到 ~150ms 一帧（尾沿兜底），
+  // 避免主线程被反复全量重绘拖慢。panel:refresh 为用户主动操作（开关面板/改设置），保持即时刷新。
+  try { Store.onEv('videos:scanned', throttle(refreshPanelState, 150)); } catch (e) { swallow(e); }
   try { Store.onEv('cmd:scan', function () { try { _loopTick(); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }
   function togglePanel() { if (_cxPanel && _cxPanel.style.display !== 'none') hidePanel(); else showPanel(); }
   // 一键退出/进入 Ninja 模式：卡在窄条、够不到「系统」勾选框时的逃生通道（键盘 N / 面板内「退出 n 模式」按钮共用）

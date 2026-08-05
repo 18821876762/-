@@ -39,4 +39,45 @@
     return s;
   }
 
+  // ===== 错误容错收口（safeCall）=====
+  // 把遍布全脚本的「try { fn(); } catch (e) { swallow(e); }」样板收口到一处：集中诊断、调用点更干净。
+  // 返回 fn 的执行结果；异常已被 swallow 记录，调用点无需再包 try/catch。
+  function safeCall(fn, tag) {
+    try { return fn(); } catch (e) { swallow(e, tag || 'safeCall'); }
+  }
+
+  // ===== 频率控制（throttle / debounce）=====
+  // 重 DOM 刷新（如 refreshPanelState）在高频事件（videos:scanned / panel:refresh / MutationObserver 兜底）下
+  // 反复全量重绘会拖慢主线程。throttle 限频为「至少 wait ms 执行一次」并尾沿兜底补最后一帧；
+  // debounce 则「停止触发 wait ms 后才执行」，适合输入类（搜索/滑块）场景。两者均不抛错（异常走 safeCall→swallow）。
+  function throttle(fn, wait) {
+    var last = 0, timer = null, ctxA = null, argsA = null;
+    return function () {
+      var now = Date.now(), ctx = this, args = arguments;
+      var remaining = wait - (now - last);
+      if (remaining <= 0) {
+        if (timer) { clearTimeout(timer); timer = null; }
+        last = now;
+        safeCall(function () { fn.apply(ctx, args); }, 'throttle');
+      } else if (!timer) {
+        ctxA = ctx; argsA = args;
+        timer = setTimeout(function () {
+          last = Date.now(); timer = null;
+          safeCall(function () { fn.apply(ctxA, argsA); }, 'throttle');
+        }, remaining);
+      }
+    };
+  }
+  function debounce(fn, wait) {
+    var timer = null;
+    return function () {
+      var ctx = this, args = arguments;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        timer = null;
+        safeCall(function () { fn.apply(ctx, args); }, 'debounce');
+      }, wait);
+    };
+  }
+
   // 接管策略开关（forcePlayEnabled / cxVideoOptOut）已迁至 biz/policy.js（业务·策略域），本文件不再持有。
