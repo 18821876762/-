@@ -153,10 +153,12 @@ function protoPause() {
 2. **温和模式是否对超星直接禁用选项**：避免用户误选 `gentle` 导致漏拦却不知。建议在面板选 `gentle` 时若识别为超星，弹确认 + 提示「可能漏拦」。
    - ✅ **已落地（2026-08-05）**：`ui/panel-controls.js` 的 `bindPanelControlEvents`（`#__cxIntrusion` change）中，当 `intr.value==='gentle'` 且 `detectSite()==='chaoxing'` 时调用 `window.confirm` 弹确认框（文案含「可能偶发漏拦」）；用户取消则把 `<select>` 回退为 `CONFIG.INTRUSION_MODE` 并 toast 提示保持当前模式。非超星站点或 `detectSite` 不可用时跳过确认，零回归。该绑定已从 `panel-core.js` 的 `ensurePanel` 抽出到独立 `panel-controls.js` 以合规单文件行数红线。
 3. **礼貌模式与「平台用 `Object.freeze` 锁原型」的对抗**：`toString` 伪装无法阻止平台 freeze 后重赋值；行为探测负责兜底重装，但仍依赖 `setInterval` 周期——极端情况下有短暂失效窗口，是否可接受？
+   - ✅ **已决策（2026-08-05）**：接受当前**轮询兜底**方案，不引入 Proxy/getter 类激进对抗，理由：① 失效窗口被 `RESCAN_INTERVAL`（默认 2s）上界约束，`main-loop` 每轮 F-B4 重装即自愈；② 实例级接管（`_ovEnforce` / `pauseNoop`）在原型短暂被还原期间仍生效，仅「原型级 `pause` 拦截」有窗口，不回退到「视频完全失控」；③ 在原生原型上改用访问器（getter/setter）拦截重赋值会破坏 `pause.apply`/原生调用语义且更易被平台检测，风险高于收益。结论：残留窗口属可接受设计权衡，无需代码变更。运行期若平台确实 freeze 后重赋值，去抖 toast 报警 + 自愈链路已覆盖（见 P2/P4）。
 4. **是否把 `MARK` 外提做成无条件（连非礼貌模式也外提）**？可统一代码路径，但会改变现状 `toString` 特征（影响现有 tamper-guard 字符串扫描基线）。建议仅礼貌模式外提，保持默认行为零回归。
+   - ✅ **已决策（2026-08-05）**：按设计建议**保持条件外提**——仅 `POLITE_MODE` 开启时把 `MARK` 移出函数体，默认（非礼貌）模式维持现状 `toString` 特征不变。理由：tamper-guard 的字符串扫描基线以默认模式为准，无条件外提会同时改变默认与礼貌两种模式的 `toString`，既无意义又引入回归风险；条件外提已满足「礼貌模式抗检测」目标且默认零回归（已通过 `sim-gentle`/`sim-polite` 验证）。无需代码变更。
 
 ---
 
 ## 7. 下一步
 
-P0–P3 已落地（每阶段均跑通 `node --check` + 体积门禁 + `pure.test.js` + 对应 `_sim` 回归）。剩余 P4：`INTRUSION_MODE` 运行期切换走 `cleanupListeners` 还原重装（手动切换无残留 + `sim-lifecycle` 复用）。运行期切换 `POLITE_MODE` 的 `toString` 版本即时性由 `main-loop` 每轮 F-B4 重装兜底（≤ `RESCAN_INTERVAL`，注入态已验证正确；如需即时可在面板切换时主动重装）。
+P0–P4 已全部落地（每阶段均跑通 `node --check` + 体积门禁 + `pure.test.js` + 对应 `_sim` 回归）。§6 全部开放问题（#1 站点识别覆盖 `.edu.cn`、#2 温和模式超星确认、#3 freeze 对抗窗口、#4 MARK 条件外提）均已落地或已决策收口，无需进一步代码变更。运行期切换 `POLITE_MODE` 的 `toString` 版本即时性由 `main-loop` 每轮 F-B4 重装兜底（≤ `RESCAN_INTERVAL`，注入态已验证正确）。设计文档至此闭合。
