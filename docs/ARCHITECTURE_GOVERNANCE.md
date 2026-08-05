@@ -22,9 +22,9 @@
 | `meta-config/` | 元信息：CONFIG / STYLES / CONST / FLAGS / 原型中和 | `config.js` |
 | `storage/` | 配置持久化（saveXxx/loadXxx/clampCfg） | `storage.js` |
 | `site/` | 站点适配 / 页面路由 | `site-router.js` |
-| `biz/` | **业务域**：按子域细分文件 | `targeting` `dedup` `playback` `stats` `foreground` |
+| `biz/` | **业务域**：按子域细分文件 | `targeting` `dedup` `playback` `stats` `foreground` `zhihuishu` |
 | `dom/` | 接管引擎：overrideVideo / 视频枚举 / 用户暂停恢复 / 计时器 / toast / MO 自启动 | `dom.js` |
-| `ui/` | **界面域**：按关注点细分文件 | `addons` `panel` `panel-template` `panel-core` `panel-controls` `panel-drag` `diagnostics` `dashboard` `commands` |
+| `ui/` | **界面域**：按关注点细分文件 | `addons` `panel` `panel-template` `panel-core` `panel-controls` `panel-drag` `diagnostics` `dashboard` `commands` `zhihuishu-fab` |
 | `bootstrap/` | 自启动：IIFE 开启+幂等守卫 / 主循环 | `core.js` `main-loop.js` |
 
 `biz/` 与 `ui/` 是"域"最多的两层，新功能优先落在这两层，并按子域继续拆文件（见 §3）。
@@ -126,3 +126,4 @@ cd ecosystem && powershell -File check-module-size.ps1
 | 2026-08-03 | 立规：分层分类、单文件红线（目标 300 / 硬上限 350）、新功能归域流程、白名单仅 `dom/dom.js`、附 `check-module-size.ps1` |
 | 2026-08-03 | 规约瘦身：§4 拆分机械约束的 ASI 代码示例外移至 `docs/references/split-gotchas.md`；修正重复的 §4 编号（现 §4 拆分约束 / §5 构建校验 / §6 自检脚本 / §7 历史教训 / §8 注释规范 / §9 变更记录） |
 | 2026-08-04 | 注释时效治理：代码内 `vX.Y` 功能徽标与历史叙述类注释迁出至 `docs/code-annotation-history.md`；新增 §8 注释规范红线（why 类保留 / 叙事类迁出）；`core-biz/core-biz.js` 与 `ui/ui.js` 删除清空 `$deprecated` |
+| 2026-08-05 | 智慧树(知到)适配追加：新增 `biz/zhihuishu.js`(上课弹窗题目随机选→答题→删弹窗) 与 `ui/zhihuishu-fab.js`(右下角微型标志图标 FAB，与超星面板视觉隔离)；`ui/` 与 `biz/` 域表补充；两模块仅 `detectSite()==='zhihuishu'` 激活 |

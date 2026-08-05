@@ -66,6 +66,7 @@ $domainRel = @(
   'biz/playback.js',         # 业务·播放原语：pauseNoop / safePlay / releaseVideo / nearEnd
   'biz/stats.js',            # 业务·看播统计：_watchStats / loadWatchStats / recordWatchMs
   'biz/foreground.js',       # 业务·前台判定：foregroundVideo / escapeHTML / shortSrc
+  'biz/zhihuishu.js',        # 业务·智慧树专属：上课弹窗题目自动处理（随机选→答题→删弹窗），仅 zhihuishu 激活
   'dom/dom.js',              # 接管引擎：overrideVideo / 视频枚举 walkVideos / neutralizeGlobalPause / MO 自启动（会话·toast·卸载还原已迁出）
   'biz/session.js',          # 业务·观看会话：userPause / userResume / autoStopTick / resumeTick（用户意图覆盖接管引擎）
   'ui/toast.js',             # 界面·轻提示组件：toast（反馈分级）；经 Store.emit('ui:toast') 触发，订阅在 ui/panel.js
@@ -79,6 +80,7 @@ $domainRel = @(
   'ui/diagnostics.js',       # 界面·诊断与黑匣子：buildDiagnostics / copyDiagnostics / fallbackCopy
   'ui/dashboard.js',         # 界面·状态刷新：refreshPanelState / updateBadge / renderDashboard / renderVideoList
   'ui/commands.js',          # 界面·命令面板：registerCommand / executeRawCmd / 下拉交互
+  'ui/zhihuishu-fab.js',     # 界面·智慧树专属：右下角微型标志性图标 FAB（与超星面板视觉隔离，仅 zhihuishu 渲染）
   'bootstrap/main-loop.js'   # 自启动：play 即时接管 / 首次安装 / _loopTick 主循环 / Store.state 镜像
 )
 

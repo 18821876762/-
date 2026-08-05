@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         学习通·强制续播（主脚本）
 // @namespace    https://github.com/cx-force-play/chaoxing-force-play
-// @version      4.10
+// @version      4.11
 // @author       anon
-// @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 页面全局 attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 全局暂停封装、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 页面全局 attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。【v4.x 面板化】命令面板(/唤起、↑↓/Tab/Enter/Esc、星标收藏夹持久化)、运维仪表盘(实时 CPU/内存/网速监控)、Ninja 折叠态(胶囊居中图标+播放/暂停状态指示)、面板设置刷新后持久化、副脚本注册中心(可扩展命令与开关)；v4.9 面板位置策略锁定右上角安全位、禁用拖拽避免遮挡。【v4.10 智慧树适配】新增 @match *://*.zhihuishu.com/*；站点私有全局/选择器收口 SITES 映射(detectSite 实时分发)；智慧树无 window.attachments 白名单与 window.ananas 私有暂停封装，auto 模式同样激进原型中性化强制续播，白名单/平台暂停对抗待真实站点校准。
+// @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 页面全局 attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 全局暂停封装、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 页面全局 attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。【v4.x 面板化】命令面板(/唤起、↑↓/Tab/Enter/Esc、星标收藏夹持久化)、运维仪表盘(实时 CPU/内存/网速监控)、Ninja 折叠态(胶囊居中图标+播放/暂停状态指示)、面板设置刷新后持久化、副脚本注册中心(可扩展命令与开关)；v4.9 面板位置策略锁定右上角安全位、禁用拖拽避免遮挡。【v4.10 智慧树适配】新增 @match *://*.zhihuishu.com/*；站点私有全局/选择器收口 SITES 映射(detectSite 实时分发)；智慧树无 window.attachments 白名单与 window.ananas 私有暂停封装，auto 模式同样激进原型中性化强制续播，白名单/平台暂停对抗待真实站点校准。【v4.11 智慧树专属交互】与学习通 UI 刻意区分：①上课弹窗题目自动处理(biz/zhihuishu.js)——轮询检测随堂题目弹窗，随机选一个选项→点击「答题」→删除弹窗(不去管对错，仅消干扰)；②右下角微型标志性图标 FAB(ui/zhihuishu-fab.js)——智慧树品牌蓝绿树芽图标，常驻右下角，点击展开极简浮层显示续播状态与本次自动作答数、可一键开关续播；两功能均仅 detectSite()==='zhihuishu' 激活，超星页面零副作用。智慧树弹窗/选项/答题按钮选择器为 best-effort 并集，待真实站点校准(同 SITES 收口思想，改 ZHIHUISHU 映射即可)。
 // @match        *://*.chaoxing.com/*
 // @match        *://*.edu.cn/*
 // @match        *://*.zhihuishu.com/*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T17:42:49+08:00  commit: 0d5d0b0  minify: off
+// Built: 2026-08-05T18:32:40+08:00  commit: 1d47daa  minify: off
 
 
 (function () {
@@ -1355,6 +1355,134 @@
     try { s = decodeURIComponent(s); } catch (e) {}
     return s.length > 76 ? (s.slice(0, 48) + '…' + s.slice(-26)) : s;
   }
+
+  // ===== DOMAIN: biz/zhihuishu (Zhihuishu / 智慧树-知到 专属业务) =====
+  // ===== MODULE: 智慧树上课弹窗题目自动处理 =====
+  // 域：业务模块 —— 智慧树(知到)专属，与超星(学习通)完全隔离；仅 detectSite()==='zhihuishu' 时才激活。
+  // 【需求差异】智慧树上课期间会弹出「随堂题目」弹窗（互动题/弹幕答题），其 UI 与超星学习通结构完全不同：
+  //   ① 无 window.attachments 白名单、无 window.ananas 私有暂停封装（已由 site-router.js 收口为智慧树空键）；
+  //   ② 强制续播仍由原型级 pause 中性化(usePrototypeNeutralize auto 分支对智慧树激进)兜底，无需本模块介入；
+  //   ③ 本模块独有职责：弹窗题目干扰处理 —— 随机选一个选项 → 点击「答题」按钮 → 删除弹窗。
+  // 题目对错不在意（用户明确：只要求随机选一个然后答题、删弹窗），故不解析题干语义、不判断正确率。
+  //
+  // 【选择器校准】智慧树真实 DOM 结构待实测校准，下方选择器为 best-effort 猜测并集，命中其一即生效。
+  //   真实站点接入时只需调 ZHIHUISHU.selectors 映射，无需改逻辑（P4 同款收口思想）。
+  var ZHIHUISHU = {
+    // 弹窗根容器候选选择器（命中任一即视为题目弹窗）
+    dialogSels: ['.dialog-wrap', '.question-pop', '.topic-pop', '.ans-pop', '.pop-box', '.question-dialog', '.tk-pop', '[class*="question"]', '[class*="topic"]', '[class*="answer"]'],
+    // 选项（单选/多选候选项）候选选择器
+    optionSels: ['.topic-item', '.option-item', '.answer-item', 'li[class*="option"]', '.dialog-wrap li', '[class*="choice"]'],
+    // 「答题 / 提交 / 确定」按钮候选选择器
+    answerBtnSels: ['.answer-btn', '.submit-btn', '.dialog-submit', '.topic-submit', 'button[class*="answer"]', 'button[class*="submit"]', '.pop-btn']
+  };
+
+  // 已处理弹窗的去重指纹集合（防同弹窗被轮询重复点击/删两次导致闪烁或误触）
+  var _zhsHandled = {};
+  function _zhsFingerprint(el) {
+    try {
+      var s = (el.className || '') + '|' + (el.id || '') + '|' + (el.textContent || '').slice(0, 80);
+      return 'zhs:' + s.length + ':' + s;
+    } catch (e) { return 'zhs:err'; }
+  }
+
+  // 在某容器(或 document)内按候选选择器并集查找首个命中元素
+  function _zhsQuery(root, sels) {
+    if (!root || !root.querySelectorAll) return null;
+    for (var i = 0; i < sels.length; i++) {
+      try {
+        var node = root.querySelector(sels[i]);
+        if (node) return node;
+      } catch (e) { swallow(e); }
+    }
+    return null;
+  }
+  function _zhsQueryAll(root, sels) {
+    var out = [];
+    if (!root || !root.querySelectorAll) return out;
+    for (var i = 0; i < sels.length; i++) {
+      try {
+        var nodes = root.querySelectorAll(sels[i]);
+        for (var j = 0; j < nodes.length; j++) out.push(nodes[j]);
+      } catch (e) { swallow(e); }
+    }
+    return out;
+  }
+
+  // 随机选一个选项并高亮（视觉反馈，不改答题语义）：点击第一项即可触发平台选中态
+  function _zhsPickRandomOption(dialog) {
+    var opts = _zhsQueryAll(dialog, ZHIHUISHU.optionSels);
+    if (!opts.length) return null;
+    var pick = opts[Math.floor(Math.random() * opts.length)];
+    try { pick.click(); } catch (e) { swallow(e); }   // 触发平台选中逻辑（radio/checkbox 切换）
+    return pick;
+  }
+
+  // 点击「答题」按钮：优先按候选选择器，退而求其次找弹窗内文字含「答题/提交/确定」的 button
+  function _zhsClickAnswerBtn(dialog) {
+    var btn = _zhsQuery(dialog, ZHIHUISHU.answerBtnSels);
+    if (!btn) {
+      try {
+        var btns = dialog.querySelectorAll('button, .btn, a[class*="btn"]');
+        for (var i = 0; i < btns.length; i++) {
+          var t = (btns[i].textContent || btns[i].innerText || '').replace(/\s/g, '');
+          if (/答题|提交|确定|作答/.test(t)) { btn = btns[i]; break; }
+        }
+      } catch (e) { swallow(e); }
+    }
+    if (btn) { try { btn.click(); } catch (e) { swallow(e); } return true; }
+    return false;
+  }
+
+  // 处理单个题目弹窗：随机选 → 答题 → 删除弹窗。返回 true 表示已处理（用于去重/计数）
+  function _zhsHandleDialog(dialog) {
+    if (!dialog) return false;
+    var fp = _zhsFingerprint(dialog);
+    if (_zhsHandled[fp]) return false;            // 已处理过，跳过（防重复点击/删）
+    _zhsHandled[fp] = true;
+    try {
+      _zhsPickRandomOption(dialog);               // ① 随机选一个选项（触发选中态）
+      _zhsClickAnswerBtn(dialog);                 // ② 点击「答题 / 提交」按钮
+      // ③ 删除弹窗：优先 removeChild，失败则隐藏兜底（避免残留遮挡播放器）
+      try {
+        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+        else if (dialog.remove) dialog.remove();
+      } catch (e) {
+        try { dialog.style.display = 'none'; dialog.style.visibility = 'hidden'; } catch (e2) { swallow(e2); }
+      }
+      try { Store.emit('ui:toast', '智慧树：已自动作答并关闭题目弹窗'); } catch (e3) { swallow(e3); }
+      dbg('智慧树弹窗已处理：', fp.slice(0, 40));
+      return true;
+    } catch (e) { swallow(e); return false; }
+  }
+
+  // 每轮扫描：找出当前页面所有题目弹窗并逐个处理
+  function zhihuishuTickQuestions() {
+    if (detectSite() !== 'zhihuishu') return 0;   // 隔离：非智慧树页面不执行任何逻辑
+    var handled = 0;
+    try {
+      var root = (document && document.documentElement) || document;
+      // 先按根容器候选直接定位弹窗
+      var dialogs = _zhsQueryAll(root, ZHIHUISHU.dialogSels);
+      for (var i = 0; i < dialogs.length; i++) {
+        if (_zhsHandleDialog(dialogs[i])) handled++;
+      }
+      // 兜底：某些弹窗无稳定 class（如行内 style 动态题），扫描含「答题」按钮的浮层 div
+      if (handled === 0) {
+        var allBtns = root.querySelectorAll ? root.querySelectorAll('button, a[class*="btn"]') : [];
+        for (var b = 0; b < allBtns.length; b++) {
+          var txt = (allBtns[b].textContent || allBtns[b].innerText || '').replace(/\s/g, '');
+          if (/答题|提交|确定|作答/.test(txt)) {
+            var cand = allBtns[b].closest ? allBtns[b].closest('div,section,li') : null;
+            if (cand && _zhsHandleDialog(cand)) { handled++; if (handled >= 1) break; }
+          }
+        }
+      }
+    } catch (e) { swallow(e); }
+    return handled;
+  }
+
+  // 暴露给主循环与回归测试
+  try { window.__CX_FORCE_PLAY.zhihuishuTickQuestions = zhihuishuTickQuestions; } catch (e) {}
 
   // ===== DOMAIN: dom module-08-10-15 =====
   // ===== MODULE: 接管引擎(overrideVideo) =====
@@ -3377,6 +3505,120 @@
   // _cxCommands 已在本 MODULE 顶部初始化完毕，此处调用 initBuiltinCommands 注册内置命令（执行顺序正确，不会被 var 初始化覆盖）
   try { initBuiltinCommands(); } catch (e) { swallow(e); }
 
+  // ===== DOMAIN: ui/zhihuishu-fab (Zhihuishu 专属微型标志图标) =====
+  // ===== MODULE: 智慧树右下角微型网页标志性图标 =====
+  // 域：UI 模块 —— 智慧树(知到)专属，与超星学习通的分区悬浮面板(左上/右上)视觉体系刻意区分。
+  // 【需求差异】用户要求：智慧树网页右下角有一个「微型的网页标志性图标」，区别于学习通的控制面板。
+  //   故此处不复用 __cxPanel，而是独立一个右下角 FAB（Floating Action Button），常驻且轻量：
+  //   - 显示智慧树标志性图标（用 SVG 树形/叶子意象，颜色取智慧树品牌蓝绿），提示脚本在本站生效；
+  //   - 点击展开一个极简浮层：显示当前强制续播状态 + 本次已自动作答弹窗数 + 一键开关续播；
+  //   - 仅 detectSite()==='zhihuishu' 时创建，超星页面完全不渲染此图标（互不干扰）。
+  var _zhsFab = null;
+  var _zhsFabAnswered = 0;            // 累计本次会话自动作答弹窗数（供图标浮层展示）
+  var _zhsFabEnabled = true;          // 续播总开关镜像（与 CONFIG 不强耦合，独立轻量开关）
+
+  // 智慧树品牌意象 SVG（微型、线性）：一片叶子/树芽，蓝绿渐变
+  var ZHS_FAB_SVG =
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;">' +
+      '<path d="M12 21c0-5 0-8 0-8" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M12 13c-4 0-6-3-6-6 3 0 6 1 6 4 0-4 3-6 6-5 0 4-2 7-6 7z" fill="#10B981" opacity="0.9"/>' +
+      '<circle cx="12" cy="4.5" r="1.6" fill="#3B82F6"/>' +
+    '</svg>';
+
+  function _zhsFabStyle() {
+    return '.cx-zhs-fab{' +
+      'position:fixed;right:14px;bottom:14px;z-index:2147483646;width:38px;height:38px;border-radius:12px;' +
+      'display:flex;align-items:center;justify-content:center;cursor:pointer;' +
+      'background:rgba(255,255,255,.92);border:1px solid #E5E7EB;' +
+      'box-shadow:0 6px 18px rgba(16,185,129,.28),0 2px 6px rgba(0,0,0,.08);' +
+      '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
+      'transition:transform .18s ease,box-shadow .18s ease;user-select:none;' +
+    '}' +
+    '.cx-zhs-fab:hover{transform:translateY(-2px) scale(1.06);box-shadow:0 10px 24px rgba(16,185,129,.4),0 2px 8px rgba(0,0,0,.1);}' +
+    '.cx-zhs-fab .cx-zhs-dot{position:absolute;top:-2px;right:-2px;width:10px;height:10px;border-radius:50%;' +
+      'background:#10B981;border:2px solid #fff;box-shadow:0 0 0 2px rgba(16,185,129,.2);animation:cx-zhs-pulse 2.4s infinite ease-out;}' +
+    '@keyframes cx-zhs-pulse{0%{transform:scale(.7);opacity:.6;}100%{transform:scale(1.8);opacity:0;}}' +
+    '.cx-zhs-pop{position:fixed;right:14px;bottom:60px;z-index:2147483646;width:240px;box-sizing:border-box;' +
+      'background:#F9FAFB;color:#1F2937;font:12px/1.5 sans-serif;border:1px solid #E5E7EB;border-radius:12px;' +
+      'box-shadow:0 12px 32px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.06);padding:12px;' +
+      'display:none;}' +
+    '.cx-zhs-pop.cx-show{display:block;}' +
+    '.cx-zhs-pop h4{margin:0 0 8px;font-size:13px;color:#10B981;display:flex;align-items:center;gap:6px;}' +
+    '.cx-zhs-pop .cx-row{display:flex;justify-content:space-between;align-items:center;margin:6px 0;}' +
+    '.cx-zhs-pop .cx-val{color:#1F2937;font-weight:600;}' +
+    '.cx-zhs-pop button{width:100%;margin-top:8px;padding:7px;border:0;border-radius:6px;cursor:pointer;' +
+      'background:#10B981;color:#fff;font-size:12px;}' +
+    '.cx-zhs-pop button.cx-off{background:#EF4444;}';
+  }
+
+  function _zhsEnsureFab() {
+    if (detectSite() !== 'zhihuishu') return;      // 隔离：非智慧树不渲染
+    if (_zhsFab) return;
+    try {
+      var pd = document;
+      if (!pd.getElementById('__cxZhsStyle')) {
+        var st = pd.createElement('style'); st.id = '__cxZhsStyle'; st.textContent = _zhsFabStyle();
+        (pd.head || pd.documentElement || pd).appendChild(st);
+      }
+      var fab = pd.createElement('div');
+      fab.className = 'cx-zhs-fab'; fab.id = '__cxZhsFab'; fab.title = '智慧树强制续播 · 自动作答已开启';
+      fab.innerHTML = ZHS_FAB_SVG + '<span class="cx-zhs-dot"></span>';
+      pd.body.appendChild(fab);
+
+      var pop = pd.createElement('div');
+      pop.className = 'cx-zhs-pop'; pop.id = '__cxZhsPop';
+      pop.innerHTML =
+        '<h4>' + ZHS_FAB_SVG.replace('width="22" height="22"', 'width="16" height="16"') + '智慧树助手</h4>' +
+        '<div class="cx-row"><span>强制续播</span><span class="cx-val" id="__cxZhsPlay">开</span></div>' +
+        '<div class="cx-row"><span>本次自动作答</span><span class="cx-val" id="__cxZhsAns">0</span></div>' +
+        '<button id="__cxZhsToggle">关闭续播</button>';
+      pd.body.appendChild(pop);
+
+      fab.addEventListener('click', function () {
+        try { pop.classList.toggle('cx-show'); _zhsRefreshFab(); } catch (e) { swallow(e); }
+      });
+      pop.querySelector('#__cxZhsToggle').addEventListener('click', function () {
+        try {
+          _zhsFabEnabled = !_zhsFabEnabled;
+          // 仅在 auto 模式下启停原型中性化；gentle 下无原型可切，仅记状态
+          try { if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) {
+            window.__CX_FORCE_PLAY.CONFIG.INTRUSION_MODE = _zhsFabEnabled ? 'auto' : 'gentle';
+            if (typeof window.__CX_FORCE_PLAY.reconcileIntrusionMode === 'function') window.__CX_FORCE_PLAY.reconcileIntrusionMode();
+          } } catch (e2) { swallow(e2); }
+          _zhsRefreshFab();
+        } catch (e) { swallow(e); }
+      });
+      _zhsFab = fab;
+      try { Store.onEv('ui:toast', function () {}); } catch (e) {}  // 占位订阅，保持事件总线一致
+    } catch (e) { swallow(e); }
+  }
+
+  // 刷新图标浮层数值（弹窗计数 / 续播状态）
+  function _zhsRefreshFab() {
+    if (!_zhsFab) return;
+    try {
+      var ans = document.getElementById('__cxZhsAns');
+      if (ans) ans.textContent = _zhsFabAnswered;
+      var pl = document.getElementById('__cxZhsPlay');
+      if (pl) pl.textContent = _zhsFabEnabled ? '开' : '关';
+      var tg = document.getElementById('__cxZhsToggle');
+      if (tg) { tg.textContent = _zhsFabEnabled ? '关闭续播' : '开启续播'; tg.className = _zhsFabEnabled ? '' : 'cx-off'; }
+    } catch (e) { swallow(e); }
+  }
+
+  // 主循环每轮调用：确保图标存在，并累加自动作答计数
+  function zhihuishuFabTick(handledCount) {
+    if (detectSite() !== 'zhihuishu') return;
+    try { _zhsEnsureFab(); } catch (e) { swallow(e); }
+    if (handledCount > 0) {
+      _zhsFabAnswered += handledCount;
+      try { _zhsRefreshFab(); } catch (e) { swallow(e); }
+    }
+  }
+
+  // 暴露给主循环与回归测试
+  try { window.__CX_FORCE_PLAY.zhihuishuFabTick = zhihuishuFabTick; } catch (e) {}
+
   // ===== DOMAIN: bootstrap/main-loop (startup + main loop scheduler) =====
   // 即时接管：任何 video 一开始 play 即立刻 override，无需等 2s 轮询（吸收 chaoxing-media-collector 的 play 捕获思路）。
   // 缩短动态插入播放器的接管空窗，使手动暂停开关对"新插入、尚未轮询到"的视频也可靠生效；overrideVideo 自身幂等且
@@ -3445,6 +3687,14 @@
     try { autoStopTick(); } catch (e) { swallow(e); }
     if (CONFIG.RESUME_AFTER_MIN > 0) { try { resumeTick(); } catch (e) { swallow(e); } }
     try { applyUserRateAll(); } catch (e) { swallow(e); }   // 周期性把用户倍速施加到所有视频，压制平台把 playbackRate 重置回 1x（防倍速形同虚设）
+    // 智慧树(知到)专属：上课弹窗题目自动处理（随机选 → 答题 → 删弹窗）+ 右下角微型标志图标。
+    // 与超星逻辑完全隔离：detectSite()!=='zhihuishu' 时两函数内部直接 return，零副作用。
+    try {
+      if (detectSite() === 'zhihuishu') {
+        var _zhsAns = zhihuishuTickQuestions();
+        try { zhihuishuFabTick(_zhsAns); } catch (e2) { swallow(e2); }
+      }
+    } catch (e) { swallow(e); }
     if (_cxPanel && _cxPanel.style.display !== 'none') { try { Store.emit('videos:scanned'); } catch (e) { swallow(e); } }  // P3：面板可见时发扫描结束信号（事件总线），订阅方刷新（等价旧行为）
   }
   var _loopTimer = null;

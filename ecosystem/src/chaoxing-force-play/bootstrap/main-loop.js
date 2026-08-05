@@ -66,6 +66,14 @@
     try { autoStopTick(); } catch (e) { swallow(e); }
     if (CONFIG.RESUME_AFTER_MIN > 0) { try { resumeTick(); } catch (e) { swallow(e); } }
     try { applyUserRateAll(); } catch (e) { swallow(e); }   // 周期性把用户倍速施加到所有视频，压制平台把 playbackRate 重置回 1x（防倍速形同虚设）
+    // 智慧树(知到)专属：上课弹窗题目自动处理（随机选 → 答题 → 删弹窗）+ 右下角微型标志图标。
+    // 与超星逻辑完全隔离：detectSite()!=='zhihuishu' 时两函数内部直接 return，零副作用。
+    try {
+      if (detectSite() === 'zhihuishu') {
+        var _zhsAns = zhihuishuTickQuestions();
+        try { zhihuishuFabTick(_zhsAns); } catch (e2) { swallow(e2); }
+      }
+    } catch (e) { swallow(e); }
     if (_cxPanel && _cxPanel.style.display !== 'none') { try { Store.emit('videos:scanned'); } catch (e) { swallow(e); } }  // P3：面板可见时发扫描结束信号（事件总线），订阅方刷新（等价旧行为）
   }
   var _loopTimer = null;
