@@ -66,7 +66,16 @@ $domainRel = @(
   'biz/playback.js',         # 业务·播放原语：pauseNoop / safePlay / releaseVideo / nearEnd
   'biz/stats.js',            # 业务·看播统计：_watchStats / loadWatchStats / recordWatchMs
   'biz/foreground.js',       # 业务·前台判定：foregroundVideo / escapeHTML / shortSrc
-  'biz/zhihuishu.js',        # 业务·智慧树专属：上课弹窗题目自动处理（随机选→答题→删弹窗），仅 zhihuishu 激活
+  'biz/popup-quiz.js',       # 业务·站点无关：弹窗题目随机作答共享骨架（随机选→答题→删），MOOC 类复用
+  'biz/zhihuishu.js',        # 业务·智慧树专属：上课弹窗题目自动处理（复用 popup-quiz），仅 zhihuishu 激活
+  'biz/icourse163.js',       # 业务·中国大学MOOC专属：弹窗随机作答，仅 icourse163 激活
+  'biz/xuetangx.js',         # 业务·学堂在线专属：弹窗随机作答，仅 xuetangx 激活
+  'biz/icve.js',             # 业务·智慧职教专属：弹窗随机作答，仅 icve 激活
+  'biz/quiz.js',             # 业务·站点无关：真答题引擎（抓题+答案源 random/bank/ai 可插拔），答题平台复用
+  'biz/renwei.js',           # 业务·人卫慕课专属：真答题(quiz)，仅 renwei 激活
+  'biz/unipus.js',           # 业务·Unipus专属：真答题(quiz)，仅 unipus 激活
+  'biz/ucampus.js',          # 业务·U校园专属：真答题(quiz)，仅 ucampus 激活
+  'biz/ilabx.js',            # 业务·实验空间专属：真答题(quiz)，仅 ilabx 激活
   'dom/dom.js',              # 接管引擎：overrideVideo / 视频枚举 walkVideos / neutralizeGlobalPause / MO 自启动（会话·toast·卸载还原已迁出）
   'biz/session.js',          # 业务·观看会话：userPause / userResume / autoStopTick / resumeTick（用户意图覆盖接管引擎）
   'ui/toast.js',             # 界面·轻提示组件：toast（反馈分级）；经 Store.emit('ui:toast') 触发，订阅在 ui/panel.js
