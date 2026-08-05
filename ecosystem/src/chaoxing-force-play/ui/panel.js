@@ -59,6 +59,29 @@
   // 避免主线程被反复全量重绘拖慢。panel:refresh 为用户主动操作（开关面板/改设置），保持即时刷新。
   try { Store.onEv('videos:scanned', throttle(refreshPanelState, 150)); } catch (e) { swallow(e); }
   try { Store.onEv('cmd:scan', function () { try { _loopTick(); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }
+  // 安全审计（建议#10）：面板「系统」页实时渲染当前侵入点清单；开面板/手动刷新时重算，扫描节流兜底。
+  function renderInvasionReport() {
+    if (!_cxPanel) return;
+    var box = _cxPanel.querySelector('#__cxInvasionReport');
+    if (!box) return;
+    try {
+      var rows = buildInvasionReport();
+      var html = '';
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var col = r.on ? STYLES.T.warning : STYLES.T.idle;   // 活跃=黄(侵入中) · 干净=绿(已还原)
+        var mark = r.on ? '●' : '○';
+        html += '<div style="display:flex;gap:6px;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px dashed ' + STYLES.T.border + ';">' +
+          '<span style="color:' + col + ';flex:0 0 auto;">' + mark + '</span>' +
+          '<span style="flex:0 0 96px;color:' + STYLES.T.text2 + ';">' + escapeHTML(r.area) + '</span>' +
+          '<span style="flex:1;color:' + STYLES.T.text + ';word-break:break-all;">' + escapeHTML(r.detail) + '</span>' +
+        '</div>';
+      }
+      box.innerHTML = html;
+    } catch (e) { swallow(e); }
+  }
+  try { Store.onEv('panel:refresh', renderInvasionReport); } catch (e) { swallow(e); }
+  try { Store.onEv('videos:scanned', throttle(renderInvasionReport, 1500)); } catch (e) { swallow(e); }
   function togglePanel() { if (_cxPanel && _cxPanel.style.display !== 'none') hidePanel(); else showPanel(); }
   // 一键退出/进入 Ninja 模式：卡在窄条、够不到「系统」勾选框时的逃生通道（键盘 N / 面板内「退出 n 模式」按钮共用）
   function toggleNinjaMode() {

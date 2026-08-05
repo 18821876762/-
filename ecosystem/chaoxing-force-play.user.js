@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T12:30:12+08:00  commit: cfc31b8  minify: off
+// Built: 2026-08-05T12:44:48+08:00  commit: 73812ab  minify: off
 
 
 (function () {
@@ -1321,8 +1321,9 @@
           // 懒保存注入前原始 pause handler 与 playbackState（仅首次），供 cleanupListeners ④ 还原（审查高优先级#3）。
           if (!_mediaSessionSaved) {
             try { _origMediaSessionPause = (typeof navigator.mediaSession.getActionHandler === 'function') ? navigator.mediaSession.getActionHandler('pause') : null; } catch (e) { _origMediaSessionPause = null; }
-            try { _origMediaSessionState = navigator.mediaSession.playbackState; } catch (e) { _origMediaSessionState = null; }
+            try {             _origMediaSessionState = navigator.mediaSession.playbackState; } catch (e) { _origMediaSessionState = null; }
             _mediaSessionSaved = true;
+            try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._mediaSessionHooked = true; } catch (e) { swallow(e); }   // 安全审计(建议#10)：标记 mediaSession 已接管，供面板实时盘点
           }
           navigator.mediaSession.setActionHandler('pause', function () {});
           navigator.mediaSession.playbackState = 'playing';   // 视频实则在播，状态标 playing 与"劫持 pause 为 no-op"语义一致，锁屏不误发暂停
@@ -1773,6 +1774,7 @@
         try { navigator.mediaSession.setActionHandler('pause', _origMediaSessionPause != null ? _origMediaSessionPause : null); } catch (e2) { swallow(e2); }
         if (_origMediaSessionState != null) { try { navigator.mediaSession.playbackState = _origMediaSessionState; } catch (e3) { swallow(e3); } }
       }
+      try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._mediaSessionHooked = false; } catch (e) { swallow(e); }   // 安全审计(建议#10)：接管已还原，更新盘点标志
     } catch (e) { swallow(e); }
     // ⑤ 还原 window.ananas.pause 中和（逐个 frame 的 ananas 全局暂停封装还原为注入前真原生，清除全局死 Hook），
     //    并删除残留元数据 __cxAnanasNativePause，避免向宿主全局泄漏脚本内部标记（审查中优先级#4）。
@@ -1797,6 +1799,7 @@
     // ⑧ 摘除卸载钩子自身：手动 uninstall() 后页面继续存活时，不留残余监听（页面真卸载时本项无副作用）
     try { window.removeEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
     try { window.removeEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+    try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._uninstallHooked = false; } catch (e) { swallow(e); }   // 安全审计(建议#10)：卸载钩子已摘除
     // ⑨ 撤销命名空间导出：删除脚本在 window 上新增的全部全局符号（含副脚本注册契约），回到注入前全局态（审查高优先级#1）。
     //    若其它脚本已读取/缓存这些引用，不影响其既有行为；但卸载后不应再暴露可调用/可覆盖的接口。
     try { delete window.__cxRegisterAddon; } catch (e) { swallow(e); }
@@ -1819,6 +1822,7 @@
   }
   try { window.addEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
   try { window.addEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+  try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._uninstallHooked = true; } catch (e) { swallow(e); }   // 安全审计(建议#10)：标记卸载钩子已装
   try { window.__CX_FORCE_PLAY.uninstall = cleanupListeners; } catch (e) { swallow(e); }   // 暴露手动卸载还原钩子（应对热禁用）
 
   // ===== DOMAIN: ui/addons (addon registry) =====
@@ -1995,6 +1999,29 @@
   // 避免主线程被反复全量重绘拖慢。panel:refresh 为用户主动操作（开关面板/改设置），保持即时刷新。
   try { Store.onEv('videos:scanned', throttle(refreshPanelState, 150)); } catch (e) { swallow(e); }
   try { Store.onEv('cmd:scan', function () { try { _loopTick(); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }
+  // 安全审计（建议#10）：面板「系统」页实时渲染当前侵入点清单；开面板/手动刷新时重算，扫描节流兜底。
+  function renderInvasionReport() {
+    if (!_cxPanel) return;
+    var box = _cxPanel.querySelector('#__cxInvasionReport');
+    if (!box) return;
+    try {
+      var rows = buildInvasionReport();
+      var html = '';
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var col = r.on ? STYLES.T.warning : STYLES.T.idle;   // 活跃=黄(侵入中) · 干净=绿(已还原)
+        var mark = r.on ? '●' : '○';
+        html += '<div style="display:flex;gap:6px;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px dashed ' + STYLES.T.border + ';">' +
+          '<span style="color:' + col + ';flex:0 0 auto;">' + mark + '</span>' +
+          '<span style="flex:0 0 96px;color:' + STYLES.T.text2 + ';">' + escapeHTML(r.area) + '</span>' +
+          '<span style="flex:1;color:' + STYLES.T.text + ';word-break:break-all;">' + escapeHTML(r.detail) + '</span>' +
+        '</div>';
+      }
+      box.innerHTML = html;
+    } catch (e) { swallow(e); }
+  }
+  try { Store.onEv('panel:refresh', renderInvasionReport); } catch (e) { swallow(e); }
+  try { Store.onEv('videos:scanned', throttle(renderInvasionReport, 1500)); } catch (e) { swallow(e); }
   function togglePanel() { if (_cxPanel && _cxPanel.style.display !== 'none') hidePanel(); else showPanel(); }
   // 一键退出/进入 Ninja 模式：卡在窄条、够不到「系统」勾选框时的逃生通道（键盘 N / 面板内「退出 n 模式」按钮共用）
   function toggleNinjaMode() {
@@ -2167,6 +2194,15 @@
         '<button id="__cxBtnCopy" style="width:100%;padding:7px;margin-bottom:4px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:6px;cursor:pointer;font-size:12px;font-weight:400;">复制诊断信息（反馈用）</button>' +
         '<button id="__cxBtnExport" style="width:100%;padding:7px;margin-top:4px;' + STYLES.BTN_GHOST + 'font-size:12px;">导出最近操作日志（黑匣子）</button>' +
         '<button id="__cxBtnClearBx" style="width:100%;padding:7px;margin-top:4px;' + STYLES.BTN_DANGER + 'font-size:12px;">清空黑匣子日志</button>' +
+        // 安全审计（建议#10）：实时展示当前对宿主页面的侵入面，落实审计透明化诉求
+        '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:10px;padding-top:8px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<div style="font-size:12px;color:' + STYLES.T.text + ';">安全审计 · 当前侵入点（实时）</div>' +
+            '<button id="__cxBtnAudit" style="padding:3px 8px;font-size:11px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;cursor:pointer;">刷新</button>' +
+          '</div>' +
+          '<div id="__cxInvasionReport" style="font-size:11px;color:' + STYLES.T.text2 + ';">— 开面板后自动盘点 —</div>' +
+          '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;">绿○=未侵入/已还原 · 黄●=当前已接管 · 卸载时全部还原（/cleardata 清配置）</div>' +
+        '</div>' +
         '<div style="font-size:11px;color:' + STYLES.T.text3 + ';margin-top:6px;">按 <b>P</b> 开关本面板 · <b>Esc</b> 关闭 · 0 = 禁用</div>' +
       '</div>'
     );
@@ -2467,6 +2503,9 @@
       (function (b) { b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); }); })(navBtns[ni]);
     }
     el.querySelector('#__cxBtnCopy').addEventListener('click', copyDiagnostics);
+    // 安全审计（建议#10）：刷新「系统」页侵入点清单
+    var btnAudit = el.querySelector('#__cxBtnAudit');
+    if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     // 黑匣子导出按钮
     var btnExport = el.querySelector('#__cxBtnExport');
     if (btnExport) btnExport.addEventListener('click', function () {
@@ -2630,6 +2669,55 @@
       Store.emit('ui:toast', '已复制诊断信息');
     } catch (e2) { Store.emit('ui:toast', '复制失败，请手动复制'); }
   }
+
+  // ===== 安全审计（建议#10）：实时侵入点盘点 =====
+  // 仅读取可观测事实（全局符号 / 注入 DOM id / prototype 包装特征 / mediaSession 钩子标志 / localStorage），
+  // 不修改任何运行状态。供面板「系统」页透明展示脚本当前的全局侵入面，落实审计透明化诉求。
+  var _CX_AUDIT_GLOBALS = ['__CX_FORCE_PLAY', '__cxRegisterAddon', '__cxRegisterCommand', '__cxUI', '__cxAddonQueue'];
+  var _CX_AUDIT_DOM_IDS = ['__cxPanel', '__cxPanelNinjaStyle', '__cxPanelAnimStyle', '__cxPanelMobileStyle', '__cxToast'];
+  function _cxAuditDomPresent(id) {
+    try {
+      if (document.getElementById(id)) return true;
+      if (window.top && window.top !== window && window.top.document && window.top.document.getElementById(id)) return true;
+    } catch (e) { swallow(e); }
+    return false;
+  }
+  function _cxAuditProtoPause() {   // 包装函数体内引用了 __cxForcePaused 标记（属性名不被压缩，可稳定探测）
+    try { return String(HTMLMediaElement.prototype.pause).indexOf('__cxForcePaused') >= 0; } catch (e) { return false; }
+  }
+  function _cxAuditProtoRate() {
+    try { var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate'); return !!(d && d.set && String(d.set).indexOf('__cxForcePaused') >= 0); } catch (e) { return false; }
+  }
+  function _cxAuditMediaSession() {
+    try { return !!(window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY._mediaSessionHooked); } catch (e) { return false; }
+  }
+  function _cxAuditUninstallHook() {
+    try { return !!(window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY._uninstallHooked); } catch (e) { return false; }
+  }
+  function _cxAuditLsKeys() {
+    var ks = [];
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('cx_') === 0) ks.push(k); } } catch (e) { swallow(e); }
+    return ks;
+  }
+  // 返回结构化清单：[{area, item, on, detail}] —— on=true 表示当前已侵入/已接管
+  function buildInvasionReport() {
+    var rows = [];
+    function add(area, item, on, detail) { rows.push({ area: area, item: item, on: !!on, detail: detail || (on ? item : '未启用/已还原') }); }
+    var g = [], i;
+    for (i = 0; i < _CX_AUDIT_GLOBALS.length; i++) { try { if (typeof window[_CX_AUDIT_GLOBALS[i]] !== 'undefined') g.push(_CX_AUDIT_GLOBALS[i]); } catch (e) { swallow(e); } }
+    add('全局符号', 'window 导出(namespace+副脚本契约)', g.length > 0, g.length ? g.join(', ') : '无');
+    var d = [];
+    for (i = 0; i < _CX_AUDIT_DOM_IDS.length; i++) { if (_cxAuditDomPresent(_CX_AUDIT_DOM_IDS[i])) d.push(_CX_AUDIT_DOM_IDS[i]); }
+    add('注入 DOM', '面板/style/Toast 节点', d.length > 0, d.length ? d.join(', ') : '无');
+    add('prototype.pause', 'HTMLMediaElement.prototype.pause 包装(抗平台还原)', _cxAuditProtoPause());
+    add('prototype.playbackRate', 'playbackRate setter 包装', _cxAuditProtoRate());
+    add('navigator.mediaSession', 'pause handler 已接管(卸载还原)', _cxAuditMediaSession());
+    add('事件监听', 'pagehide/beforeunload 卸载钩子', _cxAuditUninstallHook());
+    var ls = _cxAuditLsKeys();
+    add('localStorage', 'cx_* 配置键(' + ls.length + ')', ls.length > 0, ls.length ? ls.slice(0, 8).join(', ') + (ls.length > 8 ? ' …' : '') : '无');
+    return rows;
+  }
+  try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.buildInvasionReport = buildInvasionReport; } catch (e) { swallow(e); }   // 暴露为公开 API（面板审计/测试可调用）
 
   // ===== DOMAIN: ui/dashboard (state refresh + badge + dashboard + video list) =====
   function fmtTime(sec) {                          // 秒 → m:ss / h:mm:ss
@@ -2914,6 +3002,7 @@
     });
     registerCommand('copy', '复制诊断信息', false, function () { copyDiagnostics(); });
     registerCommand('refresh', '立即重扫视频与状态', false, function () { try { Store.emit('cmd:scan'); } catch (e) { swallow(e); } Store.emit('panel:refresh'); Store.emit('ui:toast', '已重扫'); });
+    registerCommand('audit', '刷新安全审计清单(系统页)', false, function () { try { Store.emit('ui:switchTab', 'system'); showPanel(); Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     registerCommand('rescan', '重启轮询(ms)，如 /rescan 1000', true, function (raw, arg) {
       var ms = parseInt(arg, 10); if (isNaN(ms)) { Store.emit('ui:toast', '用法: /rescan 500~5000'); return; } CONFIG.RESCAN_INTERVAL = ms; clampCfg(); savePanelCfg();
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
