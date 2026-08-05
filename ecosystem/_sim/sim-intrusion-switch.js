@@ -115,5 +115,24 @@ console.log('--- 场景3: POLITE_MODE=true 下切 gentle 仍真实还原 ---');
   }
 }
 
+// ---- 场景 4：#1 开放问题回归 — edu.cn 高校域须视为超星上下文（auto→aggressive 加载即中性化） ----
+console.log('--- 场景4: *.edu.cn 视为超星 auto→aggressive 加载即中性化 ---');
+{
+  const { window, nativePause } = loadAt('https://mooc.pku.edu.cn/learn/');
+  const ns = window.__CX_FORCE_PLAY;
+  assert('命名空间已安装(edu.cn)', !!ns);
+  if (ns) {
+    assert('auto@edu.cn 加载即中性化(getPauseNeutralized 真)', ns.getPauseNeutralized() === true);
+    assert('auto@edu.cn 加载后 prototype.pause ≠ 原生', window.HTMLMediaElement.prototype.pause !== nativePause);
+    assert('detectSite() 对 edu.cn 返回 chaoxing', ns.detectSite ? ns.detectSite() === 'chaoxing' : true);
+
+    // 切 gentle 仍应真实还原（双向无残留）
+    ns.CONFIG.INTRUSION_MODE = 'gentle';
+    try { ns.reconcileIntrusionMode(); } catch (e) { console.log('RECONCILE_ERR', e.message); }
+    assert('edu.cn 切 gentle 后 prototype.pause 还原为原生', window.HTMLMediaElement.prototype.pause === nativePause);
+    assert('edu.cn 切 gentle 后 getPauseNeutralized === null', ns.getPauseNeutralized() === null);
+  }
+}
+
 console.log('结论: ' + (fail === 0 ? 'PASS' : fail + ' FAIL') + ' — INTRUSION_MODE 运行期切换闭环(还原→重装,无残留)');
 process.exit(fail === 0 ? 0 : 1);

@@ -149,6 +149,7 @@ function protoPause() {
 ## 6. 开放问题与决策点
 
 1. **`auto` 的站点识别可靠性**：依赖 `site-router.js` 现有特征，是否覆盖全部超星域名（`.chaoxing.com` / `.edu.cn`）？需列清单回归。
+   - ✅ **已落地（2026-08-05）**：清单核查发现缺口——脚本 `@match` 限 `*.chaoxing.com + *.edu.cn`，但 `detectSite()` 仅认 `chaoxing.com`/`zhihuishu.com`，导致高校 `*.edu.cn` 域被误判 `unknown` → `auto` 模式走温和 → 漏拦。已在 `site-router.js` 的 `detectSite()` 增加 `*.edu.cn → 'chaoxing'` 规则（位于 zhihuishu 之后；智慧树域为 zhihuishu.com 不落 edu.cn，无歧义）。同时 `config.js` 暴露 `_ns.detectSite` 供 UI/审计复用，并新增 `sim-intrusion-switch` 场景4 回归（edu.cn 视为超星上下文、加载即激进、切 gentle 真实还原）。`sim-intrusion-switch` 现 23/23，无回归。
 2. **温和模式是否对超星直接禁用选项**：避免用户误选 `gentle` 导致漏拦却不知。建议在面板选 `gentle` 时若识别为超星，弹确认 + 提示「可能漏拦」。
    - ✅ **已落地（2026-08-05）**：`ui/panel-controls.js` 的 `bindPanelControlEvents`（`#__cxIntrusion` change）中，当 `intr.value==='gentle'` 且 `detectSite()==='chaoxing'` 时调用 `window.confirm` 弹确认框（文案含「可能偶发漏拦」）；用户取消则把 `<select>` 回退为 `CONFIG.INTRUSION_MODE` 并 toast 提示保持当前模式。非超星站点或 `detectSite` 不可用时跳过确认，零回归。该绑定已从 `panel-core.js` 的 `ensurePanel` 抽出到独立 `panel-controls.js` 以合规单文件行数红线。
 3. **礼貌模式与「平台用 `Object.freeze` 锁原型」的对抗**：`toString` 伪装无法阻止平台 freeze 后重赋值；行为探测负责兜底重装，但仍依赖 `setInterval` 周期——极端情况下有短暂失效窗口，是否可接受？
