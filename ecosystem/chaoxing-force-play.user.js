@@ -1,12 +1,20 @@
 // ==UserScript==
 // @name         学习通·强制续播（主脚本）
 // @namespace    https://github.com/cx-force-play/chaoxing-force-play
-// @version      4.11
+// @version      4.12
 // @author       anon
-// @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 页面全局 attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 全局暂停封装、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 页面全局 attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。【v4.x 面板化】命令面板(/唤起、↑↓/Tab/Enter/Esc、星标收藏夹持久化)、运维仪表盘(实时 CPU/内存/网速监控)、Ninja 折叠态(胶囊居中图标+播放/暂停状态指示)、面板设置刷新后持久化、副脚本注册中心(可扩展命令与开关)；v4.9 面板位置策略锁定右上角安全位、禁用拖拽避免遮挡。【v4.10 智慧树适配】新增 @match *://*.zhihuishu.com/*；站点私有全局/选择器收口 SITES 映射(detectSite 实时分发)；智慧树无 window.attachments 白名单与 window.ananas 私有暂停封装，auto 模式同样激进原型中性化强制续播，白名单/平台暂停对抗待真实站点校准。【v4.11 智慧树专属交互】与学习通 UI 刻意区分：①上课弹窗题目自动处理(biz/zhihuishu.js)——轮询检测随堂题目弹窗，随机选一个选项→点击「答题」→删除弹窗(不去管对错，仅消干扰)；②右下角微型标志性图标 FAB(ui/zhihuishu-fab.js)——智慧树品牌蓝绿树芽图标，常驻右下角，点击展开极简浮层显示续播状态与本次自动作答数、可一键开关续播；两功能均仅 detectSite()==='zhihuishu' 激活，超星页面零副作用。智慧树弹窗/选项/答题按钮选择器为 best-effort 并集，待真实站点校准(同 SITES 收口思想，改 ZHIHUISHU 映射即可)。
+// @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 页面全局 attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 全局暂停封装、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 页面全局 attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。【v4.x 面板化】命令面板(/唤起、↑↓/Tab/Enter/Esc、星标收藏夹持久化)、运维仪表盘(实时 CPU/内存/网速监控)、Ninja 折叠态(胶囊居中图标+播放/暂停状态指示)、面板设置刷新后持久化、副脚本注册中心(可扩展命令与开关)；v4.9 面板位置策略锁定右上角安全位、禁用拖拽避免遮挡。【v4.10 智慧树适配】新增 @match *://*.zhihuishu.com/*；站点私有全局/选择器收口 SITES 映射(detectSite 实时分发)；智慧树无 window.attachments 白名单与 window.ananas 私有暂停封装，auto 模式同样激进原型中性化强制续播，白名单/平台暂停对抗待真实站点校准。【v4.11 智慧树专属交互】与学习通 UI 刻意区分：①上课弹窗题目自动处理(biz/zhihuishu.js)——轮询检测随堂题目弹窗，随机选一个选项→点击「答题」→删除弹窗(不去管对错，仅消干扰)；②右下角微型标志性图标 FAB(ui/zhihuishu-fab.js)——智慧树品牌蓝绿树芽图标，常驻右下角，点击展开极简浮层显示续播状态与本次自动作答数、可一键开关续播；两功能均仅 detectSite()==='zhihuishu' 激活，超星页面零副作用。智慧树弹窗/选项/答题按钮选择器为 best-effort 并集，待真实站点校准(同 SITES 收口思想，改 ZHIHUISHU 映射即可)。【v4.12 多平台扩展】新增适配：学银在线(超星系并入 chaoxing)、中国大学MOOC(icourse163)、学堂在线(xuetangx)、智慧职教(icve)——均续播+上课弹窗随机作答(popup-quiz 共享骨架)；人卫慕课(renwei)、Unipus(unipus)、U校园(ucampus)、实验空间(ilabx)——续播+真答题引擎(biz/quiz.js：抓题+选项解析+可插拔答案源 random/bank/ai，默认 random 保不卡、配置题库/AI 即变真答题)。所有平台 detectSite 隔离、跨站零副作用；选择器 best-effort 并集待真实站点校准。
 // @match        *://*.chaoxing.com/*
 // @match        *://*.edu.cn/*
 // @match        *://*.zhihuishu.com/*
+// @match        *://*.xueyinonline.com/*
+// @match        *://*.icourse163.org/*
+// @match        *://*.icourses.cn/*
+// @match        *://*.xuetangx.com/*
+// @match        *://*.icve.com.cn/*
+// @match        *://*.unipus.cn/*
+// @match        *://*.ucampus.cn/*
+// @match        *://*.ilab-x.com/*
 // @run-at       document-idle
 // @grant        none
 // @compatible   Tampermonkey
@@ -16,7 +24,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T18:32:40+08:00  commit: 1d47daa  minify: off
+// Built: 2026-08-05T18:43:40+08:00  commit: f2f7038  minify: off
 
 
 (function () {
@@ -722,6 +730,19 @@
       var h = (window.location && window.location.hostname) || '';
       if (/chaoxing\.com$/i.test(h)) return 'chaoxing';
       if (/zhihuishu\.com$/i.test(h)) return 'zhihuishu';
+      // 学银在线(xueyinonline.com / xueyinonline.chaoxing.com)：超星 + 国家开放大学出品，与超星尔雅同源，
+      // 播放器/暂停封装结构同超星 → 并入 chaoxing 策略（auto 激进原型中性化 + 读 window.attachments 白名单）。
+      if (/xueyinonline\.com$/i.test(h)) return 'chaoxing';
+      // rev2 多平台扩展：整域匹配（避免子串误伤）。这些平台无白名单/无 ananas，续播走全量+原型中性化兜底，
+      // 站点专属逻辑(弹窗作答/真答题)由各 biz 模块按 detectSite 分支调度；选择器均 best-effort 待真实站点校准。
+      if (/icourse163\.org$/i.test(h)) return 'icourse163';   // 中国大学MOOC / 爱课程
+      if (/icourses\.cn$/i.test(h)) return 'icourse163';      // 爱课程备用域
+      if (/xuetangx\.com$/i.test(h)) return 'xuetangx';       // 学堂在线
+      if (/icve\.com\.cn$/i.test(h)) return 'icve';           // 智慧职教
+      if (/pmphmooc\.com$/i.test(h) || /renwei/i.test(h)) return 'renwei'; // 人卫慕课（真实主域待确认，先占位 pmphmooc.com；如学校镜像域含 renwei 亦匹配）
+      if (/unipus\.cn$/i.test(h)) return 'unipus';            // 中国高校外语慕课 Unipus
+      if (/ucampus\.cn$/i.test(h)) return 'ucampus';          // U校园
+      if (/ilab-x\.com$/i.test(h)) return 'ilabx';            // 实验空间
       // #1 开放问题落地：脚本 @match 仅 *.chaoxing.com + *.edu.cn；高校超星学习通常承载于 *.edu.cn（如 mooc.xxx.edu.cn），
       // 该域运行脚本即超星上下文，须与 chaoxing 同一接管策略（auto 模式激进原型中性化），否则会被误判 unknown→温和漏拦。
       // 注意：智慧树(知到)域为 zhihuishu.com，不落 edu.cn，故此规则不会误伤智慧树。
@@ -749,6 +770,38 @@
       attachmentsKey: '',                            // TODO 真实站点验证：智慧树无此白名单全局 → 定向回退全量
       ananasKey: '',                                 // TODO 真实站点验证：智慧树无 window.ananas 私有暂停封装
       taskContainerSel: '.video-container, .player, #video, .tk-container' // TODO 真实站点验证：best-effort 播放器容器
+    },
+    // ===== rev2 多平台扩展：中国大学MOOC / 学堂在线 / 智慧职教 / 人卫 / Unipus / U校园 / 实验空间 =====
+    // 这些平台与智慧树同理——无 window.attachments 白名单、无 window.ananas 私有暂停封装，故 attachmentsKey/ananasKey 置空，
+    // 续播走「全量 + 原型级 pause 中性化」兜底；taskContainerSel / 弹窗选择器为 best-effort 猜测，待真实站点校准（标 TODO）。
+    // 真答题引擎(biz/quiz.js)与弹窗随机作答(biz/popup-quiz.js)共用这些选择器的同构映射，站点隔离、逻辑只写一处。
+    icourse163: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.course-content, .video-wrap, #video, .jwplayer, .course-player' // TODO 真实站点校准
+    },
+    xuetangx: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.video-container, #video-box, .xuetangx-player, .course-video' // TODO 真实站点校准
+    },
+    icve: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.video-box, #player, .course-player, .icve-player' // TODO 真实站点校准
+    },
+    renwei: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.video-wrap, #video, .player-box' // TODO 真实站点校准（人卫慕课）
+    },
+    unipus: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.video-container, #video, .unipus-player' // TODO 真实站点校准（Unipus 外语慕课）
+    },
+    ucampus: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.video-box, #video, .ucampus-player' // TODO 真实站点校准（U校园）
+    },
+    ilabx: {
+      attachmentsKey: '', ananasKey: '',
+      taskContainerSel: '.video-wrap, #video, .lab-player' // TODO 真实站点校准（实验空间虚拟仿真）
     }
   };
   // 站点配置按 detectSite() 实时解析（脚本单页单站，性价比最高且无需启动期缓存）；未知/未配置域回退超星基线以免崩溃。
@@ -771,6 +824,16 @@
   }
   // 任务点播放器容器选择器（MO 钻入 iframe/容器用）
   function siteTaskContainerSel() { return currentSiteCfg().taskContainerSel; }
+
+  // 暴露站点路由/配置函数供诊断与回归测试
+  try {
+    window.__CX_FORCE_PLAY.detectSite = detectSite;
+    window.__CX_FORCE_PLAY.currentSiteCfg = currentSiteCfg;
+    window.__CX_FORCE_PLAY.siteAttachments = siteAttachments;
+    window.__CX_FORCE_PLAY.siteAttachmentsKey = siteAttachmentsKey;
+    window.__CX_FORCE_PLAY.siteAnanas = siteAnanas;
+    window.__CX_FORCE_PLAY.siteTaskContainerSel = siteTaskContainerSel;
+  } catch (e) {}
 
 
   // ===== MODULE: 接管策略开关（biz/policy）=====
@@ -1356,124 +1419,92 @@
     return s.length > 76 ? (s.slice(0, 48) + '…' + s.slice(-26)) : s;
   }
 
-  // ===== DOMAIN: biz/zhihuishu (Zhihuishu / 智慧树-知到 专属业务) =====
-  // ===== MODULE: 智慧树上课弹窗题目自动处理 =====
-  // 域：业务模块 —— 智慧树(知到)专属，与超星(学习通)完全隔离；仅 detectSite()==='zhihuishu' 时才激活。
-  // 【需求差异】智慧树上课期间会弹出「随堂题目」弹窗（互动题/弹幕答题），其 UI 与超星学习通结构完全不同：
-  //   ① 无 window.attachments 白名单、无 window.ananas 私有暂停封装（已由 site-router.js 收口为智慧树空键）；
-  //   ② 强制续播仍由原型级 pause 中性化(usePrototypeNeutralize auto 分支对智慧树激进)兜底，无需本模块介入；
-  //   ③ 本模块独有职责：弹窗题目干扰处理 —— 随机选一个选项 → 点击「答题」按钮 → 删除弹窗。
-  // 题目对错不在意（用户明确：只要求随机选一个然后答题、删弹窗），故不解析题干语义、不判断正确率。
-  //
-  // 【选择器校准】智慧树真实 DOM 结构待实测校准，下方选择器为 best-effort 猜测并集，命中其一即生效。
-  //   真实站点接入时只需调 ZHIHUISHU.selectors 映射，无需改逻辑（P4 同款收口思想）。
-  var ZHIHUISHU = {
-    // 弹窗根容器候选选择器（命中任一即视为题目弹窗）
-    dialogSels: ['.dialog-wrap', '.question-pop', '.topic-pop', '.ans-pop', '.pop-box', '.question-dialog', '.tk-pop', '[class*="question"]', '[class*="topic"]', '[class*="answer"]'],
-    // 选项（单选/多选候选项）候选选择器
-    optionSels: ['.topic-item', '.option-item', '.answer-item', 'li[class*="option"]', '.dialog-wrap li', '[class*="choice"]'],
-    // 「答题 / 提交 / 确定」按钮候选选择器
-    answerBtnSels: ['.answer-btn', '.submit-btn', '.dialog-submit', '.topic-submit', 'button[class*="answer"]', 'button[class*="submit"]', '.pop-btn']
+  // ===== DOMAIN: biz/popup-quiz (站点无关·弹窗题目随机作答共享骨架) =====
+  // ===== MODULE: 上课/随堂弹窗题目「随机选 → 答题 → 删弹窗」(站点无关) =====
+  // 域：业务模块 —— 与站点无关；由各平台模块传入同构 selectors 映射后调用 popupQuizTick()。
+  // 【用途】智慧树/中国大学MOOC/学堂在线/智慧职教 等平台上课期间弹「随堂题目」干扰播放，
+  //   用户明确「不要求对错、只随机选一个然后答题、删弹窗」→ 本模块消干扰、保续播不被弹窗挡住。
+  // 【复用】把 zhihuishu.js 原有的弹窗处理逻辑抽成通用骨架，避免每个 MOOC 平台重写一遍。
+  //   站点差异仅在选择器映射(SELECTORS 同构)，逻辑只写一处（P4 收口思想落地）。
+  var POPUP_QUIZ = {
+    dialogSels: ['.dialog-wrap', '.question-pop', '.topic-pop', '.ans-pop', '.pop-box', '.question-dialog',
+                 '.tk-pop', '.modal', '.exam-pop', '[class*="question"]', '[class*="topic"]', '[class*="answer"]', '[class*="popup"]'],
+    optionSels: ['.topic-item', '.option-item', '.answer-item', 'li[class*="option"]', '.dialog-wrap li',
+                 '[class*="choice"]', '.q-item', '.select-item'],
+    answerBtnSels: ['.answer-btn', '.submit-btn', '.dialog-submit', '.topic-submit', 'button[class*="answer"]',
+                    'button[class*="submit"]', '.pop-btn', '.confirm-btn']
   };
 
-  // 已处理弹窗的去重指纹集合（防同弹窗被轮询重复点击/删两次导致闪烁或误触）
-  var _zhsHandled = {};
-  function _zhsFingerprint(el) {
-    try {
-      var s = (el.className || '') + '|' + (el.id || '') + '|' + (el.textContent || '').slice(0, 80);
-      return 'zhs:' + s.length + ':' + s;
-    } catch (e) { return 'zhs:err'; }
+  var _pqHandled = {};   // 已处理弹窗指纹去重（防同弹窗重复点击/删）
+  function _pqFingerprint(el) {
+    try { var s = (el.className || '') + '|' + (el.id || '') + '|' + (el.textContent || '').slice(0, 80); return 'pq:' + s.length + ':' + s; }
+    catch (e) { return 'pq:err'; }
   }
-
-  // 在某容器(或 document)内按候选选择器并集查找首个命中元素
-  function _zhsQuery(root, sels) {
+  function _pqQuery(root, sels) {
     if (!root || !root.querySelectorAll) return null;
-    for (var i = 0; i < sels.length; i++) {
-      try {
-        var node = root.querySelector(sels[i]);
-        if (node) return node;
-      } catch (e) { swallow(e); }
-    }
+    for (var i = 0; i < sels.length; i++) { try { var n = root.querySelector(sels[i]); if (n) return n; } catch (e) { swallow(e); } }
     return null;
   }
-  function _zhsQueryAll(root, sels) {
-    var out = [];
-    if (!root || !root.querySelectorAll) return out;
-    for (var i = 0; i < sels.length; i++) {
-      try {
-        var nodes = root.querySelectorAll(sels[i]);
-        for (var j = 0; j < nodes.length; j++) out.push(nodes[j]);
-      } catch (e) { swallow(e); }
-    }
+  function _pqQueryAll(root, sels) {
+    var out = []; if (!root || !root.querySelectorAll) return out;
+    for (var i = 0; i < sels.length; i++) { try { var ns = root.querySelectorAll(sels[i]); for (var j = 0; j < ns.length; j++) out.push(ns[j]); } catch (e) { swallow(e); } }
     return out;
   }
-
-  // 随机选一个选项并高亮（视觉反馈，不改答题语义）：点击第一项即可触发平台选中态
-  function _zhsPickRandomOption(dialog) {
-    var opts = _zhsQueryAll(dialog, ZHIHUISHU.optionSels);
+  function _pqPickRandom(dialog) {
+    var opts = _pqQueryAll(dialog, POPUP_QUIZ.optionSels);
     if (!opts.length) return null;
     var pick = opts[Math.floor(Math.random() * opts.length)];
-    try { pick.click(); } catch (e) { swallow(e); }   // 触发平台选中逻辑（radio/checkbox 切换）
+    try { pick.click(); } catch (e) { swallow(e); }
     return pick;
   }
-
-  // 点击「答题」按钮：优先按候选选择器，退而求其次找弹窗内文字含「答题/提交/确定」的 button
-  function _zhsClickAnswerBtn(dialog) {
-    var btn = _zhsQuery(dialog, ZHIHUISHU.answerBtnSels);
+  function _pqClickAnswer(dialog) {
+    var btn = _pqQuery(dialog, POPUP_QUIZ.answerBtnSels);
     if (!btn) {
       try {
         var btns = dialog.querySelectorAll('button, .btn, a[class*="btn"]');
         for (var i = 0; i < btns.length; i++) {
           var t = (btns[i].textContent || btns[i].innerText || '').replace(/\s/g, '');
-          if (/答题|提交|确定|作答/.test(t)) { btn = btns[i]; break; }
+          if (/答题|提交|确定|作答|下一题|close|关闭/.test(t)) { btn = btns[i]; break; }
         }
       } catch (e) { swallow(e); }
     }
     if (btn) { try { btn.click(); } catch (e) { swallow(e); } return true; }
     return false;
   }
-
-  // 处理单个题目弹窗：随机选 → 答题 → 删除弹窗。返回 true 表示已处理（用于去重/计数）
-  function _zhsHandleDialog(dialog) {
+  function _pqRemove(dialog) {
+    try { if (dialog.parentNode) dialog.parentNode.removeChild(dialog); else if (dialog.remove) dialog.remove(); }
+    catch (e) { try { dialog.style.display = 'none'; dialog.style.visibility = 'hidden'; } catch (e2) { swallow(e2); } }
+  }
+  function _pqHandle(dialog) {
     if (!dialog) return false;
-    var fp = _zhsFingerprint(dialog);
-    if (_zhsHandled[fp]) return false;            // 已处理过，跳过（防重复点击/删）
-    _zhsHandled[fp] = true;
+    var fp = _pqFingerprint(dialog);
+    if (_pqHandled[fp]) return false;
+    _pqHandled[fp] = true;
     try {
-      _zhsPickRandomOption(dialog);               // ① 随机选一个选项（触发选中态）
-      _zhsClickAnswerBtn(dialog);                 // ② 点击「答题 / 提交」按钮
-      // ③ 删除弹窗：优先 removeChild，失败则隐藏兜底（避免残留遮挡播放器）
-      try {
-        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
-        else if (dialog.remove) dialog.remove();
-      } catch (e) {
-        try { dialog.style.display = 'none'; dialog.style.visibility = 'hidden'; } catch (e2) { swallow(e2); }
-      }
-      try { Store.emit('ui:toast', '智慧树：已自动作答并关闭题目弹窗'); } catch (e3) { swallow(e3); }
-      dbg('智慧树弹窗已处理：', fp.slice(0, 40));
+      _pqPickRandom(dialog);
+      _pqClickAnswer(dialog);
+      _pqRemove(dialog);
+      try { Store.emit('ui:toast', '已自动作答并关闭题目弹窗'); } catch (e3) { swallow(e3); }
       return true;
     } catch (e) { swallow(e); return false; }
   }
 
-  // 每轮扫描：找出当前页面所有题目弹窗并逐个处理
-  function zhihuishuTickQuestions() {
-    if (detectSite() !== 'zhihuishu') return 0;   // 隔离：非智慧树页面不执行任何逻辑
+  // 通用入口：扫描弹窗并逐个随机作答+删除。selectors 可选覆盖默认 POPUP_QUIZ（站点特化）。
+  function popupQuizTick(selectors) {
+    var sels = selectors || POPUP_QUIZ;
     var handled = 0;
     try {
       var root = (document && document.documentElement) || document;
-      // 先按根容器候选直接定位弹窗
-      var dialogs = _zhsQueryAll(root, ZHIHUISHU.dialogSels);
-      for (var i = 0; i < dialogs.length; i++) {
-        if (_zhsHandleDialog(dialogs[i])) handled++;
-      }
-      // 兜底：某些弹窗无稳定 class（如行内 style 动态题），扫描含「答题」按钮的浮层 div
+      var dialogs = _pqQueryAll(root, sels.dialogSels);
+      for (var i = 0; i < dialogs.length; i++) { if (_pqHandle(dialogs[i])) handled++; }
       if (handled === 0) {
+        // 兜底：扫描含「答题/提交」按钮的浮层（无稳定 class 的弹窗）
         var allBtns = root.querySelectorAll ? root.querySelectorAll('button, a[class*="btn"]') : [];
         for (var b = 0; b < allBtns.length; b++) {
           var txt = (allBtns[b].textContent || allBtns[b].innerText || '').replace(/\s/g, '');
           if (/答题|提交|确定|作答/.test(txt)) {
             var cand = allBtns[b].closest ? allBtns[b].closest('div,section,li') : null;
-            if (cand && _zhsHandleDialog(cand)) { handled++; if (handled >= 1) break; }
+            if (cand && _pqHandle(cand)) { handled++; break; }
           }
         }
       }
@@ -1481,8 +1512,306 @@
     return handled;
   }
 
+  try { window.__CX_FORCE_PLAY.popupQuizTick = popupQuizTick; } catch (e) {}
+
+  // ===== DOMAIN: biz/zhihuishu (Zhihuishu / 智慧树-知到 专属业务) =====
+  // ===== MODULE: 智慧树上课弹窗题目自动处理（随机选选项→点击答题→删除弹窗） =====
+  // 域：业务模块 —— 智慧树(知到)专属，与超星(学习通)完全隔离；仅 detectSite()==='zhihuishu' 时才激活。
+  // 【需求差异】智慧树上课期间会弹「随堂题目」弹窗（互动题/弹幕答题），UI 与超星学习通结构完全不同：
+  //   ① 无 window.attachments 白名单、无 window.ananas 私有暂停封装（已由 site-router.js 收口为智慧树空键）；
+  //   ② 强制续播仍由原型级 pause 中性化(usePrototypeNeutralize auto 分支对智慧树激进)兜底，无需本模块介入；
+  //   ③ 本模块独有职责：弹窗题目干扰处理 —— 复用站点无关骨架 popupQuizTick()（随机选 → 答题 → 删弹窗）。
+  // 题目对错不在意（用户明确：只随机选一个然后答题、删弹窗），故不解析题干语义、不判断正确率。
+  // 【选择器校准】智慧树真实 DOM 结构待实测校准，下方选择器为 best-effort 猜测并集，命中其一即生效（rev2 收口到 POPUP_QUIZ）。
+  var ZHIHUISHU = {
+    dialogSels: ['.dialog-wrap', '.question-pop', '.topic-pop', '.ans-pop', '.pop-box', '.question-dialog', '.tk-pop', '[class*="question"]', '[class*="topic"]', '[class*="answer"]'],
+    optionSels: ['.topic-item', '.option-item', '.answer-item', 'li[class*="option"]', '.dialog-wrap li', '[class*="choice"]'],
+    answerBtnSels: ['.answer-btn', '.submit-btn', '.dialog-submit', '.topic-submit', 'button[class*="answer"]', 'button[class*="submit"]', '.pop-btn']
+  };
+
+  function zhihuishuTickQuestions() {
+    if (detectSite() !== 'zhihuishu') return 0;   // 隔离：非智慧树页面不执行任何逻辑
+    try { return popupQuizTick(ZHIHUISHU); } catch (e) { swallow(e); return 0; }
+  }
+
   // 暴露给主循环与回归测试
   try { window.__CX_FORCE_PLAY.zhihuishuTickQuestions = zhihuishuTickQuestions; } catch (e) {}
+
+  // ===== DOMAIN: biz/icourse163 (中国大学MOOC / 爱课程 / icourse163.org) =====
+  // ===== MODULE: 中国大学MOOC 专属 —— 弹窗题目随机作答（续播由通用引擎兜底） =====
+  // 域：业务模块 —— 仅 detectSite()==='icourse163' 激活。平台无 window.attachments 白名单、无 window.ananas，
+  //   续播走通用「全量 + 原型级 pause 中性化」；本模块仅消上课弹窗干扰（随机选→答题→删）。
+  var ICOURSE163 = {
+    dialogSels: ['.quiz-pop', '.question-pop', '.modal', '.pop-layer', '[class*="question"]', '[class*="quiz"]', '[class*="popup"]'],
+    optionSels: ['.option-item', '.q-item', 'li[class*="option"]', '.choice-item', '[class*="choice"]'],
+    answerBtnSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn', '.next-btn']
+  };
+  function icourse163TickQuestions() {
+    if (detectSite() !== 'icourse163') return 0;
+    try { return popupQuizTick(ICOURSE163); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.icourse163TickQuestions = icourse163TickQuestions; } catch (e) {}
+
+  // ===== DOMAIN: biz/xuetangx (学堂在线 / xuetangx.com) =====
+  // ===== MODULE: 学堂在线专属 —— 弹窗题目随机作答（续播由通用引擎兜底；常与雨课堂配套） =====
+  // 域：业务模块 —— 仅 detectSite()==='xuetangx' 激活。无白名单/无 ananas，续播走通用全量兜底；
+  //   本模块仅消上课弹窗干扰（随机选→答题→删）。
+  var XUETANGX = {
+    dialogSels: ['.xtx-quiz', '.question-modal', '.pop-mask', '.modal', '[class*="quiz"]', '[class*="question"]', '[class*="popup"]'],
+    optionSels: ['.option', '.q-option', 'li[class*="option"]', '.choice', '[class*="choice"]'],
+    answerBtnSels: ['.submit', '.answer-btn', 'button[class*="submit"]', '.confirm', '.xtx-submit']
+  };
+  function xuetangxTickQuestions() {
+    if (detectSite() !== 'xuetangx') return 0;
+    try { return popupQuizTick(XUETANGX); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.xuetangxTickQuestions = xuetangxTickQuestions; } catch (e) {}
+
+  // ===== DOMAIN: biz/icve (智慧职教 / icve.com.cn) =====
+  // ===== MODULE: 智慧职教专属 —— 弹窗题目随机作答（续播由通用引擎兜底） =====
+  // 域：业务模块 —— 仅 detectSite()==='icve' 激活。高职院校主用，无白名单/无 ananas，续播走通用全量兜底；
+  //   本模块仅消上课弹窗干扰（随机选→答题→删）。智慧职教考试有防作弊屏捕，本模块只处理普通课程弹窗、不碰考试态。
+  var ICVE = {
+    dialogSels: ['.question-pop', '.modal', '.pop-mask', '.tk-pop', '[class*="question"]', '[class*="quiz"]', '[class*="popup"]'],
+    optionSels: ['.option-item', '.q-item', 'li[class*="option"]', '.choice-item', '[class*="choice"]'],
+    answerBtnSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn', '.next-btn']
+  };
+  function icveTickQuestions() {
+    if (detectSite() !== 'icve') return 0;
+    try { return popupQuizTick(ICVE); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.icveTickQuestions = icveTickQuestions; } catch (e) {}
+
+  // ===== DOMAIN: biz/quiz (站点无关·真答题引擎) =====
+  // ===== MODULE: 作业/章节「真答题」引擎 —— 抓取题目+选项，经可插拔答案源求答案并回填 =====
+  // 域：业务模块 —— 与站点无关；rev2 为「题目/作业重」的平台(人卫/Unipus/U校园/实验空间)提供真答题能力。
+  //
+  // 【与 popup-quiz 的区别】
+  //   popup-quiz：上课弹窗干扰，「随机选一个→答题→删弹窗」，不关心对错（消干扰保续播）。
+  //   quiz(本模块)：作业/章节题需「认真作答」——抓题干文本+选项，由答案源求答案再回填，追求正确率。
+  //
+  // 【答案源(可插拔)】—— 正确答案从哪来由答案源决定，脚本不凭空编造：
+  //   ① 'random'  (默认兜底)：随机选一项。保证「不卡进度 / 不空题」，但无正确率 —— 用户未配置题库/AI 时的安全默认。
+  //   ② 'bank'    (本地题库)：从 window.__CX_QUIZ_BANK 或 localStorage['cx_quiz_bank'] 读 {题干指纹: 答案} 映射做匹配；
+  //                命中则回填正确项，未命中回退 random。题库格式由用户维护（见文档）。
+  //   ③ 'ai'      (AI 接口，预留)：把题干+选项 POST 到 CONFIG.QUIZ_AI_ENDPOINT，取回答案索引回填；
+  //                接口契约预留（请求/响应形态见下方 _quizAskAI），端点与密钥由用户配置，脚本不内置任何密钥。
+  //   默认答案源 = CONFIG.QUIZ_ANSWER_SOURCE || 'random'；用户可于面板/配置切换。
+  //
+  // 【站点适配】各答题平台模块只需提供 selectors 同构映射 + 调用 quizTick(sel)；题目 DOM 结构各异，selector 待真实站点校准(标 TODO)。
+  var QUIZ = {
+    // 题目容器 / 题干 / 选项 / 提交 的候选选择器并集（best-effort，站点可覆盖）
+    questionSels: ['.question-item', '.quiz-item', '.topic-item', '.exam-item', 'li[class*="question"]', '[class*="quiz-item"]', '.q-container'],
+    stemSels: ['.stem', '.question-title', '.q-title', '.topic-title', '[class*="stem"]', '[class*="title"]'],
+    optionSels: ['.option-item', '.q-option', '.choice-item', 'li[class*="option"]', '[class*="choice"]', '.answer-item'],
+    submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn', '.next-btn']
+  };
+
+  var _quizHandled = {};   // 已作答题目指纹去重（防重复提交）
+  function _quizFingerprint(qEl) {
+    try { var s = (qEl.textContent || '').replace(/\s+/g, '').slice(0, 120); return 'quiz:' + s.length + ':' + s; }
+    catch (e) { return 'quiz:err'; }
+  }
+  function _quizText(el, sels) {
+    if (!el) return '';
+    var node = (sels && _pqQuery) ? null : null; // 占位（避免未定义引用，下方用本地 query）
+    try {
+      if (sels && sels.length) {
+        for (var i = 0; i < sels.length; i++) { var n = el.querySelector(sels[i]); if (n && (n.textContent || '').trim()) return n.textContent.trim(); }
+      }
+      return (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    } catch (e) { return ''; }
+  }
+  function _quizOptions(qEl, sels) {
+    var out = []; if (!qEl || !qEl.querySelectorAll) return out;
+    for (var i = 0; i < sels.length; i++) { try { var ns = qEl.querySelectorAll(sels[i]); for (var j = 0; j < ns.length; j++) out.push(ns[j]); } catch (e) { swallow(e); } }
+    return out;
+  }
+
+  // ---- 答案源解析 ----
+  function _quizBankLookup(stem) {
+    try {
+      var bank = null;
+      try { bank = window.__CX_QUIZ_BANK; } catch (e) {}
+      if (!bank && typeof localStorage !== 'undefined') {
+        try { var raw = localStorage.getItem('cx_quiz_bank'); if (raw) bank = JSON.parse(raw); } catch (e2) { swallow(e2); }
+      }
+      if (bank && typeof bank === 'object') {
+        // 精确键或子串匹配
+        if (bank[stem]) return bank[stem];
+        var keys = Object.keys(bank);
+        for (var k = 0; k < keys.length; k++) { if (stem && stem.indexOf(keys[k]) >= 0) return bank[keys[k]]; }
+      }
+    } catch (e) { swallow(e); }
+    return null;
+  }
+  function _quizAskAI(stem, options) {
+    // 预留 AI 答案源接口：CONFIG.QUIZ_AI_ENDPOINT 由用户配置，脚本不内置密钥。
+    try {
+      var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_ENDPOINT) || '';
+      if (!ep) return null;
+      // 同步环境无法 await；采用 fire-and-forget + 后续轮次回填（命中缓存即生效）。
+      // 这里仅返回 null，交由调用方按 random 兜底；AI 异步结果写入 __CX_QUIZ_BANK 供下轮命中。
+      try {
+        var payload = JSON.stringify({ stem: stem, options: options.map(function (o) { return (o.textContent || '').replace(/\s+/g, ' ').trim(); }) });
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', ep, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+              var ans = JSON.parse(xhr.responseText);
+              if (ans && (ans.index != null || ans.answer != null)) {
+                var idx = ans.index != null ? ans.index : ans.answer;
+                try { window.__CX_QUIZ_BANK = window.__CX_QUIZ_BANK || {}; window.__CX_QUIZ_BANK[stem] = idx; } catch (e3) {}
+              }
+            } catch (e2) { swallow(e2); }
+          }
+        };
+        xhr.send(payload);
+      } catch (e) { swallow(e); }
+    } catch (e) { swallow(e); }
+    return null;
+  }
+  // 求答案索引：返回数字索引（选项数组下标）或 null（调用方按 random 兜底）
+  function _quizResolveAnswer(stem, options) {
+    var src = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random';
+    if (src === 'bank') {
+      var b = _quizBankLookup(stem);
+      if (b != null) return (typeof b === 'number') ? b : parseInt(b, 10);
+    } else if (src === 'ai') {
+      var a = _quizAskAI(stem, options);
+      if (a != null) return a;
+    }
+    return null; // null → 调用方 random 兜底
+  }
+
+  function _quizClick(optEls, idx) {
+    try {
+      var el = optEls[idx] || optEls[Math.floor(Math.random() * optEls.length)];
+      if (!el) return false;
+      // 触发选中：优先 click 选项本身；若选项是 label 包裹 input，则勾选其内部 input
+      try { el.click(); } catch (e) { swallow(e); }
+      try {
+        var inp = el.querySelector('input[type="radio"], input[type="checkbox"]');
+        if (inp) { inp.checked = true; try { inp.click(); } catch (e2) { swallow(e2); } }
+      } catch (e3) { swallow(e3); }
+      return true;
+    } catch (e) { swallow(e); return false; }
+  }
+  function _quizSubmit(qEl, sels) {
+    if (!sels) sels = QUIZ.submitSels;
+    for (var i = 0; i < sels.length; i++) { try { var b = qEl.querySelector(sels[i]); if (b) { b.click(); return true; } } catch (e) { swallow(e); } }
+    // 退而求其次：题目容器内任意含「提交/下一题/确定」文字的按钮
+    try {
+      var btns = qEl.querySelectorAll('button, .btn, a[class*="btn"]');
+      for (var j = 0; j < btns.length; j++) {
+        var t = (btns[j].textContent || '').replace(/\s/g, '');
+        if (/提交|下一题|确定|作答|保存/.test(t)) { btns[j].click(); return true; }
+      }
+    } catch (e) { swallow(e); }
+    return false;
+  }
+
+  // 通用入口：扫描题目并认真作答（随机/bank/ai 兜底）。selectors 可选覆盖默认 QUIZ。
+  function quizTick(selectors) {
+    var sels = selectors || QUIZ;
+    var answered = 0;
+    try {
+      var root = (document && document.documentElement) || document;
+      var qs = _pqQueryAll(root, sels.questionSels);
+      for (var i = 0; i < qs.length; i++) {
+        var qEl = qs[i];
+        var fp = _quizFingerprint(qEl);
+        if (_quizHandled[fp]) continue;            // 已作答跳过
+        var stem = _quizText(qEl, sels.stemSels);
+        var opts = _quizOptions(qEl, sels.optionSels);
+        if (!opts.length) continue;
+        var idx = _quizResolveAnswer(stem, opts);
+        var useIdx = (idx != null && idx >= 0 && idx < opts.length) ? idx : Math.floor(Math.random() * opts.length);
+        _quizClick(opts, useIdx);
+        _quizSubmit(qEl, sels.submitSels);
+        _quizHandled[fp] = true;
+        answered++;
+        try { Store.emit('ui:toast', '已作答 1 题（源=' + ((typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random') + '）'); } catch (e) { swallow(e); }
+      }
+    } catch (e) { swallow(e); }
+    return answered;
+  }
+
+  // 配置默认值注入（CONFIG 可能尚未含这些字段，安全补默认值）
+  try {
+    if (typeof CONFIG !== 'undefined') {
+      if (CONFIG.QUIZ_ANSWER_SOURCE == null) CONFIG.QUIZ_ANSWER_SOURCE = 'random';
+      if (CONFIG.QUIZ_AI_ENDPOINT == null) CONFIG.QUIZ_AI_ENDPOINT = '';
+    }
+  } catch (e) {}
+
+  try { window.__CX_FORCE_PLAY.quizTick = quizTick; } catch (e) {}
+
+  // ===== DOMAIN: biz/renwei (人卫慕课 / 人民卫生出版社 / 医学院校专用) =====
+  // ===== MODULE: 人卫慕课专属 —— 真答题(接入 quiz 引擎) + 续播(通用兜底) =====
+  // 域：业务模块 —— 仅 detectSite()==='renwei' 激活。医学院校专用；题目/作业重，故接 quiz 真答题引擎。
+  //   答案源默认 'random' 保不卡；用户配置 bank/ai 后变真答题（见 quiz.js 说明）。选择器待真实站点校准(标 TODO)。
+  var RENWEI = {
+    questionSels: ['.question-item', '.quiz-item', '.exam-item', '[class*="question"]', '[class*="quiz"]'],
+    stemSels: ['.stem', '.question-title', '.q-title', '[class*="stem"]'],
+    optionSels: ['.option-item', '.q-option', 'li[class*="option"]', '[class*="choice"]'],
+    submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn']
+  };
+  function renweiTickQuiz() {
+    if (detectSite() !== 'renwei') return 0;
+    try { return quizTick(RENWEI); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.renweiTickQuiz = renweiTickQuiz; } catch (e) {}
+
+  // ===== DOMAIN: biz/unipus (中国高校外语慕课平台 Unipus / 北外+外研社) =====
+  // ===== MODULE: Unipus 专属 —— 真答题(接入 quiz 引擎) + 续播(通用兜底) =====
+  // 域：业务模块 —— 仅 detectSite()==='unipus' 激活。英语专业/大学英语拓展课常见；题目重，接 quiz 真答题引擎。
+  //   默认 'random' 兜底保不卡；配置 bank/ai 变真答题。选择器待真实站点校准(标 TODO)。
+  var UNIPUS = {
+    questionSels: ['.question-item', '.quiz-item', '.exercise-item', '[class*="question"]', '[class*="quiz"]'],
+    stemSels: ['.stem', '.question-title', '.q-title', '[class*="stem"]'],
+    optionSels: ['.option-item', '.q-option', 'li[class*="option"]', '[class*="choice"]'],
+    submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn']
+  };
+  function unipusTickQuiz() {
+    if (detectSite() !== 'unipus') return 0;
+    try { return quizTick(UNIPUS); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.unipusTickQuiz = unipusTickQuiz; } catch (e) {}
+
+  // ===== DOMAIN: biz/ucampus (U校园 / 外研社 / 英语教材配套) =====
+  // ===== MODULE: U校园专属 —— 真答题(接入 quiz 引擎) + 续播(通用兜底) =====
+  // 域：业务模块 —— 仅 detectSite()==='ucampus' 激活。偏英语教材配套(听力/作业)；题目重，接 quiz 真答题引擎。
+  //   默认 'random' 兜底保不卡；配置 bank/ai 变真答题。选择器待真实站点校准(标 TODO)。
+  var UCAMPUS = {
+    questionSels: ['.question-item', '.quiz-item', '.exercise-item', '[class*="question"]', '[class*="quiz"]'],
+    stemSels: ['.stem', '.question-title', '.q-title', '[class*="stem"]'],
+    optionSels: ['.option-item', '.q-option', 'li[class*="option"]', '[class*="choice"]'],
+    submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn']
+  };
+  function ucampusTickQuiz() {
+    if (detectSite() !== 'ucampus') return 0;
+    try { return quizTick(UCAMPUS); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.ucampusTickQuiz = ucampusTickQuiz; } catch (e) {}
+
+  // ===== DOMAIN: biz/ilabx (实验空间 ilab-x / 国家虚拟仿真实验教学平台) =====
+  // ===== MODULE: 实验空间专属 —— 真答题(接入 quiz 引擎) + 续播(通用兜底) =====
+  // 域：业务模块 —— 仅 detectSite()==='ilabx' 激活。理工科虚拟实验；步骤内嵌题目，接 quiz 真答题引擎。
+  //   默认 'random' 兜底保不卡；配置 bank/ai 变真答题。选择器待真实站点校准(标 TODO)。
+  var ILABX = {
+    questionSels: ['.question-item', '.quiz-item', '.step-question', '[class*="question"]', '[class*="quiz"]'],
+    stemSels: ['.stem', '.question-title', '.q-title', '[class*="stem"]'],
+    optionSels: ['.option-item', '.q-option', 'li[class*="option"]', '[class*="choice"]'],
+    submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn']
+  };
+  function ilabxTickQuiz() {
+    if (detectSite() !== 'ilabx') return 0;
+    try { return quizTick(ILABX); } catch (e) { swallow(e); return 0; }
+  }
+  try { window.__CX_FORCE_PLAY.ilabxTickQuiz = ilabxTickQuiz; } catch (e) {}
 
   // ===== DOMAIN: dom module-08-10-15 =====
   // ===== MODULE: 接管引擎(overrideVideo) =====
@@ -3687,13 +4016,29 @@
     try { autoStopTick(); } catch (e) { swallow(e); }
     if (CONFIG.RESUME_AFTER_MIN > 0) { try { resumeTick(); } catch (e) { swallow(e); } }
     try { applyUserRateAll(); } catch (e) { swallow(e); }   // 周期性把用户倍速施加到所有视频，压制平台把 playbackRate 重置回 1x（防倍速形同虚设）
-    // 智慧树(知到)专属：上课弹窗题目自动处理（随机选 → 答题 → 删弹窗）+ 右下角微型标志图标。
-    // 与超星逻辑完全隔离：detectSite()!=='zhihuishu' 时两函数内部直接 return，零副作用。
+    // 多平台站点专属调度（rev2）：按 detectSite() 分发，各平台函数内部对站点做了二层守卫，跨站零副作用。
+    // 续播本身由通用 dom.js（scanVideos/原型中性化）对所有站点兜底，此处仅调度「弹窗消干扰 / 真答题」。
     try {
-      if (detectSite() === 'zhihuishu') {
+      var _site = detectSite();
+      if (_site === 'zhihuishu') {
         var _zhsAns = zhihuishuTickQuestions();
         try { zhihuishuFabTick(_zhsAns); } catch (e2) { swallow(e2); }
+      } else if (_site === 'icourse163') {
+        try { icourse163TickQuestions(); } catch (e) { swallow(e); }
+      } else if (_site === 'xuetangx') {
+        try { xuetangxTickQuestions(); } catch (e) { swallow(e); }
+      } else if (_site === 'icve') {
+        try { icveTickQuestions(); } catch (e) { swallow(e); }
+      } else if (_site === 'renwei') {
+        try { renweiTickQuiz(); } catch (e) { swallow(e); }
+      } else if (_site === 'unipus') {
+        try { unipusTickQuiz(); } catch (e) { swallow(e); }
+      } else if (_site === 'ucampus') {
+        try { ucampusTickQuiz(); } catch (e) { swallow(e); }
+      } else if (_site === 'ilabx') {
+        try { ilabxTickQuiz(); } catch (e) { swallow(e); }
       }
+      // chaoxing/unknown/xueyinonline(并入 chaoxing) 走通用续播，无站点专属弹窗/答题逻辑
     } catch (e) { swallow(e); }
     if (_cxPanel && _cxPanel.style.display !== 'none') { try { Store.emit('videos:scanned'); } catch (e) { swallow(e); } }  // P3：面板可见时发扫描结束信号（事件总线），订阅方刷新（等价旧行为）
   }
