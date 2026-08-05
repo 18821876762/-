@@ -269,6 +269,29 @@
         Store.emit('panel:refresh');
       });
     }
+    // #1 温和/礼貌模式：入侵模式选择（原型中性化策略）
+    var intr = el.querySelector('#__cxIntrusion');
+    if (intr) {
+      try { intr.value = CONFIG.INTRUSION_MODE || 'auto'; } catch (e) { swallow(e); }
+      intr.addEventListener('change', function () {
+        CONFIG.INTRUSION_MODE = intr.value;
+        savePanelCfg();
+        try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
+        try { Store.emit('ui:toast', '入侵模式 → ' + intr.value + (intr.value === 'gentle' ? '（超星可能偶发漏拦）' : '')); } catch (e) { swallow(e); }
+        Store.emit('panel:refresh');
+      });
+    }
+    // #1 礼貌模式开关（抗检测：pause.toString 伪装）
+    var polite = el.querySelector('#__cxPolite');
+    if (polite) {
+      try { polite.checked = !!CONFIG.POLITE_MODE; } catch (e) { swallow(e); }
+      polite.addEventListener('change', function () {
+        CONFIG.POLITE_MODE = !!polite.checked;
+        savePanelCfg();
+        try { Store.emit('ui:toast', CONFIG.POLITE_MODE ? '礼貌模式已开（抗检测）' : '礼貌模式已关'); } catch (e) { swallow(e); }
+        Store.emit('panel:refresh');
+      });
+    }
     // —— 主从式导航：切换下方内容区块（localStorage 记住当前 tab）——
     function switchTab(name) {
       if (!_cxPanel) return;
@@ -293,7 +316,7 @@
       (function (b) { b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); }); })(navBtns[ni]);
     }
     el.querySelector('#__cxBtnCopy').addEventListener('click', copyDiagnostics);
-    // 安全审计（建议#10）：刷新「系统」页侵入点清单
+    // 安全审计（建议#10）：刷新「洞察」页侵入点清单
     var btnAudit = el.querySelector('#__cxBtnAudit');
     if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     // 黑匣子导出按钮

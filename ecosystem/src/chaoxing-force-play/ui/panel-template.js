@@ -106,6 +106,15 @@
           '<div style="font-size:11px;color:' + STYLES.T.text2 + ';margin-bottom:6px;">副面板（内嵌显示，可折叠）</div>' +
           '<div id="__cxSubPanels"></div>' +
         '</div>' +
+        // 安全审计（建议#10）：实时展示当前对宿主页面的侵入面，落实审计透明化诉求。置于「洞察」栏：运行状况/侵入透明视角更贴切。
+        '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:10px;padding-top:8px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<div style="font-size:12px;color:' + STYLES.T.text + ';">安全审计 · 当前侵入点（实时）</div>' +
+            '<button id="__cxBtnAudit" style="padding:3px 8px;font-size:11px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;cursor:pointer;">刷新</button>' +
+          '</div>' +
+          '<div id="__cxInvasionReport" style="font-size:11px;color:' + STYLES.T.text2 + ';">— 开面板后自动盘点 —</div>' +
+          '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;">绿○=未侵入/已还原 · 黄●=当前已接管 · 卸载时全部还原（/cleardata 清配置）</div>' +
+        '</div>' +
       '</div>' +
       // 区块：系统（月操维护：低频设置 + 诊断导出 + 帮助）
       '<div id="__cxTab_system" class="cx-tab">' +
@@ -118,18 +127,18 @@
         '<label id="__cxSingleVideoRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxSingleVideo" type="checkbox" style="vertical-align:middle;margin-right:6px;">只播放一个视频（仅前台播放，同开时取消视频开关）</label>' +
         '<label id="__cxNinjaRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxNinja" type="checkbox" style="vertical-align:middle;margin-right:6px;">Ninja 模式（缩成窄条，悬停展开）</label>' +
         '<label id="__cxDebugRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxDebug" type="checkbox" style="vertical-align:middle;margin-right:6px;">调试日志 (DEBUG → 控制台)</label>' +
+        // #1 温和/礼貌模式：入侵模式（原型中性化策略）+ 礼貌模式（抗检测）开关
+        '<div id="__cxIntrusionRow" style="display:block;margin-bottom:6px;font-size:12px;">入侵模式: ' +
+          '<select id="__cxIntrusion" style="margin-left:6px;font-size:12px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;padding:2px 4px;">' +
+            '<option value="auto">auto（按站点自适应）</option>' +
+            '<option value="gentle">gentle（仅实例级·最小侵入）</option>' +
+            '<option value="aggressive">aggressive（始终改原型·最稳）</option>' +
+          '</select>' +
+        '</div>' +
+        '<label id="__cxPoliteRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxPolite" type="checkbox" style="vertical-align:middle;margin-right:6px;">礼貌模式（pause.toString 伪装·抗检测）</label>' +
         '<button id="__cxBtnCopy" style="width:100%;padding:7px;margin-bottom:4px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:6px;cursor:pointer;font-size:12px;font-weight:400;">复制诊断信息（反馈用）</button>' +
         '<button id="__cxBtnExport" style="width:100%;padding:7px;margin-top:4px;' + STYLES.BTN_GHOST + 'font-size:12px;">导出最近操作日志（黑匣子）</button>' +
         '<button id="__cxBtnClearBx" style="width:100%;padding:7px;margin-top:4px;' + STYLES.BTN_DANGER + 'font-size:12px;">清空黑匣子日志</button>' +
-        // 安全审计（建议#10）：实时展示当前对宿主页面的侵入面，落实审计透明化诉求
-        '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:10px;padding-top:8px;">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-            '<div style="font-size:12px;color:' + STYLES.T.text + ';">安全审计 · 当前侵入点（实时）</div>' +
-            '<button id="__cxBtnAudit" style="padding:3px 8px;font-size:11px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;cursor:pointer;">刷新</button>' +
-          '</div>' +
-          '<div id="__cxInvasionReport" style="font-size:11px;color:' + STYLES.T.text2 + ';">— 开面板后自动盘点 —</div>' +
-          '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;">绿○=未侵入/已还原 · 黄●=当前已接管 · 卸载时全部还原（/cleardata 清配置）</div>' +
-        '</div>' +
         '<div style="font-size:11px;color:' + STYLES.T.text3 + ';margin-top:6px;">按 <b>P</b> 开关本面板 · <b>Esc</b> 关闭 · 0 = 禁用</div>' +
       '</div>'
     );

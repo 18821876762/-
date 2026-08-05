@@ -8,6 +8,8 @@
     CONFIG.END_RELEASE_SEC = Math.max(0, Math.min(120, +CONFIG.END_RELEASE_SEC || 0));
     CONFIG.USER_RATE = Math.max(0.25, Math.min(4, +CONFIG.USER_RATE || 1));
     CONFIG.PANEL_W = Math.max(288, Math.min(760, +CONFIG.PANEL_W || 380));
+    if (CONFIG.INTRUSION_MODE !== 'gentle' && CONFIG.INTRUSION_MODE !== 'aggressive') CONFIG.INTRUSION_MODE = 'auto';
+    CONFIG.POLITE_MODE = !!CONFIG.POLITE_MODE;
     DEBUG = !!DEBUG;
   }
   function savePanelCfg() {
@@ -23,7 +25,9 @@
         SINGLE_VIDEO: CONFIG.SINGLE_VIDEO,
         NINJA_MODE: CONFIG.NINJA_MODE,
         PANEL_W: CONFIG.PANEL_W,
-        PANEL_POS: CONFIG.PANEL_POS
+        PANEL_POS: CONFIG.PANEL_POS,
+        INTRUSION_MODE: CONFIG.INTRUSION_MODE,
+        POLITE_MODE: CONFIG.POLITE_MODE
       }));
     } catch (e) { swallow(e); }
   }
@@ -43,6 +47,8 @@
       if (typeof o.NINJA_MODE === 'boolean') CONFIG.NINJA_MODE = o.NINJA_MODE;
       if (typeof o.PANEL_W === 'number') CONFIG.PANEL_W = o.PANEL_W;
       if (o.PANEL_POS && typeof o.PANEL_POS.x === 'number' && typeof o.PANEL_POS.y === 'number') CONFIG.PANEL_POS = o.PANEL_POS;
+      if (o.INTRUSION_MODE === 'gentle' || o.INTRUSION_MODE === 'aggressive' || o.INTRUSION_MODE === 'auto') CONFIG.INTRUSION_MODE = o.INTRUSION_MODE;
+      if (typeof o.POLITE_MODE === 'boolean') CONFIG.POLITE_MODE = o.POLITE_MODE;
       clampCfg();
     } catch (e) { swallow(e); }
   }

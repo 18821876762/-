@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T12:44:48+08:00  commit: 73812ab  minify: off
+// Built: 2026-08-05T13:36:35+08:00  commit: e654c5c  minify: off
 
 
 (function () {
@@ -226,7 +226,9 @@
     SINGLE_VIDEO: false,   // 只播放一个视频：开启后仅前台视频播放，其他视频全部暂停；同时取消所有逐视频开关
     NINJA_MODE: false,     // Ninja 模式：面板默认缩成窄条（仅标题+指示灯），鼠标悬停展开。适合录屏/隐私场景
     PANEL_W: 460,          // 面板宽度(px，288~760)：正常态与 Ninja 展开态共用，「系统」页滑块可调并持久化（默认加宽，避免 Ninja 悬停展开仍显窄）
-    PANEL_POS: null        // 面板拖拽落点 {x,y}（px，相对视口）；null=使用 CSS 默认右上角。解决 Ninja 模式无法上下/左右移动
+    PANEL_POS: null,       // 面板拖拽落点 {x,y}（px，相对视口）；null=使用 CSS 默认右上角。解决 Ninja 模式无法上下/左右移动
+    INTRUSION_MODE: 'auto', // #1 温和模式：原型中性化启用策略。'auto'=按站点自适应(超星激进/其余温和)；'gentle'=仅实例级+事件，绝不碰原型(超星有覆盖窗口)；'aggressive'=始终包装原型(现状默认，最稳)
+    POLITE_MODE: false     // #1 礼貌模式：抗检测——pause.toString()/playbackRate setter 来源特征伪装为原生，规避平台基于字面量扫描的反篡改；默认关，开启后还原检测改为行为探测
   };
   Store.state.CONFIG = CONFIG;   // P1 状态集中：镜像 CONFIG（同对象引用，零行为回归）
 
@@ -253,8 +255,10 @@
   //   endedLock  —— ended-notify 读取的“已结束”锁（跨脚本契约）；
   //   userPaused —— 用户暂停态（keyboard-shortcuts 读写，跨脚本契约）；
   //   np         —— 原生 pause 备份（keyboard-shortcuts 读写，跨脚本契约）。
-  // 注意：forcePaused 在原型 neutralize 函数体内必须保留字面量（tamper-guard 靠 pause.toString() 检测该字符串判断是否被还原），
-  //       故 FLAGS.forcePaused 仅供原型体之外引用；原型体内部仍写字符串字面量 '__cxForcePaused'。
+  // 注意：forcePaused 在原型 neutralize 函数体内「默认」保留字面量（tamper-guard 字串基线靠 pause.toString() 含该串判断）；
+  //   但 #1 礼貌模式(POLITE_MODE=true)下，原型体会改用闭包变量 _CX_FP 引用该标记，使 pause.toString() / rate setter.toString()
+  //   不含 '__cxForcePaused' 字面量，规避平台基于 toString 字串扫描的反篡改。该分支由 CONFIG.POLITE_MODE 门控，非礼貌模式保持字面量零回归。
+  //   FLAGS.forcePaused 仍供原型体之外引用；礼貌模式的闭包别名见下方 _CX_FP。
   var FLAGS = {
     forcePaused: '__cxForcePaused',
     anHold:      '__cxAN_hold',
@@ -263,6 +267,15 @@
     np:          '__np',
     nearEndEndedGuard: '__cxNearEndEndedGuard'   // 近尾 ended 监听只安装一次
   };
+  // #1 礼貌模式：标记名闭包引用（仅 POLITE_MODE 下原型体改用 this[_CX_FP]，使 pause.toString()/rate setter.toString() 不含 '__cxForcePaused' 字面量，
+  //   规避平台基于 toString 字串扫描的反篡改）。非礼貌模式保持 this.__cxForcePaused 字面量，兼容现有 tamper-guard 字串扫描基线（零回归）。
+  // 关键：此变量声明本身不在任何注入函数体内，故 pause.toString() 不会出现该字面量。
+  var _CX_FP = FLAGS.forcePaused;   // === '__cxForcePaused'
+  // #1 行为/引用探测状态：原型中性化是否仍在位（替代字串扫描，礼貌模式下唯一可靠判据）。
+  var _installedProtoPause = null;   // 当前装上的原型 pause 函数引用（用于比对是否被平台还原）
+  var _installedProtoRateSet = null; // 当前装上的 playbackRate setter 引用
+  var _pauseNeutralized = null;      // true=中性化在位；false=被还原；null=未接管原型(温和/未装)
+  var _rateNeutralized = null;
 
   // 注入样式（集中管理，便于主题定制 / 平台改版适配；避免 CSS 散落于各模块）
   // 【内聚性收敛】STYLES（设计令牌 + 面板/移动/Ninja/动效/按钮样式 + window.__cxUI 导出）已迁至 ui/styles.js。
@@ -293,41 +306,143 @@
     ? Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'pause') : null;
   var NATIVE_PLAY = (typeof HTMLMediaElement !== 'undefined' && HTMLMediaElement.prototype && HTMLMediaElement.prototype.play)
     ? HTMLMediaElement.prototype.play : null;   // 原生 play 备份：用户暂停闸门放行时经此播放，绕过实例级覆盖
+  var _protoPauseInstalled = false;   // #1 原型 pause 中性化当前是否已装（reconcileIntrusionMode 据此决策装/卸）
   function installPrototypePauseNeutralize() {
     if (!NATIVE_PAUSE) return;
     if (!forcePlayEnabled()) return;   // opt-out：页面/帧级停用强制播放（?cxforce=off 或 localStorage.cx_force_off）
-    function protoPause() {
+    // 两个版本：礼貌模式用闭包变量引用(toString 不含字面量·抗字串扫描)；非礼貌保留字面量(兼容 tamper-guard 字串基线·零回归)
+    function protoPauseNeutral() {
+      try { if (this && this[_CX_FP]) return; } catch (e) { swallow(e); }
+      return NATIVE_PAUSE.apply(this, arguments);
+    }
+    function protoPauseLiteral() {
       try { if (this && this.__cxForcePaused) return; } catch (e) { swallow(e); }
       return NATIVE_PAUSE.apply(this, arguments);
     }
-    try { HTMLMediaElement.prototype.pause = protoPause; }
+    var protoPause = CONFIG.POLITE_MODE ? protoPauseNeutral : protoPauseLiteral;
+    try { HTMLMediaElement.prototype.pause = protoPause; _protoPauseInstalled = true; _installedProtoPause = protoPause; _pauseNeutralized = true; }
     catch (e1) {
-      try { Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, writable: true, value: protoPause }); }
+      try { Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, writable: true, value: protoPause }); _protoPauseInstalled = true; _installedProtoPause = protoPause; _pauseNeutralized = true; }
       catch (e2) { swallow(e2); }
     }
   }
-  installPrototypePauseNeutralize();
+  // #1 卸载还原：按原生描述符写回 prototype.pause（与 cleanupListeners ① 同口径），并清安装标记
+  function restorePrototypePause() {
+    if (!NATIVE_PAUSE_DESC) return;
+    try { Object.defineProperty(HTMLMediaElement.prototype, 'pause', NATIVE_PAUSE_DESC); _protoPauseInstalled = false; _installedProtoPause = null; _pauseNeutralized = false; } catch (e) { swallow(e); }
+  }
+  if (usePrototypeNeutralize()) installPrototypePauseNeutralize();
 
   // #2 进阶（对抗 playbackRate 伪暂停）：平台不调 pause()，而是直接 video.playbackRate = 0 让画面"冻结"。
   // 已有时有 ratechange 事件回拉 + 轮询断言；再下沉到原型 setter 更激进拦截：一旦对"已强制续播"视频
   // 赋 0/极小速率，直接改写为 1x（尊重 hold 锁与未命中视频）。不 Hook SourceBuffer（appendBuffer 风险花屏，故不采用）。
   var NATIVE_RATE_DESC = (typeof HTMLMediaElement !== 'undefined' && HTMLMediaElement.prototype)
     ? Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate') : null;
+  var _protoRateInstalled = false;    // #1 原型 playbackRate 中性化当前是否已装
   function installPlaybackRateNeutralize() {
     if (!NATIVE_RATE_DESC || !NATIVE_RATE_DESC.set) return;
     if (!forcePlayEnabled()) return;   // opt-out
+    function rateSetNeutral(v) {
+      try { if (this && this[_CX_FP] && !this[FLAGS.anHold] && !this[FLAGS.userPaused] && v <= 0.01) v = (CONFIG.USER_RATE || 1); } catch (e) { swallow(e); }
+      return NATIVE_RATE_DESC.set.call(this, v);
+    }
+    function rateSetLiteral(v) {
+      try { if (this && this.__cxForcePaused && !this[FLAGS.anHold] && !this[FLAGS.userPaused] && v <= 0.01) v = (CONFIG.USER_RATE || 1); } catch (e) { swallow(e); }
+      return NATIVE_RATE_DESC.set.call(this, v);
+    }
+    var rateSet = CONFIG.POLITE_MODE ? rateSetNeutral : rateSetLiteral;
     try {
       Object.defineProperty(HTMLMediaElement.prototype, 'playbackRate', {
         configurable: true, enumerable: true,
         get: NATIVE_RATE_DESC.get,
-        set: function (v) {
-          try { if (this && this.__cxForcePaused && !this[FLAGS.anHold] && !this[FLAGS.userPaused] && v <= 0.01) v = (CONFIG.USER_RATE || 1); } catch (e) { swallow(e); }
-          return NATIVE_RATE_DESC.set.call(this, v);
-        }
+        set: rateSet
       });
+      _protoRateInstalled = true; _installedProtoRateSet = rateSet; _rateNeutralized = true;
     } catch (e) { swallow(e); }
   }
-  installPlaybackRateNeutralize();
+  // #1 卸载还原：按原生描述符写回 prototype.playbackRate，并清安装标记
+  function restorePrototypeRate() {
+    if (!NATIVE_RATE_DESC) return;
+    try { Object.defineProperty(HTMLMediaElement.prototype, 'playbackRate', NATIVE_RATE_DESC); _protoRateInstalled = false; _installedProtoRateSet = null; _rateNeutralized = false; } catch (e) { swallow(e); }
+  }
+  if (usePrototypeNeutralize()) installPlaybackRateNeutralize();
+
+  // #1 温和/礼貌模式：是否启用原型中性化（prototype.pause / playbackRate）。
+  //   'aggressive' → 始终包装（现状默认行为，最稳）；
+  //   'gentle'     → 仅实例级(v.pause=pauseNoop，dom.js:_ovEnforce 已做)+事件，绝不碰原型（超星有覆盖窗口，已知）；
+  //   'auto'（默认）→ 运行时按站点识别：仅检测为超星(chaoxing)才激进；其余(含 'unknown' / 智慧树TODO)降级温和。
+  // 注：detectSite() 返回 'chaoxing' | 'zhihuishu' | 'unknown'（见 site-router.js），并不依赖任何 SITE 枚举；
+  //   其函数体只读 window.location，故 config.js 加载期(早于 site-router.js 文本位置，但函数已提升)即可正确调用，
+  //   无需保守兜底——仅在 detectSite 不可用/抛错时回落激进，保证核心续播不丢。
+  function usePrototypeNeutralize() {
+    var m = CONFIG.INTRUSION_MODE;
+    if (m === 'aggressive') return true;
+    if (m === 'gentle') return false;
+    // 'auto'：仅超星需原型中性化（闭包 pause 必改原型）；其余站点实例级+事件已足够，降级温和以减侵入
+    try { return (typeof detectSite === 'function' ? detectSite() === 'chaoxing' : true); } catch (e) { return true; }
+  }
+  // #1 收敛原型中性化的装/卸决策（运行期切换 INTRUSION_MODE 或 'auto' 站点解析后调用）：
+  //   需温和 → 卸原型（还原原生），并全量重扫让 _ovEnforce 对每实例补 own-property 覆盖(pauseNoop)；
+  //   需激进 → 未装则装。默认加载期已按 usePrototypeNeutralize() 装过一次。
+  //   关键：运行期切换的「还原」与「全卸」(cleanupListeners ①②)走同一套 restorePrototype* 原语，单一事实源、避免两套还原逻辑漂移导致残留。
+  function reconcileIntrusionMode() {
+    try {
+      var on = usePrototypeNeutralize();
+      if (on) {
+        if (!_protoPauseInstalled) installPrototypePauseNeutralize();
+        if (!_protoRateInstalled) installPlaybackRateNeutralize();
+        // 重装：原型已接管，但实例级 own-property(pauseNoop) 仍由 _ovEnforce 维护；全量重扫刷新之，使新插入/已存在的视频与新模式一致
+        try { if (typeof scanVideos === 'function') scanVideos(document); } catch (e) { swallow(e); }
+      } else {
+        restorePrototypeNeutralization();
+        // 降级温和：全量重扫（必须传 document 而非 true —— scanVideos(root) 要求 root 有 querySelectorAll，true 会让重扫成 no-op），
+        // 使每个已扫描视频补上实例级 pause no-op（dom.js:_ovEnforce 接管路径），与原型卸除后「仅实例级」语义一致，杜绝两种中性化并存
+        try { if (typeof scanVideos === 'function') scanVideos(document); } catch (e) { swallow(e); }
+      }
+    } catch (e) { swallow(e); }
+  }
+  // #1 还原原语统一封装：运行期切换(本函数)与全卸(cleanupListeners ①②)共用，避免两套还原逻辑漂移。
+  function restorePrototypeNeutralization() {
+    try { if (_protoPauseInstalled) restorePrototypePause(); } catch (e) { swallow(e); }
+    try { if (_protoRateInstalled) restorePrototypeRate(); } catch (e) { swallow(e); }
+  }
+
+  // #1 礼貌模式·行为/引用探测：原型 pause/playbackRate 中性化是否仍在位（替代字串扫描）。
+  //   比较 prototype 上当前函数引用是否仍等于我们装上的中性化函数（_installedProtoPause / _installedProtoRateSet）；
+  //   相等即平台未重写原型 → 中性化在位；不等即被还原（Object.freeze/重新赋值绕过）→ 返回 false，供审计/副脚本/报警判据。
+  //   温和模式(未装原型)返回 null（不适用）；结果同时缓存到 _pauseNeutralized / _rateNeutralized 供审计面板直读。
+  function probePauseNeutralized() {
+    try {
+      if (!_protoPauseInstalled || !_installedProtoPause) { _pauseNeutralized = (_protoPauseInstalled ? true : null); return _pauseNeutralized; }
+      _pauseNeutralized = (HTMLMediaElement.prototype.pause === _installedProtoPause);
+      return _pauseNeutralized;
+    } catch (e) { swallow(e); return _pauseNeutralized; }
+  }
+  function probeRateNeutralized() {
+    try {
+      if (!_protoRateInstalled || !_installedProtoRateSet) { _rateNeutralized = (_protoRateInstalled ? true : null); return _rateNeutralized; }
+      var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate');
+      _rateNeutralized = !!(d && d.set === _installedProtoRateSet);
+      return _rateNeutralized;
+    } catch (e) { swallow(e); return false; }
+  }
+  function getPauseNeutralized() { try { return probePauseNeutralized(); } catch (e) { return false; } }
+  function getRateNeutralized() { try { return probeRateNeutralized(); } catch (e) { return false; } }
+
+  try {
+    if (!window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY = {};
+    var _ns = window.__CX_FORCE_PLAY;
+    _ns.reconcileIntrusionMode = reconcileIntrusionMode;
+    _ns.usePrototypeNeutralize = usePrototypeNeutralize;
+    _ns.probePauseNeutralized = probePauseNeutralized;
+    _ns.probeRateNeutralized = probeRateNeutralized;
+    _ns.getPauseNeutralized = getPauseNeutralized;
+    _ns.getRateNeutralized = getRateNeutralized;
+    _ns.restorePrototypeNeutralization = restorePrototypeNeutralization;   // 暴露统一还原原语：运行期切换与全卸(cleanupListeners)共用
+    _ns.CONFIG = CONFIG;                  // 暴露配置引用（副脚本 tamper-guard 读取 POLITE_MODE 以切换探测方式）
+    _ns._pauseNeutralized = _pauseNeutralized;
+    _ns._rateNeutralized = _rateNeutralized;
+  } catch (e) { swallow(e); }
 
   // 把当前用户倍速(CONFIG.USER_RATE)施加到页面内所有视频（含 iframe 内），用于面板上调节倍速后即时生效、并持续压制平台重置。
   // 不局限于"已强制接管"的视频：定向模式下未命中白名单被释放的主视频、以及普通观看视频同样生效，避免速率形同虚设。
@@ -550,6 +665,8 @@
     CONFIG.END_RELEASE_SEC = Math.max(0, Math.min(120, +CONFIG.END_RELEASE_SEC || 0));
     CONFIG.USER_RATE = Math.max(0.25, Math.min(4, +CONFIG.USER_RATE || 1));
     CONFIG.PANEL_W = Math.max(288, Math.min(760, +CONFIG.PANEL_W || 380));
+    if (CONFIG.INTRUSION_MODE !== 'gentle' && CONFIG.INTRUSION_MODE !== 'aggressive') CONFIG.INTRUSION_MODE = 'auto';
+    CONFIG.POLITE_MODE = !!CONFIG.POLITE_MODE;
     DEBUG = !!DEBUG;
   }
   function savePanelCfg() {
@@ -565,7 +682,9 @@
         SINGLE_VIDEO: CONFIG.SINGLE_VIDEO,
         NINJA_MODE: CONFIG.NINJA_MODE,
         PANEL_W: CONFIG.PANEL_W,
-        PANEL_POS: CONFIG.PANEL_POS
+        PANEL_POS: CONFIG.PANEL_POS,
+        INTRUSION_MODE: CONFIG.INTRUSION_MODE,
+        POLITE_MODE: CONFIG.POLITE_MODE
       }));
     } catch (e) { swallow(e); }
   }
@@ -585,6 +704,8 @@
       if (typeof o.NINJA_MODE === 'boolean') CONFIG.NINJA_MODE = o.NINJA_MODE;
       if (typeof o.PANEL_W === 'number') CONFIG.PANEL_W = o.PANEL_W;
       if (o.PANEL_POS && typeof o.PANEL_POS.x === 'number' && typeof o.PANEL_POS.y === 'number') CONFIG.PANEL_POS = o.PANEL_POS;
+      if (o.INTRUSION_MODE === 'gentle' || o.INTRUSION_MODE === 'aggressive' || o.INTRUSION_MODE === 'auto') CONFIG.INTRUSION_MODE = o.INTRUSION_MODE;
+      if (typeof o.POLITE_MODE === 'boolean') CONFIG.POLITE_MODE = o.POLITE_MODE;
       clampCfg();
     } catch (e) { swallow(e); }
   }
@@ -1742,20 +1863,11 @@
     try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
     try { document.removeEventListener('keydown', keydownHandler); } catch (e) { swallow(e); }
     try { document.removeEventListener('visibilitychange', visibilityHandler, true); } catch (e) { swallow(e); }
-    // ① 还原 HTMLMediaElement.prototype.pause（优先按原始属性描述符还原，与 playbackRate 还原一致；
-    //    描述符不可用时退回函数引用写回。仅当被本脚本 noop 包装时才还原，避免误改其他脚本的覆盖）
-    try {
-      if (typeof HTMLMediaElement !== 'undefined' && NATIVE_PAUSE && HTMLMediaElement.prototype.pause !== NATIVE_PAUSE) {
-        if (NATIVE_PAUSE_DESC) Object.defineProperty(HTMLMediaElement.prototype, 'pause', NATIVE_PAUSE_DESC);
-        else HTMLMediaElement.prototype.pause = NATIVE_PAUSE;
-      }
-    } catch (e) { swallow(e); }
-    // ② 还原 HTMLMediaElement.prototype.playbackRate setter（还原为注入前的原始属性描述符）
-    try {
-      if (typeof HTMLMediaElement !== 'undefined' && NATIVE_RATE_DESC) {
-        Object.defineProperty(HTMLMediaElement.prototype, 'playbackRate', NATIVE_RATE_DESC);
-      }
-    } catch (e) { swallow(e); }
+    // ① 还原 HTMLMediaElement.prototype.pause —— 复用 config.js 的 restorePrototypePause 原语（与运行期切换 INTRUSION_MODE 同一套还原逻辑，单一事实源，避免两套还原漂移导致残留）。
+    //    该原语内部仅当本脚本已装(_protoPauseInstalled)才还原为 NATIVE_PAUSE_DESC，未装则跳过（不误改其他脚本的覆盖），语义等价原内联守卫。
+    try { if (typeof restorePrototypePause === 'function') restorePrototypePause(); } catch (e) { swallow(e); }
+    // ② 还原 HTMLMediaElement.prototype.playbackRate setter —— 同样复用 config.js 的 restorePrototypeRate 原语
+    try { if (typeof restorePrototypeRate === 'function') restorePrototypeRate(); } catch (e) { swallow(e); }
     // ③ 还原 window.attachments（审查中优先级#5）：脚本自建 accessor 仅当 window 无自有属性时才安装；
     //    先移除 accessor，再以数据属性还原钩子期间平台最后写入的取值（_attachStore.value），避免 drop 直接丢失
     //    平台数据——即便卸载多在页面卸载时发生，仍保证「注入前语义」可恢复，而非回到裸 undefined。
@@ -1999,7 +2111,7 @@
   // 避免主线程被反复全量重绘拖慢。panel:refresh 为用户主动操作（开关面板/改设置），保持即时刷新。
   try { Store.onEv('videos:scanned', throttle(refreshPanelState, 150)); } catch (e) { swallow(e); }
   try { Store.onEv('cmd:scan', function () { try { _loopTick(); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }
-  // 安全审计（建议#10）：面板「系统」页实时渲染当前侵入点清单；开面板/手动刷新时重算，扫描节流兜底。
+  // 安全审计（建议#10）：面板「洞察」页实时渲染当前侵入点清单；开面板/手动刷新时重算，扫描节流兜底。
   function renderInvasionReport() {
     if (!_cxPanel) return;
     var box = _cxPanel.querySelector('#__cxInvasionReport');
@@ -2179,6 +2291,15 @@
           '<div style="font-size:11px;color:' + STYLES.T.text2 + ';margin-bottom:6px;">副面板（内嵌显示，可折叠）</div>' +
           '<div id="__cxSubPanels"></div>' +
         '</div>' +
+        // 安全审计（建议#10）：实时展示当前对宿主页面的侵入面，落实审计透明化诉求。置于「洞察」栏：运行状况/侵入透明视角更贴切。
+        '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:10px;padding-top:8px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<div style="font-size:12px;color:' + STYLES.T.text + ';">安全审计 · 当前侵入点（实时）</div>' +
+            '<button id="__cxBtnAudit" style="padding:3px 8px;font-size:11px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;cursor:pointer;">刷新</button>' +
+          '</div>' +
+          '<div id="__cxInvasionReport" style="font-size:11px;color:' + STYLES.T.text2 + ';">— 开面板后自动盘点 —</div>' +
+          '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;">绿○=未侵入/已还原 · 黄●=当前已接管 · 卸载时全部还原（/cleardata 清配置）</div>' +
+        '</div>' +
       '</div>' +
       // 区块：系统（月操维护：低频设置 + 诊断导出 + 帮助）
       '<div id="__cxTab_system" class="cx-tab">' +
@@ -2191,18 +2312,18 @@
         '<label id="__cxSingleVideoRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxSingleVideo" type="checkbox" style="vertical-align:middle;margin-right:6px;">只播放一个视频（仅前台播放，同开时取消视频开关）</label>' +
         '<label id="__cxNinjaRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxNinja" type="checkbox" style="vertical-align:middle;margin-right:6px;">Ninja 模式（缩成窄条，悬停展开）</label>' +
         '<label id="__cxDebugRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxDebug" type="checkbox" style="vertical-align:middle;margin-right:6px;">调试日志 (DEBUG → 控制台)</label>' +
+        // #1 温和/礼貌模式：入侵模式（原型中性化策略）+ 礼貌模式（抗检测）开关
+        '<div id="__cxIntrusionRow" style="display:block;margin-bottom:6px;font-size:12px;">入侵模式: ' +
+          '<select id="__cxIntrusion" style="margin-left:6px;font-size:12px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;padding:2px 4px;">' +
+            '<option value="auto">auto（按站点自适应）</option>' +
+            '<option value="gentle">gentle（仅实例级·最小侵入）</option>' +
+            '<option value="aggressive">aggressive（始终改原型·最稳）</option>' +
+          '</select>' +
+        '</div>' +
+        '<label id="__cxPoliteRow" style="display:block;margin-bottom:6px;font-size:12px;"><input id="__cxPolite" type="checkbox" style="vertical-align:middle;margin-right:6px;">礼貌模式（pause.toString 伪装·抗检测）</label>' +
         '<button id="__cxBtnCopy" style="width:100%;padding:7px;margin-bottom:4px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:6px;cursor:pointer;font-size:12px;font-weight:400;">复制诊断信息（反馈用）</button>' +
         '<button id="__cxBtnExport" style="width:100%;padding:7px;margin-top:4px;' + STYLES.BTN_GHOST + 'font-size:12px;">导出最近操作日志（黑匣子）</button>' +
         '<button id="__cxBtnClearBx" style="width:100%;padding:7px;margin-top:4px;' + STYLES.BTN_DANGER + 'font-size:12px;">清空黑匣子日志</button>' +
-        // 安全审计（建议#10）：实时展示当前对宿主页面的侵入面，落实审计透明化诉求
-        '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:10px;padding-top:8px;">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-            '<div style="font-size:12px;color:' + STYLES.T.text + ';">安全审计 · 当前侵入点（实时）</div>' +
-            '<button id="__cxBtnAudit" style="padding:3px 8px;font-size:11px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text2 + ';border:1px solid ' + STYLES.T.border + ';border-radius:5px;cursor:pointer;">刷新</button>' +
-          '</div>' +
-          '<div id="__cxInvasionReport" style="font-size:11px;color:' + STYLES.T.text2 + ';">— 开面板后自动盘点 —</div>' +
-          '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;">绿○=未侵入/已还原 · 黄●=当前已接管 · 卸载时全部还原（/cleardata 清配置）</div>' +
-        '</div>' +
         '<div style="font-size:11px;color:' + STYLES.T.text3 + ';margin-top:6px;">按 <b>P</b> 开关本面板 · <b>Esc</b> 关闭 · 0 = 禁用</div>' +
       '</div>'
     );
@@ -2479,6 +2600,29 @@
         Store.emit('panel:refresh');
       });
     }
+    // #1 温和/礼貌模式：入侵模式选择（原型中性化策略）
+    var intr = el.querySelector('#__cxIntrusion');
+    if (intr) {
+      try { intr.value = CONFIG.INTRUSION_MODE || 'auto'; } catch (e) { swallow(e); }
+      intr.addEventListener('change', function () {
+        CONFIG.INTRUSION_MODE = intr.value;
+        savePanelCfg();
+        try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
+        try { Store.emit('ui:toast', '入侵模式 → ' + intr.value + (intr.value === 'gentle' ? '（超星可能偶发漏拦）' : '')); } catch (e) { swallow(e); }
+        Store.emit('panel:refresh');
+      });
+    }
+    // #1 礼貌模式开关（抗检测：pause.toString 伪装）
+    var polite = el.querySelector('#__cxPolite');
+    if (polite) {
+      try { polite.checked = !!CONFIG.POLITE_MODE; } catch (e) { swallow(e); }
+      polite.addEventListener('change', function () {
+        CONFIG.POLITE_MODE = !!polite.checked;
+        savePanelCfg();
+        try { Store.emit('ui:toast', CONFIG.POLITE_MODE ? '礼貌模式已开（抗检测）' : '礼貌模式已关'); } catch (e) { swallow(e); }
+        Store.emit('panel:refresh');
+      });
+    }
     // —— 主从式导航：切换下方内容区块（localStorage 记住当前 tab）——
     function switchTab(name) {
       if (!_cxPanel) return;
@@ -2503,7 +2647,7 @@
       (function (b) { b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); }); })(navBtns[ni]);
     }
     el.querySelector('#__cxBtnCopy').addEventListener('click', copyDiagnostics);
-    // 安全审计（建议#10）：刷新「系统」页侵入点清单
+    // 安全审计（建议#10）：刷新「洞察」页侵入点清单
     var btnAudit = el.querySelector('#__cxBtnAudit');
     if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     // 黑匣子导出按钮
@@ -2633,7 +2777,7 @@
     L.push('heap: ' + (m ? (m.usedJSHeapSize / 1048576).toFixed(1) + 'MB / ' + (m.jsHeapSizeLimit / 1048576).toFixed(0) + 'MB' : 'n/a'));
     L.push('桥: ' + (BRIDGE && BRIDGE.base ? ('已连 ' + BRIDGE.base) : '离线') + ' · skipResume=' + !!(BRIDGE && BRIDGE.skipResume) + ' · 章清单=' + !!(BRIDGE && BRIDGE.chapter));
     L.push('定向: enabled=' + (TARGET && TARGET.enabled) + ' matchedAny=' + (TARGET && TARGET.matchedAny) + ' 0命中连击=' + _targetMissStreak + '/' + CONST.TARGET_FALLBACK_ROUNDS);
-    L.push('CONFIG: AUTO_STOP_MIN=' + CONFIG.AUTO_STOP_MIN + ' RESUME_AFTER_MIN=' + CONFIG.RESUME_AFTER_MIN + ' RESCAN_INTERVAL=' + CONFIG.RESCAN_INTERVAL + ' END_RELEASE_SEC=' + CONFIG.END_RELEASE_SEC + ' LOOP_PLAY=' + CONFIG.LOOP_PLAY + ' SINGLE_VIDEO=' + CONFIG.SINGLE_VIDEO + ' NINJA=' + CONFIG.NINJA_MODE + ' PAUSE_HOTKEY=' + CONFIG.PAUSE_HOTKEY + ' DEBUG=' + DEBUG);
+    L.push('CONFIG: AUTO_STOP_MIN=' + CONFIG.AUTO_STOP_MIN + ' RESUME_AFTER_MIN=' + CONFIG.RESUME_AFTER_MIN + ' RESCAN_INTERVAL=' + CONFIG.RESCAN_INTERVAL + ' END_RELEASE_SEC=' + CONFIG.END_RELEASE_SEC + ' LOOP_PLAY=' + CONFIG.LOOP_PLAY + ' SINGLE_VIDEO=' + CONFIG.SINGLE_VIDEO + ' NINJA=' + CONFIG.NINJA_MODE + ' PAUSE_HOTKEY=' + CONFIG.PAUSE_HOTKEY + ' DEBUG=' + DEBUG + ' INTRUSION_MODE=' + CONFIG.INTRUSION_MODE + ' POLITE_MODE=' + CONFIG.POLITE_MODE);
     var fg = foregroundVideo();
     L.push('前台(可见·面积最大): ' + (fg ? ('#' + (vs.indexOf(fg) + 1)) : '无(无可见视频→本帧不强制续播)'));
     L.push('=== 视频列表(' + vs.length + ') ===');
@@ -2682,11 +2826,24 @@
     } catch (e) { swallow(e); }
     return false;
   }
-  function _cxAuditProtoPause() {   // 包装函数体内引用了 __cxForcePaused 标记（属性名不被压缩，可稳定探测）
-    try { return String(HTMLMediaElement.prototype.pause).indexOf('__cxForcePaused') >= 0; } catch (e) { return false; }
+  function _cxAuditProtoPause() {   // #1 礼貌模式原型体 toString 已伪装(不含 '__cxForcePaused')，字串扫描恒 false 会撒谎；故礼貌模式改用行为/引用探测判据
+    try {
+      if (CONFIG.POLITE_MODE) {
+        var n = (window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.getPauseNeutralized === 'function') ? window.__CX_FORCE_PLAY.getPauseNeutralized() : null;
+        return !!n;   // true=中性化在位；false=被还原；null(未装原型)→false
+      }
+      return String(HTMLMediaElement.prototype.pause).indexOf('__cxForcePaused') >= 0;
+    } catch (e) { return false; }
   }
   function _cxAuditProtoRate() {
-    try { var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate'); return !!(d && d.set && String(d.set).indexOf('__cxForcePaused') >= 0); } catch (e) { return false; }
+    try {
+      if (CONFIG.POLITE_MODE) {
+        var n = (window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.getRateNeutralized === 'function') ? window.__CX_FORCE_PLAY.getRateNeutralized() : null;
+        return !!n;
+      }
+      var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate');
+      return !!(d && d.set && String(d.set).indexOf('__cxForcePaused') >= 0);
+    } catch (e) { return false; }
   }
   function _cxAuditMediaSession() {
     try { return !!(window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY._mediaSessionHooked); } catch (e) { return false; }
@@ -2715,6 +2872,10 @@
     add('事件监听', 'pagehide/beforeunload 卸载钩子', _cxAuditUninstallHook());
     var ls = _cxAuditLsKeys();
     add('localStorage', 'cx_* 配置键(' + ls.length + ')', ls.length > 0, ls.length ? ls.slice(0, 8).join(', ') + (ls.length > 8 ? ' …' : '') : '无');
+    // #1 温和/礼貌模式：当前入侵策略（透明展示，便于用户核对与 #10 审计协同）
+    add('策略', 'INTRUSION_MODE=' + CONFIG.INTRUSION_MODE, CONFIG.INTRUSION_MODE !== 'gentle',
+      '原型中性化' + (CONFIG.INTRUSION_MODE === 'gentle' ? '已关（仅实例级·最小侵入）' : (CONFIG.INTRUSION_MODE === 'aggressive' ? '始终启用' : '按站点自适应')));
+    add('策略', 'POLITE_MODE=' + CONFIG.POLITE_MODE, CONFIG.POLITE_MODE, CONFIG.POLITE_MODE ? 'pause.toString 伪装·抗检测（行为还原检测）' : '关');
     return rows;
   }
   try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.buildInvasionReport = buildInvasionReport; } catch (e) { swallow(e); }   // 暴露为公开 API（面板审计/测试可调用）
@@ -3002,7 +3163,7 @@
     });
     registerCommand('copy', '复制诊断信息', false, function () { copyDiagnostics(); });
     registerCommand('refresh', '立即重扫视频与状态', false, function () { try { Store.emit('cmd:scan'); } catch (e) { swallow(e); } Store.emit('panel:refresh'); Store.emit('ui:toast', '已重扫'); });
-    registerCommand('audit', '刷新安全审计清单(系统页)', false, function () { try { Store.emit('ui:switchTab', 'system'); showPanel(); Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
+    registerCommand('audit', '刷新安全审计清单(洞察页)', false, function () { try { Store.emit('ui:switchTab', 'insight'); showPanel(); Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
     registerCommand('rescan', '重启轮询(ms)，如 /rescan 1000', true, function (raw, arg) {
       var ms = parseInt(arg, 10); if (isNaN(ms)) { Store.emit('ui:toast', '用法: /rescan 500~5000'); return; } CONFIG.RESCAN_INTERVAL = ms; clampCfg(); savePanelCfg();
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
@@ -3190,12 +3351,27 @@
   try { refreshTargets(); } catch (e) { swallow(e); }
   try { scanVideos(document); neutralizeGlobalPause(window); } catch (e) { swallow(e); }
 
+  var _tamperAlarmed = false;   // #1 原型还原报警去抖（跨轮保持）
   // 低频全量重扫：应对平台重定义 pause / 原型硬调用 / DOM 换血（间隔由 CONFIG.RESCAN_INTERVAL 控制，面板可实时调整）
   function _loopTick() {                            // 提取为命名函数：使面板改 RESCAN_INTERVAL 时能 clearInterval 后重启立即生效
     try { refreshTargets(); } catch (e) { swallow(e); }                 // 重置 matchedAny 并重建任务点 id 集
     try { scanVideos(document); neutralizeGlobalPause(window); } catch (e) { swallow(e); }
     // 【易误判·诊断#六】此处每轮重装是 F-B4 刻意设计（防 use strict 下描述符被平台还原绕过），切勿改为"仅首装幂等"，否则还原该缺陷。
-    try { installPrototypePauseNeutralize(); } catch (e) { swallow(e); }   // F-B4：每轮重新 neutralize 原型 pause，防个别页 use strict 下描述符被平台还原绕过
+    // #1 行为探测还原检测：F-B4 重装前比对原型 pause/playbackRate 是否仍引用我们装上的中性化函数（probePauseNeutralized/probeRateNeutralized）；
+    //   若被平台还原（Object.freeze/重新赋值绕过）→ 报警一次（去抖），随后 F-B4 重装自愈。温和模式(未装原型)探测返回 null，跳过。
+    try {
+      if (typeof probePauseNeutralized === 'function' && typeof probeRateNeutralized === 'function') {
+        var _pn = probePauseNeutralized(), _rn = probeRateNeutralized();
+        if (_pn === false || _rn === false) {
+          if (!_tamperAlarmed) {
+            _tamperAlarmed = true;
+            dbg('原型 pause/playbackRate 中性化被平台还原，触发重装');
+            try { if (typeof window !== 'undefined' && window.Store && window.Store.emit) window.Store.emit('ui:toast', '⚠ 检测到原型被平台还原，已自动重装续播守卫'); } catch (e2) {}
+          }
+        } else { _tamperAlarmed = false; }
+      }
+    } catch (e) { swallow(e); }
+    try { if (usePrototypeNeutralize()) installPrototypePauseNeutralize(); } catch (e) { swallow(e); }   // F-B4：每轮重新 neutralize 原型 pause，防个别页 use strict 下描述符被平台还原绕过；#1 温和模式下跳过（usePrototypeNeutralize 据 INTRUSION_MODE 决策）
     // 定向启用但本轮无任何 video 命中：不在本轮回退（避免章节切换间隙 / 视频延迟渲染的瞬时空窗触发
     // 定向↔全量横跳、误强播广告/插播）。连续 N 轮稳定 0 命中才判定"白名单失效"回退全量（专项诊断#三，迟滞）。
     try {
@@ -3213,6 +3389,11 @@
   }
   var _loopTimer = null;
   try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+
+  // #1 温和/礼貌模式：全模块加载、站点识别(SITE)已就绪后，按 INTRUSION_MODE 收敛原型中性化装/卸。
+  // 加载期(config.js 早于 site-router.js)usePrototypeNeutralize 保守返回 true 已先装原型；
+  // 此处对 'auto' 做精确站点解析、对持久化 'gentle' 执行卸载降级，使刷新后的设置即时生效。
+  try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
 
   // P1 状态集中：将核心业务状态镜像进 Store.state（与全局变量同一对象引用，零行为回归）
   Store.state.TARGET = TARGET;

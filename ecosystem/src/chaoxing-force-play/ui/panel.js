@@ -59,7 +59,7 @@
   // 避免主线程被反复全量重绘拖慢。panel:refresh 为用户主动操作（开关面板/改设置），保持即时刷新。
   try { Store.onEv('videos:scanned', throttle(refreshPanelState, 150)); } catch (e) { swallow(e); }
   try { Store.onEv('cmd:scan', function () { try { _loopTick(); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }
-  // 安全审计（建议#10）：面板「系统」页实时渲染当前侵入点清单；开面板/手动刷新时重算，扫描节流兜底。
+  // 安全审计（建议#10）：面板「洞察」页实时渲染当前侵入点清单；开面板/手动刷新时重算，扫描节流兜底。
   function renderInvasionReport() {
     if (!_cxPanel) return;
     var box = _cxPanel.querySelector('#__cxInvasionReport');

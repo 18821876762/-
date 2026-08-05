@@ -69,9 +69,17 @@
 
   function check() {
     if (!getOpt()) return;
+    var ns = window.__CX_FORCE_PLAY;
+    var polite = !!(ns && ns.CONFIG && ns.CONFIG.POLITE_MODE);
     var pauseOk = false, rateOk = false;
-    try { var p = HTMLMediaElement.prototype.pause; pauseOk = containsMarker(p && p.toString()); } catch (e) {}
-    try { rateOk = containsMarker(rateToString()); } catch (e) {}
+    if (polite && ns && typeof ns.getPauseNeutralized === 'function' && typeof ns.getRateNeutralized === 'function') {
+      // #1 礼貌模式：主脚本 pause/rate setter 的 toString 已伪装，字串扫描恒 false → 改用主脚本实时行为/引用探测判据，避免误报/漏报
+      pauseOk = !!ns.getPauseNeutralized();
+      rateOk = !!ns.getRateNeutralized();
+    } else {
+      try { var p = HTMLMediaElement.prototype.pause; pauseOk = containsMarker(p && p.toString()); } catch (e) {}
+      try { rateOk = containsMarker(rateToString()); } catch (e) {}
+    }
     if (pauseOk && rateOk) {
       baselineSeen = true;                 // 基线建立：主脚本已注入
       if (alarmed) { alarmed = false; hideBanner(); }

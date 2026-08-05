@@ -11,7 +11,7 @@
     L.push('heap: ' + (m ? (m.usedJSHeapSize / 1048576).toFixed(1) + 'MB / ' + (m.jsHeapSizeLimit / 1048576).toFixed(0) + 'MB' : 'n/a'));
     L.push('桥: ' + (BRIDGE && BRIDGE.base ? ('已连 ' + BRIDGE.base) : '离线') + ' · skipResume=' + !!(BRIDGE && BRIDGE.skipResume) + ' · 章清单=' + !!(BRIDGE && BRIDGE.chapter));
     L.push('定向: enabled=' + (TARGET && TARGET.enabled) + ' matchedAny=' + (TARGET && TARGET.matchedAny) + ' 0命中连击=' + _targetMissStreak + '/' + CONST.TARGET_FALLBACK_ROUNDS);
-    L.push('CONFIG: AUTO_STOP_MIN=' + CONFIG.AUTO_STOP_MIN + ' RESUME_AFTER_MIN=' + CONFIG.RESUME_AFTER_MIN + ' RESCAN_INTERVAL=' + CONFIG.RESCAN_INTERVAL + ' END_RELEASE_SEC=' + CONFIG.END_RELEASE_SEC + ' LOOP_PLAY=' + CONFIG.LOOP_PLAY + ' SINGLE_VIDEO=' + CONFIG.SINGLE_VIDEO + ' NINJA=' + CONFIG.NINJA_MODE + ' PAUSE_HOTKEY=' + CONFIG.PAUSE_HOTKEY + ' DEBUG=' + DEBUG);
+    L.push('CONFIG: AUTO_STOP_MIN=' + CONFIG.AUTO_STOP_MIN + ' RESUME_AFTER_MIN=' + CONFIG.RESUME_AFTER_MIN + ' RESCAN_INTERVAL=' + CONFIG.RESCAN_INTERVAL + ' END_RELEASE_SEC=' + CONFIG.END_RELEASE_SEC + ' LOOP_PLAY=' + CONFIG.LOOP_PLAY + ' SINGLE_VIDEO=' + CONFIG.SINGLE_VIDEO + ' NINJA=' + CONFIG.NINJA_MODE + ' PAUSE_HOTKEY=' + CONFIG.PAUSE_HOTKEY + ' DEBUG=' + DEBUG + ' INTRUSION_MODE=' + CONFIG.INTRUSION_MODE + ' POLITE_MODE=' + CONFIG.POLITE_MODE);
     var fg = foregroundVideo();
     L.push('前台(可见·面积最大): ' + (fg ? ('#' + (vs.indexOf(fg) + 1)) : '无(无可见视频→本帧不强制续播)'));
     L.push('=== 视频列表(' + vs.length + ') ===');
@@ -60,11 +60,24 @@
     } catch (e) { swallow(e); }
     return false;
   }
-  function _cxAuditProtoPause() {   // 包装函数体内引用了 __cxForcePaused 标记（属性名不被压缩，可稳定探测）
-    try { return String(HTMLMediaElement.prototype.pause).indexOf('__cxForcePaused') >= 0; } catch (e) { return false; }
+  function _cxAuditProtoPause() {   // #1 礼貌模式原型体 toString 已伪装(不含 '__cxForcePaused')，字串扫描恒 false 会撒谎；故礼貌模式改用行为/引用探测判据
+    try {
+      if (CONFIG.POLITE_MODE) {
+        var n = (window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.getPauseNeutralized === 'function') ? window.__CX_FORCE_PLAY.getPauseNeutralized() : null;
+        return !!n;   // true=中性化在位；false=被还原；null(未装原型)→false
+      }
+      return String(HTMLMediaElement.prototype.pause).indexOf('__cxForcePaused') >= 0;
+    } catch (e) { return false; }
   }
   function _cxAuditProtoRate() {
-    try { var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate'); return !!(d && d.set && String(d.set).indexOf('__cxForcePaused') >= 0); } catch (e) { return false; }
+    try {
+      if (CONFIG.POLITE_MODE) {
+        var n = (window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.getRateNeutralized === 'function') ? window.__CX_FORCE_PLAY.getRateNeutralized() : null;
+        return !!n;
+      }
+      var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate');
+      return !!(d && d.set && String(d.set).indexOf('__cxForcePaused') >= 0);
+    } catch (e) { return false; }
   }
   function _cxAuditMediaSession() {
     try { return !!(window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY._mediaSessionHooked); } catch (e) { return false; }
@@ -93,6 +106,10 @@
     add('事件监听', 'pagehide/beforeunload 卸载钩子', _cxAuditUninstallHook());
     var ls = _cxAuditLsKeys();
     add('localStorage', 'cx_* 配置键(' + ls.length + ')', ls.length > 0, ls.length ? ls.slice(0, 8).join(', ') + (ls.length > 8 ? ' …' : '') : '无');
+    // #1 温和/礼貌模式：当前入侵策略（透明展示，便于用户核对与 #10 审计协同）
+    add('策略', 'INTRUSION_MODE=' + CONFIG.INTRUSION_MODE, CONFIG.INTRUSION_MODE !== 'gentle',
+      '原型中性化' + (CONFIG.INTRUSION_MODE === 'gentle' ? '已关（仅实例级·最小侵入）' : (CONFIG.INTRUSION_MODE === 'aggressive' ? '始终启用' : '按站点自适应')));
+    add('策略', 'POLITE_MODE=' + CONFIG.POLITE_MODE, CONFIG.POLITE_MODE, CONFIG.POLITE_MODE ? 'pause.toString 伪装·抗检测（行为还原检测）' : '关');
     return rows;
   }
   try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.buildInvasionReport = buildInvasionReport; } catch (e) { swallow(e); }   // 暴露为公开 API（面板审计/测试可调用）
