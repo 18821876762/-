@@ -24,7 +24,7 @@
 | `site/` | 站点适配 / 页面路由 | `site-router.js` |
 | `biz/` | **业务域**：按子域细分文件 | `targeting` `dedup` `playback` `stats` `foreground` |
 | `dom/` | 接管引擎：overrideVideo / 视频枚举 / 用户暂停恢复 / 计时器 / toast / MO 自启动 | `dom.js` |
-| `ui/` | **界面域**：按关注点细分文件 | `addons` `panel` `panel-template` `panel-core` `panel-drag` `diagnostics` `dashboard` `commands` |
+| `ui/` | **界面域**：按关注点细分文件 | `addons` `panel` `panel-template` `panel-core` `panel-controls` `panel-drag` `diagnostics` `dashboard` `commands` |
 | `bootstrap/` | 自启动：IIFE 开启+幂等守卫 / 主循环 | `core.js` `main-loop.js` |
 
 `biz/` 与 `ui/` 是"域"最多的两层，新功能优先落在这两层，并按子域继续拆文件（见 §3）。

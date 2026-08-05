@@ -74,6 +74,7 @@ $domainRel = @(
   'ui/panel.js',             # 界面·悬浮面板编排：共享状态 / 输入回填 / 显隐 / 热键 / 事件订阅
   'ui/panel-template.js',    # 界面·面板 HTML 模板（视图层）：buildPanelHTML
   'ui/panel-core.js',        # 界面·面板装配与事件绑定：ensurePanel（含导航 switchTab）
+  'ui/panel-controls.js',    # 界面·控制区事件绑定：bindPanelControlEvents（入侵/礼貌模式 + 黑匣子，从 panel-core 抽出合规行数红线）
   'ui/panel-drag.js',        # 界面·面板拖拽（合成层优化）与 Ninja 窄条贴边判定
   'ui/diagnostics.js',       # 界面·诊断与黑匣子：buildDiagnostics / copyDiagnostics / fallbackCopy
   'ui/dashboard.js',         # 界面·状态刷新：refreshPanelState / updateBadge / renderDashboard / renderVideoList

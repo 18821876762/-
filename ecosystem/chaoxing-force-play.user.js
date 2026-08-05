@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T13:36:35+08:00  commit: e654c5c  minify: off
+// Built: 2026-08-05T14:22:27+08:00  commit: df6130e  minify: off
 
 
 (function () {
@@ -2600,29 +2600,8 @@
         Store.emit('panel:refresh');
       });
     }
-    // #1 温和/礼貌模式：入侵模式选择（原型中性化策略）
-    var intr = el.querySelector('#__cxIntrusion');
-    if (intr) {
-      try { intr.value = CONFIG.INTRUSION_MODE || 'auto'; } catch (e) { swallow(e); }
-      intr.addEventListener('change', function () {
-        CONFIG.INTRUSION_MODE = intr.value;
-        savePanelCfg();
-        try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
-        try { Store.emit('ui:toast', '入侵模式 → ' + intr.value + (intr.value === 'gentle' ? '（超星可能偶发漏拦）' : '')); } catch (e) { swallow(e); }
-        Store.emit('panel:refresh');
-      });
-    }
-    // #1 礼貌模式开关（抗检测：pause.toString 伪装）
-    var polite = el.querySelector('#__cxPolite');
-    if (polite) {
-      try { polite.checked = !!CONFIG.POLITE_MODE; } catch (e) { swallow(e); }
-      polite.addEventListener('change', function () {
-        CONFIG.POLITE_MODE = !!polite.checked;
-        savePanelCfg();
-        try { Store.emit('ui:toast', CONFIG.POLITE_MODE ? '礼貌模式已开（抗检测）' : '礼貌模式已关'); } catch (e) { swallow(e); }
-        Store.emit('panel:refresh');
-      });
-    }
+    // #1 温和/礼貌模式 + 黑匣子：控制区事件绑定抽到 ui/panel-controls.js（行数红线合规）
+    bindPanelControlEvents(el);
     // —— 主从式导航：切换下方内容区块（localStorage 记住当前 tab）——
     function switchTab(name) {
       if (!_cxPanel) return;
@@ -2650,6 +2629,57 @@
     // 安全审计（建议#10）：刷新「洞察」页侵入点清单
     var btnAudit = el.querySelector('#__cxBtnAudit');
     if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
+    _cxPanel = el;
+    syncPanelInputs();
+    drainAddonQueue();   // 面板建成后渲染已注册的副脚本开关（含晚于本脚本注册的）
+    switchTab(_cxActiveTab || 'control');   // 主从式导航：应用上次选中的区块（默认 主控）
+    positionPanel();   // 适配 progress-panel：若其已挂载，则下沉避让避免同角重叠
+    return el;
+  }
+
+  // ===== DOMAIN: ui/panel-controls (control + 礼貌/温和模式 + 黑匣子 事件绑定) =====
+  // 从 ensurePanel 抽出的「控制区」事件绑定：入侵模式/礼貌模式开关、黑匣子导出/清空。
+  // 抽到独立域模块以合规单文件行数红线（ARCHITECTURE_GOVERNANCE §2/§5）；
+  // 仍在同一 IIFE 闭包内，引用 detectSite / reconcileIntrusionMode / _bxBuffer 等均为闭包内符号。
+  function bindPanelControlEvents(el) {
+    if (!el) return;
+    // #1 温和/礼貌模式：入侵模式选择（原型中性化策略）
+    var intr = el.querySelector('#__cxIntrusion');
+    if (intr) {
+      try { intr.value = CONFIG.INTRUSION_MODE || 'auto'; } catch (e) { swallow(e); }
+      intr.addEventListener('change', function () {
+        // #2 开放问题落地：超星站点误选 gentle 会静默漏拦却无提示，此处弹确认 + 风险提示
+        if (intr.value === 'gentle') {
+          try {
+            if (typeof detectSite === 'function' && detectSite() === 'chaoxing' && typeof window.confirm === 'function') {
+              var ok = window.confirm('当前为超星学习通站点，温和模式依赖页面原生暂停按钮，可能偶发漏拦（视频未自动续播）。\n\n确定要切换到「温和」吗？取消将保持当前模式。');
+              if (!ok) {
+                try { intr.value = CONFIG.INTRUSION_MODE || 'auto'; } catch (e2) { swallow(e2); }
+                try { Store.emit('ui:toast', '已取消切换，保持「' + (CONFIG.INTRUSION_MODE || 'auto') + '」', 'warn'); } catch (e2) { swallow(e2); }
+                Store.emit('panel:refresh');
+                return;
+              }
+            }
+          } catch (e) { swallow(e); }
+        }
+        CONFIG.INTRUSION_MODE = intr.value;
+        savePanelCfg();
+        try { if (typeof reconcileIntrusionMode === 'function') reconcileIntrusionMode(); } catch (e) { swallow(e); }
+        try { Store.emit('ui:toast', '入侵模式 → ' + intr.value + (intr.value === 'gentle' ? '（超星可能偶发漏拦）' : '')); } catch (e) { swallow(e); }
+        Store.emit('panel:refresh');
+      });
+    }
+    // #1 礼貌模式开关（抗检测：pause.toString 伪装）
+    var polite = el.querySelector('#__cxPolite');
+    if (polite) {
+      try { polite.checked = !!CONFIG.POLITE_MODE; } catch (e) { swallow(e); }
+      polite.addEventListener('change', function () {
+        CONFIG.POLITE_MODE = !!polite.checked;
+        savePanelCfg();
+        try { Store.emit('ui:toast', CONFIG.POLITE_MODE ? '礼貌模式已开（抗检测）' : '礼貌模式已关'); } catch (e) { swallow(e); }
+        Store.emit('panel:refresh');
+      });
+    }
     // 黑匣子导出按钮
     var btnExport = el.querySelector('#__cxBtnExport');
     if (btnExport) btnExport.addEventListener('click', function () {
@@ -2689,12 +2719,6 @@
         Store.emit('ui:toast', '黑匣子日志已清空', 'warn');
       } catch (e) { swallow(e); }
     });
-    _cxPanel = el;
-    syncPanelInputs();
-    drainAddonQueue();   // 面板建成后渲染已注册的副脚本开关（含晚于本脚本注册的）
-    switchTab(_cxActiveTab || 'control');   // 主从式导航：应用上次选中的区块（默认 主控）
-    positionPanel();   // 适配 progress-panel：若其已挂载，则下沉避让避免同角重叠
-    return el;
   }
 
   // ===== DOMAIN: ui/panel-drag (panel drag + ninja side) =====
