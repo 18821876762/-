@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         学习通·强制续播（主脚本）
 // @namespace    https://github.com/cx-force-play/chaoxing-force-play
-// @version      4.9
+// @version      4.10
 // @author       anon
-// @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 页面全局 attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 全局暂停封装、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 页面全局 attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。【v4.x 面板化】命令面板(/唤起、↑↓/Tab/Enter/Esc、星标收藏夹持久化)、运维仪表盘(实时 CPU/内存/网速监控)、Ninja 折叠态(胶囊居中图标+播放/暂停状态指示)、面板设置刷新后持久化、副脚本注册中心(可扩展命令与开关)；v4.9 面板位置策略锁定右上角安全位、禁用拖拽避免遮挡。
+// @description  钻入同源 iframe / Shadow DOM，覆盖 pause 为 no-op、ratechange 仅在 rate<=0.01 时拉回 1x、低频 2s 轮询兜底续播；无条件尊重 auto-next 的 __cxAN_hold 暂停锁。ended 状态采用持久锁(__cxEndedLock)覆盖 play 为 no-op、进度条锁末尾、seeking 守卫，并持续到元素被替换(阻断平台以 video.play()/重建元素/src 替换重播)，与 auto-next 的 ended 跳课协同(避免重播吃掉跳课时机)；劫持 navigator.mediaSession 应对锁屏续播。无视平台自定义暂停指令(window.ananas.pause / 直接 video.pause / playbackRate=0 伪暂停 / postMessage)。【定向续播】读取 页面全局 attachments 构建任务点视频白名单，仅对命中的任务点视频强制续播，跳过广告/插播视频；匹配规则整体失效时自动回退为全量续播。【重建去重】ended 时登记 currentSrc，任何地址命中的新 video 判定为同一已播完任务点的整元素重建并锁死不播，彻底杜绝跳课后的重播。【稳健性】定向匹配改边界正则(防 123 误命中 12345)、refreshTargets 加滞回(附件瞬时空窗不回退全量)、ENDED_SRCS 黑名单仅随真实章节切换清空。【v3.9 健壮性】MutationObserver 改为帧合并队列(防高频雪崩)、loop 持续断言(防循环重播)、可见性切回复位 全局暂停封装、mediaSession 态改 playing、safePlay 静音重试后恢复音量、定向匹配正则按 URL 边界[/?&=.#]收紧。【v3.10 健壮性】neutralizeGlobalPause 改 defineProperty+描述符探测(严格模式不再静默失效)、重建去重补齐祖先 iframe src 关掉 currentSrc 未就绪时间窗、直播 duration=Infinity 加 isFinite 守卫、for...in 改 Object.keys、hasVideo 仅计 video、querySelectorAll 微优化为 getElementsByTagName、清死代码(__rp/重复 pauseNoop/不可达 TARGETED 分支)。【v3.11 复核修复】keyRe 回退 [^A-Za-z0-9](撤销纯损的 [/?&=.#] 收窄，防漏匹 lesson_123/clip-123)、iframe src 仅限承载任务 id 的播放器 iframe 进黑名单(防通用 shell iframe 误锁)、neutralizeGlobalPause 改 defineProperty 直接遮蔽(覆盖继承属性)、删死配置 TARGETED 与死字段 hasVideo/__cxSkip、safePlay 音量恢复改 playing 事件驱动(避免提前取消静音)。【v3.12 复核修复】safePlay 的 restore 监听器改用 {once:true} 注册(消除 addEventListener(capture) 与 removeEventListener 缺 capture 标志不匹配导致的监听器永久累积泄漏)、videoIframeSrcsOf 改用 keyRe 边界匹配(与 videoBelongsToTask 统一，避免裸子串误收通用 iframe)。【v3.14 抗失效】①定向续播：安装 页面全局 attachments setter 钩子(AJAX 异步到达即重建白名单，不等 2s 轮询)，attachments 永不出现时由桥 objectids 独立撑起白名单(防"无米之炊")；②重建去重：指纹由仅 video.src/iframe.src 扩展为 iframe id/name/title/data-* 与 video 自身 id——抗 MSE 的 blob: 源(无 objectid)与通用 src 播放器重建；③防暂停：下沉到 HTMLMediaElement.prototype.pause(仅拦截 __cxForcePaused 视频)，连闭包/webpack 私有 pause() 也拦得住，未命中广告/插播仍可正常暂停，auto-next 经原生备份 v.__np 真正暂停。【v3.15 抗伪暂停/断流】①playbackRate 伪暂停下沉 HTMLMediaElement.prototype.playbackRate setter 拦截（对 __cxForcePaused 视频赋 0/极小速率直接改写为 1x，与 ratechange+轮询双重兜底，不采用 SourceBuffer Hook 以免花屏）；②MSE 断流：新增 waiting/stalled 事件监听，缓冲枯竭即 safePlay() 触发新一轮数据请求续播（不跳秒以免 seek 出错）。【v4.x 面板化】命令面板(/唤起、↑↓/Tab/Enter/Esc、星标收藏夹持久化)、运维仪表盘(实时 CPU/内存/网速监控)、Ninja 折叠态(胶囊居中图标+播放/暂停状态指示)、面板设置刷新后持久化、副脚本注册中心(可扩展命令与开关)；v4.9 面板位置策略锁定右上角安全位、禁用拖拽避免遮挡。【v4.10 智慧树适配】新增 @match *://*.zhihuishu.com/*；站点私有全局/选择器收口 SITES 映射(detectSite 实时分发)；智慧树无 window.attachments 白名单与 window.ananas 私有暂停封装，auto 模式同样激进原型中性化强制续播，白名单/平台暂停对抗待真实站点校准。
 // @match        *://*.chaoxing.com/*
 // @match        *://*.edu.cn/*
+// @match        *://*.zhihuishu.com/*
 // @run-at       document-idle
 // @grant        none
 // @compatible   Tampermonkey
@@ -15,7 +16,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T14:27:35+08:00  commit: c9de693  minify: off
+// Built: 2026-08-05T17:42:49+08:00  commit: 0d5d0b0  minify: off
 
 
 (function () {
@@ -370,17 +371,17 @@
   // #1 温和/礼貌模式：是否启用原型中性化（prototype.pause / playbackRate）。
   //   'aggressive' → 始终包装（现状默认行为，最稳）；
   //   'gentle'     → 仅实例级(v.pause=pauseNoop，dom.js:_ovEnforce 已做)+事件，绝不碰原型（超星有覆盖窗口，已知）；
-  //   'auto'（默认）→ 运行时按站点识别：仅检测为超星(chaoxing)才激进；其余(含 'unknown' / 智慧树TODO)降级温和。
+  //   'auto'（默认）→ 运行时按站点识别：超星(chaoxing，含 edu.cn 高校域)与智慧树(zhihuishu)均激进；其余('unknown'/未来站点)降级温和。
   // 注：detectSite() 返回 'chaoxing' | 'zhihuishu' | 'unknown'（见 site-router.js），并不依赖任何 SITE 枚举；
-  //   其中 'chaoxing' 含 *.chaoxing.com 与 *.edu.cn（高校承载超星，#1 已覆盖），故 auto 模式在这两类域均激进中性化；
+  //   其中 'chaoxing' 含 *.chaoxing.com 与 *.edu.cn（高校承载超星，#1 已覆盖），'zhihuishu' 为智慧树网；故 auto 模式在超星与智慧树均激进中性化；
   //   其函数体只读 window.location，故 config.js 加载期(早于 site-router.js 文本位置，但函数已提升)即可正确调用，
   //   无需保守兜底——仅在 detectSite 不可用/抛错时回落激进，保证核心续播不丢。
   function usePrototypeNeutralize() {
     var m = CONFIG.INTRUSION_MODE;
     if (m === 'aggressive') return true;
     if (m === 'gentle') return false;
-    // 'auto'：仅超星需原型中性化（闭包 pause 必改原型）；其余站点实例级+事件已足够，降级温和以减侵入
-    try { return (typeof detectSite === 'function' ? detectSite() === 'chaoxing' : true); } catch (e) { return true; }
+    // 'auto'：超星依赖平台私有暂停指令(window.ananas.pause)、智慧树无可靠自定义暂停封装可依赖，二者必用原型级 pause 拦截；其余站点实例级+事件已足够，降级温和以减侵入
+    try { return (typeof detectSite === 'function' ? (detectSite() === 'chaoxing' || detectSite() === 'zhihuishu') : true); } catch (e) { return true; }
   }
   // #1 收敛原型中性化的装/卸决策（运行期切换 INTRUSION_MODE 或 'auto' 站点解析后调用）：
   //   需温和 → 卸原型（还原原生），并全量重扫让 _ovEnforce 对每实例补 own-property 覆盖(pauseNoop)；
@@ -713,9 +714,9 @@
   }
 
   // ===== 站点适配 / 页面路由 =====
-  // 站点检测与路由分发：当前聚焦超星学习通(chaoxing)；预留智慧树网(zhihuishu)等兼容点。
+  // 站点检测与路由分发：支持超星学习通(chaoxing) 与 智慧树网(zhihuishu)；平台私有全局/选择器集中到 SITES 映射。
   // 路由结果可用于驱动白名单抽取 / 接管策略的差异（不同站点的 attachments 字段、播放器容器不同）。
-  // 当前为骨架：detectSite() 识别站点，routeBySite() 预留分支；默认走既有 chaoxing 逻辑，不改动现有行为。
+  // 站点配置经 currentSiteCfg() 按 detectSite() 实时分发；未知/未配置域回退超星基线，不改动既有 chaoxing 行为。
   function detectSite() {
     try {
       var h = (window.location && window.location.hostname) || '';
@@ -729,19 +730,47 @@
     return 'unknown';
   }
   function routeBySite() {
-    var site = detectSite();
-    // TODO: 智慧树网适配分支（白名单抽取 / 播放器容器 / 续播策略差异）在此扩展
-    return site; // 业务模块可据此分支
+    return detectSite(); // 业务模块可据此分支；站点配置经 currentSiteCfg() 实时分发
   }
 
-  // P4：平台适配收口——把站点私有全局/选择器集中于此，平台改版只改这里。
-  // chaoxing 的定向白名单挂全局 window.attachments；属性名亦收口，便于 defineProperty 钩子与读取统一切换。
-  function siteAttachments() { try { return window.attachments; } catch (e) { return undefined; } }
-  function siteAttachmentsKey() { return 'attachments'; }
-  // chaoxing 的全局暂停封装挂在 window.ananas（跨 iframe 需按窗口取，缺省回退顶层）。
-  function siteAnanas(win) { try { return (win && win.ananas) || window.ananas; } catch (e) { return null; } }
-  // 任务点播放器容器选择器（chaoxing 用 .ans-attach-ct）。
-  function siteTaskContainerSel() { return SELECTORS.TASK_CONTAINER; }
+  // P4 + 智慧树适配：站点私有全局/选择器集中到 SITES 映射，按 detectSite() 实时分发；平台改版只改这里。
+  // chaoxing：定向白名单挂 window.attachments，全局暂停封装挂 window.ananas（超星专属）。
+  // zhihuishu（智慧树/知到）：与超星结构不同——无 window.attachments 白名单、无 window.ananas 私有暂停封装。
+  //   attachmentsKey/ananasKey 置空：① siteAttachments() 回退 undefined → 定向续播自动回退全量（targeting 已有兜底）；
+  //   ② hookAttachments 见空键跳过 defineProperty 钩子（targeting.js 空键守卫）→ 退回轮询/全量；③ 仅原型级 pause 拦截生效。
+  //   taskContainerSel 为 best-effort 猜测，需在本站实测校准（TODO）。
+  var SITES = {
+    chaoxing: {
+      attachmentsKey: 'attachments',                 // 播放页 AJAX 渲染后顶层 window.attachments = 任务点数组（含 objectid）
+      ananasKey: 'ananas',                            // 超星私有全局暂停封装 window.ananas.pause
+      taskContainerSel: SELECTORS.TASK_CONTAINER      // .ans-attach-ct
+    },
+    zhihuishu: {
+      attachmentsKey: '',                            // TODO 真实站点验证：智慧树无此白名单全局 → 定向回退全量
+      ananasKey: '',                                 // TODO 真实站点验证：智慧树无 window.ananas 私有暂停封装
+      taskContainerSel: '.video-container, .player, #video, .tk-container' // TODO 真实站点验证：best-effort 播放器容器
+    }
+  };
+  // 站点配置按 detectSite() 实时解析（脚本单页单站，性价比最高且无需启动期缓存）；未知/未配置域回退超星基线以免崩溃。
+  function currentSiteCfg() {
+    var s = detectSite();
+    return SITES[s] || SITES.chaoxing;
+  }
+
+  function siteAttachments() {
+    var k = currentSiteCfg().attachmentsKey;
+    if (!k) return undefined;
+    try { return window[k]; } catch (e) { return undefined; }
+  }
+  function siteAttachmentsKey() { return currentSiteCfg().attachmentsKey; }
+  // 平台自定义全局暂停封装：返回该 window 的私有暂停对象，无则 null（智慧树无 ananasKey → null，仅原型级拦截生效）
+  function siteAnanas(win) {
+    var k = currentSiteCfg().ananasKey;
+    if (!k) return null;
+    try { return (win && win[k]) || window[k]; } catch (e) { return null; }
+  }
+  // 任务点播放器容器选择器（MO 钻入 iframe/容器用）
+  function siteTaskContainerSel() { return currentSiteCfg().taskContainerSel; }
 
 
   // ===== MODULE: 接管策略开关（biz/policy）=====
@@ -963,6 +992,7 @@
   var _attachStore = null;
   function hookAttachments() {
     if (_attachHooked) return;
+    if (!siteAttachmentsKey()) return;   // 空键（智慧树等无白名单全局）→ 跳过钩子，回退轮询/全量，避免 defineProperty('') 抛错
     try {
       if (Object.getOwnPropertyDescriptor(window, siteAttachmentsKey())) return;  // 已被平台定义（不可重定义）→ 退回轮询兜底
       _attachStore = { value: siteAttachments() };

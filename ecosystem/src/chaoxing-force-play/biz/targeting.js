@@ -45,6 +45,7 @@
   var _attachStore = null;
   function hookAttachments() {
     if (_attachHooked) return;
+    if (!siteAttachmentsKey()) return;   // 空键（智慧树等无白名单全局）→ 跳过钩子，回退轮询/全量，避免 defineProperty('') 抛错
     try {
       if (Object.getOwnPropertyDescriptor(window, siteAttachmentsKey())) return;  // 已被平台定义（不可重定义）→ 退回轮询兜底
       _attachStore = { value: siteAttachments() };

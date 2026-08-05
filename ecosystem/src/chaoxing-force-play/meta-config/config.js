@@ -156,17 +156,17 @@
   // #1 温和/礼貌模式：是否启用原型中性化（prototype.pause / playbackRate）。
   //   'aggressive' → 始终包装（现状默认行为，最稳）；
   //   'gentle'     → 仅实例级(v.pause=pauseNoop，dom.js:_ovEnforce 已做)+事件，绝不碰原型（超星有覆盖窗口，已知）；
-  //   'auto'（默认）→ 运行时按站点识别：仅检测为超星(chaoxing)才激进；其余(含 'unknown' / 智慧树TODO)降级温和。
+  //   'auto'（默认）→ 运行时按站点识别：超星(chaoxing，含 edu.cn 高校域)与智慧树(zhihuishu)均激进；其余('unknown'/未来站点)降级温和。
   // 注：detectSite() 返回 'chaoxing' | 'zhihuishu' | 'unknown'（见 site-router.js），并不依赖任何 SITE 枚举；
-  //   其中 'chaoxing' 含 *.chaoxing.com 与 *.edu.cn（高校承载超星，#1 已覆盖），故 auto 模式在这两类域均激进中性化；
+  //   其中 'chaoxing' 含 *.chaoxing.com 与 *.edu.cn（高校承载超星，#1 已覆盖），'zhihuishu' 为智慧树网；故 auto 模式在超星与智慧树均激进中性化；
   //   其函数体只读 window.location，故 config.js 加载期(早于 site-router.js 文本位置，但函数已提升)即可正确调用，
   //   无需保守兜底——仅在 detectSite 不可用/抛错时回落激进，保证核心续播不丢。
   function usePrototypeNeutralize() {
     var m = CONFIG.INTRUSION_MODE;
     if (m === 'aggressive') return true;
     if (m === 'gentle') return false;
-    // 'auto'：仅超星需原型中性化（闭包 pause 必改原型）；其余站点实例级+事件已足够，降级温和以减侵入
-    try { return (typeof detectSite === 'function' ? detectSite() === 'chaoxing' : true); } catch (e) { return true; }
+    // 'auto'：超星依赖平台私有暂停指令(window.ananas.pause)、智慧树无可靠自定义暂停封装可依赖，二者必用原型级 pause 拦截；其余站点实例级+事件已足够，降级温和以减侵入
+    try { return (typeof detectSite === 'function' ? (detectSite() === 'chaoxing' || detectSite() === 'zhihuishu') : true); } catch (e) { return true; }
   }
   // #1 收敛原型中性化的装/卸决策（运行期切换 INTRUSION_MODE 或 'auto' 站点解析后调用）：
   //   需温和 → 卸原型（还原原生），并全量重扫让 _ovEnforce 对每实例补 own-property 覆盖(pauseNoop)；
