@@ -73,9 +73,16 @@
         Object.defineProperty(HTMLMediaElement.prototype, 'playbackRate', NATIVE_RATE_DESC);
       }
     } catch (e) { swallow(e); }
-    // ③ 还原 window.attachments setter（脚本自建钩子，configurable:true 可删除，回到注入前"未定义"状态）
+    // ③ 还原 window.attachments（审查中优先级#5）：脚本自建 accessor 仅当 window 无自有属性时才安装；
+    //    先移除 accessor，再以数据属性还原钩子期间平台最后写入的取值（_attachStore.value），避免 drop 直接丢失
+    //    平台数据——即便卸载多在页面卸载时发生，仍保证「注入前语义」可恢复，而非回到裸 undefined。
     try {
-      if (_attachHooked && typeof siteAttachmentsKey === 'function') { delete window[siteAttachmentsKey()]; _attachHooked = false; }
+      if (_attachHooked && typeof siteAttachmentsKey === 'function') {
+        var _ak = siteAttachmentsKey();
+        try { delete window[_ak]; } catch (e) { swallow(e); }
+        try { Object.defineProperty(window, _ak, { configurable: true, enumerable: true, writable: true, value: _attachStore ? _attachStore.value : undefined }); } catch (e) { swallow(e); }
+        _attachHooked = false;
+      }
     } catch (e) { swallow(e); }
     // ④ 还原 navigator.mediaSession 暂停处理：还原为注入前的原始 handler 与 playbackState，
     //    而非盲目 setActionHandler('pause', null)——若页面原本设有 pause handler，盲目置 null 会破坏站点媒体按键交互（审查高优先级#3）。
