@@ -117,6 +117,12 @@
       // MediaSession 劫持提到最前面：所有状态都执行（含 ended），应对锁屏界面续播。
       try {
         if (navigator.mediaSession) {
+          // 懒保存注入前原始 pause handler 与 playbackState（仅首次），供 cleanupListeners ④ 还原（审查高优先级#3）。
+          if (!_mediaSessionSaved) {
+            try { _origMediaSessionPause = (typeof navigator.mediaSession.getActionHandler === 'function') ? navigator.mediaSession.getActionHandler('pause') : null; } catch (e) { _origMediaSessionPause = null; }
+            try { _origMediaSessionState = navigator.mediaSession.playbackState; } catch (e) { _origMediaSessionState = null; }
+            _mediaSessionSaved = true;
+          }
           navigator.mediaSession.setActionHandler('pause', function () {});
           navigator.mediaSession.playbackState = 'playing';   // 视频实则在播，状态标 playing 与"劫持 pause 为 no-op"语义一致，锁屏不误发暂停
         }

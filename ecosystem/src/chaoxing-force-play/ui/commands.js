@@ -78,6 +78,16 @@
       try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
       syncPanelInputs(); Store.emit('panel:refresh'); Store.emit('ui:toast', '轮询 ' + CONFIG.RESCAN_INTERVAL + 'ms');
     });
+    registerCommand('cleardata', '彻底清除脚本写入的 localStorage(cx_* 键)', false, function () {
+      try {
+        var n = 0;
+        for (var i = localStorage.length - 1; i >= 0; i--) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('cx_') === 0) { try { localStorage.removeItem(k); n++; } catch (e2) { swallow(e2); } }
+        }
+        Store.emit('ui:toast', '已清除 ' + n + ' 个 cx_* 键（刷新后配置/统计归零）', 'success');
+      } catch (e) { swallow(e); Store.emit('ui:toast', '清除失败', 'error'); }
+    });
     registerCommand('help', '显示命令帮助', false, function () {
       var names = _cxCommands.map(function (c) { return '/' + c.name + (c.args ? ' …' : ''); }).join('  ');
       Store.emit('ui:toast', '命令: ' + names);
