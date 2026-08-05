@@ -15,7 +15,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-05T11:59:09+08:00  commit: fe1d3b2  minify: off
+// Built: 2026-08-05T12:09:38+08:00  commit: 72bef36  minify: off
 
 
 (function () {
