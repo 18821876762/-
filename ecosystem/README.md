@@ -3,11 +3,11 @@
 集成中枢，使感知层与决策层协同。
 
 - `chaoxing-force-play.user.js` — 主控面板：强制续播 / 防暂停 / 速率 / 循环 / 自动停止；
-  提供副脚本注册 `window.__cxRegisterAddon`、命令注册 `window.__cxRegisterCommand`、
+  提供工具库项注册 `window.__cxRegisterAddon`、命令注册 `window.__cxRegisterCommand`、
   跨进程桥（127.0.0.1:7531）与 `postMessage` 协议，聚合所有层。
 
 ## 跨层合约
-- 感知层 → 生态层：`postMessage` 上报（如媒体采集）、`__cxRegisterAddon` 注册副面板/副脚本。
+- 感知层 → 生态层：`postMessage` 上报（如媒体采集）、`__cxRegisterAddon` 注册副面板/工具库项。
 - 决策层 → 生态层：`__cxRegisterAddon` 注册行为插件，由主控统一开关。
 - 生态层 ⇄ 感知层(爬虫)：本地 HTTP 桥 `GET /playlist/{cid}` 拉取权威章节清单。
 
@@ -18,7 +18,7 @@
 cd ecosystem
 powershell -ExecutionPolicy Bypass -File build-force-play.ps1
 ```
-脚本把 `src/chaoxing-force-play/` 下 28 个模块按依赖顺序拼装为单个 `chaoxing-force-play.user.js`（仍是零运行时依赖的一个可安装文件）。
+脚本把 `src/chaoxing-force-play/` 按「接管(takeover)/站点(sites)/插件(plugins)/呈现(presentation)」4 个能力域拆分的 48 个模块按依赖顺序拼装为单个 `chaoxing-force-play.user.js`（仍是零运行时依赖的一个可安装文件）。
 
 支持的参数（便于 CI / 本地用备用路径）：
 - `-srcDir <path>` 源目录（默认 `./src/chaoxing-force-play`）
@@ -42,7 +42,21 @@ node tests/pure.test.js        # 纯函数单测：escapeHTML / fmtTime / signat
 
 卸载/可卸载性：脚本在 `pagehide` / `beforeunload` 以及 `window.__CX_FORCE_PLAY.uninstall()` 触发 `cleanupListeners()`，撤销全部侵入——包括还原原型方法、ananas 中和、`play` 监听、mediaSession 原 handler，并**删除**脚本在 `window` 上新增的全部全局导出（`__cxRegisterAddon` / `__cxRegisterCommand` / `__cxUI` / `__cxAddonQueue`）与注入的 DOM/样式（`#__cxPanel` 及三个 `*Style`、`#__cxToast`），最终 `delete window.__CX_FORCE_PLAY` 使页面全局回到注入前状态。命令 `/cleardata` 可主动清除脚本写入的 `cx_*` localStorage 键。回归见 `ecosystem/_sim/sim-lifecycle.js`（全局符号/命名空间撤销 5/5）与 `ecosystem/_sim/sim-mediasession.js`（mediaSession 原 handler 保存→劫持→卸载还原契约 6/6，以模拟 mediaSession 闭环，无须真实浏览器实机回归）。此外 `ecosystem/_sim/sim-audit.js`（10/10）校验面板「洞察」页的实时安全审计清单在接管态/卸载态均正确反映侵入面（`buildInvasionReport()` 只读盘点在 `window`/`document`/`prototype`/`mediaSession`/`localStorage` 上的当前侵入点，绿○=已还原，黄●=已接管）。
 
-温和/礼貌模式（建议#1）新增 `INTRUSION_MODE`（`auto`/`gentle`/`aggressive`）与 `POLITE_MODE` 两个开关（面板「系统」页可调、`localStorage.cx_panel_cfg` 持久化、刷新后生效）：`auto`（默认）按站点识别——超星域激进、非超星域温和；`gentle` 仅实例级接管（`dom.js:_ovEnforce` 已对每实例设 `v.pause=pauseNoop`）+ 事件，**绝不碰原型**（超星闭包 pause 有覆盖窗口，已知局限）；`aggressive` 始终包装原型（现状默认，最稳）。`POLITE_MODE` 开启后使 `pause.toString()`/`playbackRate` setter 来源特征伪装为原生（安装时按 `POLITE_MODE` 选择 `protoPauseNeutral`/`rateSetNeutral` 版本，原函数体不再含 `__cxForcePaused` 字面量）以规避平台基于字面量扫描的反篡改；并改以行为/引用探测（`probePauseNeutralized`/`getPauseNeutralized`，比对原型函数引用是否被平台还原）作为「中性化在位」判据，供审计面板（`_cxAuditProtoPause`）与副脚本 `chaoxing-tamper-guard.user.js` 使用——伪装后审计不撒谎、被还原仍可检出。`reconcileIntrusionMode()` 在面板切换或全模块加载（`main-loop.js` 末尾，此时 `site-router` 站点识别已就绪）后收敛原型中性化的装/卸；`main-loop.js` 每轮重扫的 F-B4 修复也已按 `usePrototypeNeutralize()` 门控（温和模式下跳过重装）。回归见 `ecosystem/_sim/sim-gentle.js`（auto·超星→激进 / auto·非超星→温和 / gentle·超星→不装原型 三条路径契约）。`ecosystem/_sim/sim-polite.js`（4/4）校验礼貌模式 `toString` 伪装 + 行为探测判据契约（含模拟平台还原原型后行为探测检出 false）；`ecosystem/_sim/sim-intrusion-switch.js`（22/22）校验运行期切换 `INTRUSION_MODE` 走统一还原原语→新模式重装的闭环，双向切换（aggressive↔gentle）均无原型残留、行为探测判据自洽，且 `POLITE_MODE` 下切回温和仍能真实还原原生原型。
+温和/礼貌模式（建议#1）新增 `INTRUSION_MODE`（`auto`/`gentle`/`aggressive`）与 `POLITE_MODE` 两个开关（面板「系统」页可调、`localStorage.cx_panel_cfg` 持久化、刷新后生效）：`auto`（默认）按站点识别——超星域激进、非超星域温和；`gentle` 仅实例级接管（`dom.js:_ovEnforce` 已对每实例设 `v.pause=pauseNoop`）+ 事件，**绝不碰原型**（超星闭包 pause 有覆盖窗口，已知局限）；`aggressive` 始终包装原型（现状默认，最稳）。`POLITE_MODE` 开启后使 `pause.toString()`/`playbackRate` setter 来源特征伪装为原生（安装时按 `POLITE_MODE` 选择 `protoPauseNeutral`/`rateSetNeutral` 版本，原函数体不再含 `__cxForcePaused` 字面量）以规避平台基于字面量扫描的反篡改；并改以行为/引用探测（`probePauseNeutralized`/`getPauseNeutralized`，比对原型函数引用是否被平台还原）作为「中性化在位」判据，供审计面板（`_cxAuditProtoPause`）与工具库项 `tamper-guard`（已内置 `plugins/addons/tamper-guard.js`）使用——伪装后审计不撒谎、被还原仍可检出。`reconcileIntrusionMode()` 在面板切换或全模块加载（`main-loop.js` 末尾，此时 `site-router` 站点识别已就绪）后收敛原型中性化的装/卸；`main-loop.js` 每轮重扫的 F-B4 修复也已按 `usePrototypeNeutralize()` 门控（温和模式下跳过重装）。回归见 `ecosystem/_sim/sim-gentle.js`（auto·超星→激进 / auto·非超星→温和 / gentle·超星→不装原型 三条路径契约）。`ecosystem/_sim/sim-polite.js`（4/4）校验礼貌模式 `toString` 伪装 + 行为探测判据契约（含模拟平台还原原型后行为探测检出 false）；`ecosystem/_sim/sim-intrusion-switch.js`（22/22）校验运行期切换 `INTRUSION_MODE` 走统一还原原语→新模式重装的闭环，双向切换（aggressive↔gentle）均无原型残留、行为探测判据自洽，且 `POLITE_MODE` 下切回温和仍能真实还原原生原型。
+
+审查整改 #2/#8 仿真：`_sim/sim-innerhtml-audit.js`（15/15）校验 `h()` 构建正确性 + `setSafeText` 注入文本化（innerHTML→DOM 的 XSS 免疫落地）；`_sim/sim-e2e.js`（11/11）在 jsdom 加载完整产物、触发初始化并插入视频，断言面板渲染 / 视频接管 / 诊断块无注入 / 零错误。
+
+### 静态分析（ESLint，审查整改 #9）
+```powershell
+cd ecosystem
+npm install          # 安装 devDependency eslint（仅开发期，零运行时依赖）
+npm run build        # 先构建产物
+npm run lint         # 对完整构建产物 chaoxing-force-play.user.js 做静态分析
+```
+- 配置：`ecosystem/.eslintrc.cjs`（渐进式门禁）。源模块因被拼接进同一 IIFE 无法单独解析，故仅 lint 完整产物；
+  源级语法由 build 的 `node --check` 退化为整体 `--check`。
+- 门禁级（error，出现即失败）：`no-undef` / `no-dupe-keys` / `no-dupe-args` / `no-irregular-whitespace`。
+- 观察级（warn，不阻断，后续逐步加严）：`no-redeclare`（已知 3 处跨模块重复定义技术债，见 `docs/reviews/refactor-force-play-coupling-plan.md §整改状态`）、`no-cond-assign`、`no-constant-condition`；`no-unused-vars`/`no-shadow` 等先关闭。
 
 ### 体积门禁
 - `check-module-size.ps1`：单文件行数红线（软 300 / 硬 350，超硬且不在白名单即失败）。
@@ -50,8 +64,8 @@ node tests/pure.test.js        # 纯函数单测：escapeHTML / fmtTime / signat
 
 ### 持续集成
 `.github/workflows/ci.yml`（GitHub Actions，push / PR 到 `master` 时触发）依次执行：
-构建 → 全 src 模块 `node --check` 语法检查 → 模块行数门禁 → 产物体积门禁 → 纯函数单测 →
-上传构建产物 `chaoxing-force-play.user.js` 作为 Artifact。
+构建 → 全 src 模块 `node --check` 语法检查 → 模块行数门禁 → ESLint 静态分析（#9 门禁）→
+产物体积门禁 → 纯函数单测 → 上传构建产物 `chaoxing-force-play.user.js` 作为 Artifact。
 
 ### 发布
 1. 本地构建并自测通过；

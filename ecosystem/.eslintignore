@@ -1,0 +1,5 @@
+node_modules/
+_sim/
+tests/
+dist/
+*.min.js

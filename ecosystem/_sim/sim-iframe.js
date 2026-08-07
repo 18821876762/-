@@ -6,6 +6,8 @@
 //   - jsdom 提供了可用的 iframe（contentDocument + contentWindow 均非空）→ 跑完整 iframe 场景；
 //   - 否则优雅 SKIP：仍校验「顶层实例加载」与「顶层 P 键面板」这两个 jsdom 可验证的点
 //     （真正的回归仍会被抓到），并明确标注「跨 iframe 续播需浏览器实机验证」。
+//     注：跨 iframe 续播的真实浏览器回归已由 Playwright 版 sim-iframe-pw.js 覆盖并通过
+//     （真实 chromium 下 iframe 内 video 经脚本续播处于播放态 paused=false），见 docs/CHANGELOG.md。
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');

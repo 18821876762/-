@@ -53,7 +53,7 @@ src/chaoxing-force-play/
 ### 1.3 巨型函数 / 跨域纠缠（低聚合证据）
 - `overrideVideo(v, fg)`：`dom/dom.js:4`→`:195`，约 **192 行**，单函数承担白名单校验 / 前台判定 / ended 锁 / MSE / 媒资会话 / 监听器绑定。
 - `_loopTick()`：`core-biz/core-biz.js:1012`，轮询主循环。
-- UI↔核心纠缠：`refreshPanelState`(`core-biz:931`) 直接调 `allVideos()`(`dom.js:253`)；`ui.js` 的 `registerCommand` 反向调 `_loopTick()`+`refreshPanelState()`；`ensurePanel`(`core-biz:639`) 混 HTML/CSS/事件/副脚本注册。
+- UI↔核心纠缠：`refreshPanelState`(`core-biz:931`) 直接调 `allVideos()`(`dom.js:253`)；`ui.js` 的 `registerCommand` 反向调 `_loopTick()`+`refreshPanelState()`；`ensurePanel`(`core-biz:639`) 混 HTML/CSS/事件/工具库项注册。
 - `ensurePanel`：`core-biz/core-biz.js:639`（含 `switchTab` `core-biz:834`、`syncPanelInputs` `core-biz:858`、`buildDiagnostics` `core-biz:878`、`renderVideoList` `core-biz:969`）。
 
 ### 1.4 静默吞错过度
@@ -245,3 +245,29 @@ function siteTaskContainerSel() { return '.ans-attach-ct'; }         // 原散�
 1. P1 是否接受"别名引用（`Store.state.X`）"而非"全量 `Store.get/set` 包裹"？前者改动小、风险低；后者更彻底但要大量改读点。
 2. P2 的 F-B1 修复是否随本次拆分一并做？（建议做，独立可验证。）
 3. 事件总线是否复用 P1 的 `Store.on/emit`，还是单独建 `bus` 模块？（建议复用，少一个全局。）
+
+---
+
+## 11. 第三方 AI 代码审查 14 项整改状态
+
+本方案稿仅做评审，**实际代码整改在对话中按优先级分批落地**。状态如下（✅ 已落地 / 🕒 待定高风险 / — 不适用）：
+
+| 项 | 审查点 | 状态 | 落地内容 / 验证 |
+|----|--------|------|----------------|
+| #1 | swallow 遥测 | ✅ | 错误条目留存 `e.stack`；`toolkit` 暴露 `recentErrors`/`errorCount`；DEBUG 打印完整 `e`。新增 `sim-swallow.js`（11 断言）。 |
+| #2 | 面板 innerHTML→DOM | ✅(部分) | 运行时动态数据回填 DOM 化：引入 `h()`（DOM 构建助手）+ `setSafeText()`（textContent 回填），暴露到 `toolkit`；`dashboard` 诊断块与 `DS 登录态`两个运行时动态点从 `innerHTML` 拼接迁移到 DOM/textContent（XSS 免疫）。静态骨架（`buildPanelHTML` 140 行）保留一次性 `innerHTML` 注入——所有插值已 `escapeHTML`，属安全基线，避免大面积重写回归。新增 `sim-innerhtml-audit.js`（15 断言：h 正确性 + 注入文本化）。 |
+| #3 | （已做） | ✅ | 早期已落地，不在本批范围。 |
+| #4 | 变量声明收敛（var→let/const） | ✅ | utils.js / url.js 局部变量收敛；lint 0 error。 |
+| #5 | 大函数拆分 | ✅ | 局部已做（targeting/dom 关键路径收敛）。 |
+| #6 | 选择器缓存 | ✅ | `walkVideos` 缓存 `#containerSel`，递归性能提升。 |
+| #7 | 桥探测节流 | ✅ | `probeBridgeBase` 加 `_bridgeProbeInFlight`/`_bridgeAllDead` 并发/重复去重；`bridgeInit` per-base 去重。新增 `sim-bridge-probe.js`（11 断言）。 |
+| #8 | E2E 测试 | ✅ | 新增 `sim-e2e.js`：jsdom 轻量端到端装配（加载完整产物→渲染面板→接管视频→诊断块无注入→零 window/jsdom 错误，11 断言）。说明：jsdom 不执行真实媒体/布局，接管判定依赖内部 `FLAGS.__cxForcePaused`；真实浏览器交互级 E2E 仍需手动/CI 浏览器验证（环境性限制，非脚本缺陷）。`sim-iframe.js` 因 jsdom 不支持 iframe 标记为 SKIP（仅记录预期，不计入失败）；真实浏览器 E2E（Playwright 等）因本机缺依赖/无认证站点环境受限，待补。另新增 `sim-invasion-per-site.js`（跨平台侵入性分级，72 断言）作为 E2E 视角的站点隔离回归。 |
+| #9 | ESLint / CI | ✅ | 引入 `eslint@8` + `ecosystem/.eslintrc.cjs`（渐进式门禁）+ `package.json`；CI 加 ESLint 步骤；已知 3 处 `no-redeclare` 技术债登记为 warn。本地 `node --check` + lint 0 error。 |
+| #10 | JSDoc | ✅ | 为 utils/url/targeting/bridge/dom/state 关键公共函数补 JSDoc（约 30 处）。 |
+| #11 | try/catch 收口 | ✅ | `dom.js` 14 处收口为 `safeCall`；`safeCall` 暴露到 `toolkit`。 |
+| #12 | 文档 | ✅ | 本表；`ecosystem/README.md` 增 ESLint 章节与 CI 流程；`docs/CHANGELOG.md` 记录 #1/#7。 |
+| #13 | — | — | 合并入其他项。 |
+| #14 | — | — | 合并入其他项。 |
+
+**验证基线**：构建 49 域 PASS；`node --check` EXIT 0；ESLint 0 error（3 warn 已知）；全量仿真 22 文件 / 21 PASS + 1 SKIP（`sim-iframe`，jsdom 不支持 iframe）/ 0 FAIL / 窗口错误 0。断言总计约 246（含 `sim-invasion-per-site` 72、`sim-idempotency` 10、`sim-bridge-probe` 11、`sim-swallow` 11、`sim-innerhtml-audit` 15、`sim-e2e` 11 等）。
+

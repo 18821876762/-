@@ -1,0 +1,14 @@
+{
+  "name": "chaoxing-force-play",
+  "version": "4.15.0",
+  "private": true,
+  "description": "网课强制续播 用户脚本（零运行时依赖单文件）— 开发期静态检查/测试工具链",
+  "scripts": {
+    "build": "powershell -ExecutionPolicy Bypass -File build-force-play.ps1",
+    "lint": "eslint chaoxing-force-play.user.js",
+    "test": "node tests/pure.test.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

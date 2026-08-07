@@ -36,6 +36,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Write-Host "syntax check: built artifact OK"
 
+      - name: Install lint toolchain
+        shell: pwsh
+        run: |
+          cd ecosystem
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: ESLint static analysis (built artifact)
+        shell: pwsh
+        run: |
+          cd ecosystem
+          # 审查整改 #9：对完整构建产物做静态分析门禁。
+          # 源模块因被拼接进同一 IIFE 无法单独解析，故仅 lint 产物（源级语法由 build 的 node --check 退化为整体 --check）。
+          # error 级规则（no-undef 等）出现即失败；warn 级（已知 no-redeclare 技术债）不阻断。
+          node node_modules/eslint/bin/eslint.js chaoxing-force-play.user.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Host "eslint: built artifact OK"
+
       - name: Module size gate
         shell: pwsh
         run: |

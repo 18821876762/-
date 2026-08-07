@@ -26,7 +26,7 @@
 | 全局 `window.ananas.pause` 中和 | `dom.js:194-208` `neutralizeGlobalPause` | 实例 own-property 遮蔽（defineProperty）。 |
 | 卸载还原 | `lifecycle.js:55-139` `cleanupListeners` | ① ② 还原 prototype.pause / playbackRate（按 `NATIVE_PAUSE_DESC` / `NATIVE_RATE_DESC` 还原）。 |
 | 安全审计 | `diagnostics.js:51-98` | `_cxAuditProtoPause` 用 `String(prototype.pause).indexOf('__cxForcePaused')>=0` 探测包装特征。 |
-| 自有篡改报警副脚本 | `decision/chaoxing-tamper-guard.user.js:52,73` | `containsMarker` 同样靠 `pause.toString()` 含 `__cxForcePaused` 判断中性化是否还在。 |
+| 自有篡改报警工具库项 | `decision/chaoxing-tamper-guard.user.js:52,73` | `containsMarker` 同样靠 `pause.toString()` 含 `__cxForcePaused` 判断中性化是否还在。 |
 
 **结论**：#5（可卸载）、#8（面板诊断）、#10（安全审计）已落地；#1 温和/礼貌模式未做。下面两个张力决定设计不能简单照搬「默认不改原型」。
 
@@ -47,7 +47,7 @@
 ### 2.2 礼貌模式：隐藏字面量会破坏自有 tamper-guard
 
 - 平台反篡改常做：`pause.toString()` 是否仍含注入者特征串（即 `config.js:42-43` 提到的探测方式）。礼貌模式需让 `pause.toString()` 看起来像原生函数。
-- 但 `chaoxing-tamper-guard.user.js:52,73` 的 `containsMarker` 也靠这个字面量判断是否被平台还原并报警。一旦礼貌模式隐藏字面量，**自有报警副脚本将永久误判为「已被还原」而疯狂报警**。
+- 但 `chaoxing-tamper-guard.user.js:52,73` 的 `containsMarker` 也靠这个字面量判断是否被平台还原并报警。一旦礼貌模式隐藏字面量，**自有报警工具库项将永久误判为「已被还原」而疯狂报警**。
 - 安全审计 `_cxAuditProtoPause`（`diagnostics.js:63-64`）同样依赖该字面量，礼貌模式开启后审计会错误显示「未包装」。
 
 > 设计推论：礼貌模式必须把「还原检测」从「字串扫描」改为「行为探测」，且审计面板需改用行为探测结果，否则三个系统互相打架。
@@ -118,6 +118,26 @@ function protoPause() {
 
 审计面板（`panel-template.js:124-132`）图例已说明「绿○=未侵入/已还原」，温和模式天然契合；礼貌模式只需审计判据从「字串」切「行为」。
 
+### 3.5 跨平台侵入面分级矩阵（`auto` 默认）
+
+`usePrototypeNeutralize()`（`config.js:164` `reconcileIntrusionMode`）是分级唯一决策点：`INTRUSION_MODE='auto'` 时仅对 `chaoxing` / `zhihuishu` 返回 true（包装 `HTMLMediaElement.prototype.pause` 与 `playbackRate`，激进），其余站点降级温和——只做实例 own-property + 事件级接管，**绝不碰原型**，侵入最轻。`'gentle'` 永远不碰原型；`'aggressive'` 全部站点包装原型。
+
+| 平台 | detectSite | `usePrototypeNeutralize()`(auto) | `buildInvasionReport` prototype.pause | 侵入等级 | 备注 |
+|---|---|---|---|---|---|
+| 超星（含 `*.edu.cn` 高校域） | `chaoxing` | true | 包装(on) | 激进（原型级中性化） | 闭包 `pause` 需单点全覆盖，零漏拦窗口 |
+| 智慧树/知到 | `zhihuishu` | true | 包装(on) | 激进（原型级中性化） | 同超星根因（无 `attachments` 白名单） |
+| 中国大学MOOC | `icourse163` | false | 未包装(off) | 温和（实例级+事件） | 实例级+事件已足够 |
+| 学堂在线 | `xuetangx` | false | 未包装(off) | 温和 | 同上 |
+| 智慧职教 | `icve` | false | 未包装(off) | 温和 | 同上 |
+| 人卫慕课 | `renwei` | false | 未包装(off) | 温和 | 主域待真实站点校准（`pmphmooc.com` 占位） |
+| Unipus | `unipus` | false | 未包装(off) | 温和 | 同上 |
+| U校园 | `ucampus` | false | 未包装(off) | 温和 | 同上 |
+| 实验空间 | `ilabx` | false | 未包装(off) | 温和 | 同上 |
+| DeepSeek 应答端 | `deepseek` | false | 未包装(off) | 温和（无视频接管） | 仅承载 responder，不接管视频 |
+| 未知域（兜底） | `unknown` | false | 未包装(off) | 温和（安全基线） | `auto` 不误伤宿主页 |
+
+> 站点隔离：`sites/*.js` 各 biz 模块均以 `if (detectSite()!=='X') return` 二层守卫，跨站零副作用；`buildInvasionReport()`（`diagnostics.js:106`）实时盘点 6 类侵入面，面板「洞察」页以绿○/黄●透明展示，用户可见差异化。
+
 ---
 
 ## 4. 回归风险与测试策略
@@ -130,6 +150,7 @@ function protoPause() {
 新增回归（沿用 `_sim` jsdom 范式）：
 - `_sim/sim-gentle.js`：验证 `gentle` 模式下 prototype.pause **未**被包装（审计 `_cxAuditProtoPause()===false`），且实例 own-property 拦截闭包 pause 生效。
 - `_sim/sim-polite.js`：验证 `POLITE_MODE=true` 时 `String(prototype.pause).indexOf('__cxForcePaused')<0`，且行为探针仍判定中性化在位（`_pauseNeutralized===true`）。
+- `_sim/sim-invasion-per-site.js`：跨平台侵入性分级回归——对 11 个域（含 `*.edu.cn`、未知域共 12 用例）逐一 `detectSite()` 解析 + `usePrototypeNeutralize()` 决策 + `buildInvasionReport()` 运行时侵入面核对 + `uninstall()` 还原闭环；验证 `auto` 下仅 `chaoxing`/`zhihuishu` 包装原型、其余降级温和、卸载后 `prototype.pause` 均还原（72 断言 / 12 用例 × 6 项，PASS）。
 - 既有 `sim-audit.js` / `sim-lifecycle.js` / `sim-mediasession.js` 不受影响（默认模式不变）。
 
 ---
@@ -141,7 +162,7 @@ function protoPause() {
 | P0 | 新增 `INTRUSION_MODE` / `POLITE_MODE` 配置 + 持久化 + 系统页两个 checkbox | 手动面板开关持久化 | ✅ |
 | P1 | 温和模式：`auto` 站点识别 + 实例 own-property 接管路径（超星回退激进） | `sim-gentle.js` | ✅ |
 | P2 | 礼貌模式：安装时按 `POLITE_MODE` 选 `protoPause/rateSet` 版本（`toString` 不含标记字面量）+ 行为探测还原检测(`probePauseNeutralized`) | `sim-polite.js`（4/4 通过） | ✅ |
-| P3 | 审计判据从「字串」切「行为」(`getPauseNeutralized`)；tamper-guard 副脚本同步切行为探测 | 审计面板 + 副脚本不再误报 | ✅ |
+| P3 | 审计判据从「字串」切「行为」(`getPauseNeutralized`)；tamper-guard 工具库项同步切行为探测 | 审计面板 + 工具库项不再误报 | ✅ |
 | P4 | `INTRUSION_MODE` 运行期切换走统一还原原语(`restorePrototypeNeutralization`,与 `cleanupListeners` ①② 同一套)→ 新模式重装 + 全量重扫刷新实例级接管 | `sim-intrusion-switch.js`(22/22) 验证双向切换无残留 + POLITE_MODE 下还原不受 `toString` 伪装影响 | ✅ |
 
 ---
@@ -151,17 +172,22 @@ function protoPause() {
 1. **`auto` 的站点识别可靠性**：依赖 `site-router.js` 现有特征，是否覆盖全部超星域名（`.chaoxing.com` / `.edu.cn`）？需列清单回归。
    - ✅ **已落地（2026-08-05）**：清单核查发现缺口——脚本 `@match` 限 `*.chaoxing.com + *.edu.cn`，但 `detectSite()` 仅认 `chaoxing.com`/`zhihuishu.com`，导致高校 `*.edu.cn` 域被误判 `unknown` → `auto` 模式走温和 → 漏拦。已在 `site-router.js` 的 `detectSite()` 增加 `*.edu.cn → 'chaoxing'` 规则（位于 zhihuishu 之后；智慧树域为 zhihuishu.com 不落 edu.cn，无歧义）。同时 `config.js` 暴露 `_ns.detectSite` 供 UI/审计复用，并新增 `sim-intrusion-switch` 场景4 回归（edu.cn 视为超星上下文、加载即激进、切 gentle 真实还原）。`sim-intrusion-switch` 现 23/23，无回归。
 2. **温和模式是否对超星直接禁用选项**：避免用户误选 `gentle` 导致漏拦却不知。建议在面板选 `gentle` 时若识别为超星，弹确认 + 提示「可能漏拦」。
-   - ✅ **已落地（2026-08-05）**：`ui/panel-controls.js` 的 `bindPanelControlEvents`（`#__cxIntrusion` change）中，当 `intr.value==='gentle'` 且 `detectSite()==='chaoxing'` 时调用 `window.confirm` 弹确认框（文案含「可能偶发漏拦」）；用户取消则把 `<select>` 回退为 `CONFIG.INTRUSION_MODE` 并 toast 提示保持当前模式。非超星站点或 `detectSite` 不可用时跳过确认，零回归。该绑定已从 `panel-core.js` 的 `ensurePanel` 抽出到独立 `panel-controls.js` 以合规单文件行数红线。
+   - ✅ **已落地（2026-08-05）**：`presentation/panel-controls.js` 的 `bindPanelControlEvents`（`#__cxIntrusion` change）中，当 `intr.value==='gentle'` 且 `detectSite()==='chaoxing'` 时调用 `window.confirm` 弹确认框（文案含「可能偶发漏拦」）；用户取消则把 `<select>` 回退为 `CONFIG.INTRUSION_MODE` 并 toast 提示保持当前模式。非超星站点或 `detectSite` 不可用时跳过确认，零回归。该绑定已从 `presentation/panel-core.js` 的 `ensurePanel` 抽出到独立 `presentation/panel-controls.js` 以合规单文件行数红线。
 3. **礼貌模式与「平台用 `Object.freeze` 锁原型」的对抗**：`toString` 伪装无法阻止平台 freeze 后重赋值；行为探测负责兜底重装，但仍依赖 `setInterval` 周期——极端情况下有短暂失效窗口，是否可接受？
    - ✅ **已决策（2026-08-05）**：接受当前**轮询兜底**方案，不引入 Proxy/getter 类激进对抗，理由：① 失效窗口被 `RESCAN_INTERVAL`（默认 2s）上界约束，`main-loop` 每轮 F-B4 重装即自愈；② 实例级接管（`_ovEnforce` / `pauseNoop`）在原型短暂被还原期间仍生效，仅「原型级 `pause` 拦截」有窗口，不回退到「视频完全失控」；③ 在原生原型上改用访问器（getter/setter）拦截重赋值会破坏 `pause.apply`/原生调用语义且更易被平台检测，风险高于收益。结论：残留窗口属可接受设计权衡，无需代码变更。运行期若平台确实 freeze 后重赋值，去抖 toast 报警 + 自愈链路已覆盖（见 P2/P4）。
 4. **是否把 `MARK` 外提做成无条件（连非礼貌模式也外提）**？可统一代码路径，但会改变现状 `toString` 特征（影响现有 tamper-guard 字符串扫描基线）。建议仅礼貌模式外提，保持默认行为零回归。
 5. **智慧树(知到)专属交互差异（与学习通不同）**：用户明确智慧树上课期间会弹「随堂题目」弹窗干扰，且 UI 需与学习通区分（右下角微型标志性图标）。如何处理？
    - ✅ **已落地（2026-08-05）**：拆解为原则——智慧树与超星结构完全独立（无 `attachments` 白名单、无 `ananas` 私有暂停封装），故专属逻辑不入通用路径，新建两个站点隔离模块：① `biz/zhihuishu.js`：轮询检测题目弹窗 → **随机选一个选项 → 点击「答题」按钮 → 删除弹窗**（不去管对错，仅消干扰）；带指纹去重防同弹窗重复处理。② `ui/zhihuishu-fab.js`：右下角微型品牌图标（蓝绿树芽 SVG）FAB，常驻、点击展开极简浮层显示续播状态与本次自动作答数、可一键开关续播，与超星左上/右上悬浮面板视觉刻意区分。两模块均仅在 `detectSite()==='zhihuishu'` 时激活（`main-loop` 主循环按站点分支调用），超星页面零副作用。弹窗/选项/答题按钮选择器为 best-effort 并集（收口在 `ZHIHUISHU` 映射），待真实站点校准（同 SITES 收口思想，改映射即可不改逻辑）。`sim-zhihuishu` 现 12/12（含弹窗处理 3 断言 + 图标创建 2 断言），超星 `sim-gentle/polite/intrusion-switch/audit` 零回归，版本升 4.11。
 6. **rev2 多平台扩展（国内高校被要求用的其他网课/答题平台）**：用户确认需适配 学银在线(超星系)、中国大学MOOC、学堂在线、智慧职教(续播+弹窗随机作答) 与 人卫慕课、Unipus、U校园、实验空间(需真答题)。如何处理？
-   - ✅ **已落地（2026-08-05）**：架构沿用「站点隔离 + 共享骨架 + 选择器收口」原则，零侵入超星：① 学银在线是超星系 → `detectSite` 对 `xueyinonline.com` 返回 `'chaoxing'`，复用超星全部策略（`@match` 加域即可，几乎零成本）。② 抽 **站点无关共享骨架** `biz/popup-quiz.js`（弹窗随机选→答题→删，去重），MOOC 类(icourse163/xuetangx/icve)与智慧树仅定义选择器映射+调用它，逻辑只写一处。③ **真答题引擎** `biz/quiz.js`：抓题干+选项 → 可插拔答案源 `random`(默认兜底保不卡) / `bank`(本地题库 `window.__CX_QUIZ_BANK` 或 `localStorage.cx_quiz_bank`) / `ai`(预留 POST `CONFIG.QUIZ_AI_ENDPOINT` 接口，脚本不内置密钥) → 回填选中项+提交；4 个答题平台(renwei/unipus/ucampus/ilabx)各定义选择器映射+调用 `quizTick`。④ `detectSite` 扩展 7 个新域、`SITES` 加 7 项(均无白名单/无 ananas，续播走全量+原型中性化)、`main-loop` 按站点分支调度。⑤ 全部选择器 best-effort 并集待真实站点校准(标 TODO，改映射不改逻辑)。回归：`sim-mooc`(学银+3 MOOC 路由/弹窗) PASS、`sim-quiz`(引擎+4平台+跨站隔离) PASS、超星 4 套 sim 零回归，版本升 4.12。
-   - ⚠️ **真答题答案来源需用户补**：`quiz.js` 默认 `random` 保证「不卡进度」但无正确率；要真答题，用户须提供 **本地题库**(`__CX_QUIZ_BANK` 或 localStorage，格式 `{题干指纹: 选项下标}`) 或 **配置 AI 端点**(`CONFIG.QUIZ_AI_ENDPOINT`，契约：请求 `{stem, options[]}`、响应 `{index|answer}` 回填并写入题库供下轮命中)。脚本不凭空编造答案。
+   - ✅ **已落地（2026-08-05）**：架构沿用「站点隔离 + 共享骨架 + 选择器收口」原则，零侵入超星：① 学银在线是超星系 → `detectSite` 对 `xueyinonline.com` 返回 `'chaoxing'`，复用超星全部策略（`@match` 加域即可，几乎零成本）。② 抽 **站点无关共享骨架** `biz/popup-quiz.js`（弹窗随机选→答题→删，去重），MOOC 类(icourse163/xuetangx/icve)与智慧树仅定义选择器映射+调用它，逻辑只写一处。③ **真答题引擎** `biz/quiz.js`：抓题干+选项 → 可插拔答案源 `random`(默认兜底保不卡) / `bank`(本地题库 `window.__CX_FORCE_PLAY.quizBank` 或 `localStorage.cx_quiz_bank`) / `ai`(预留 POST `CONFIG.QUIZ_AI_ENDPOINT` 接口，脚本不内置密钥) → 回填选中项+提交；4 个答题平台(renwei/unipus/ucampus/ilabx)各定义选择器映射+调用 `quizTick`。④ `detectSite` 扩展 7 个新域、`SITES` 加 7 项(均无白名单/无 ananas，续播走全量+原型中性化)、`main-loop` 按站点分支调度。⑤ 全部选择器 best-effort 并集待真实站点校准(标 TODO，改映射不改逻辑)。回归：`sim-mooc`(学银+3 MOOC 路由/弹窗) PASS、`sim-quiz`(引擎+4平台+跨站隔离) PASS、超星 4 套 sim 零回归，版本升 4.12。
+   - ⚠️ **真答题答案来源需用户补**：`quiz.js` 默认 `random` 保证「不卡进度」但无正确率；要真答题，用户须提供 **本地题库**(`window.__CX_FORCE_PLAY.quizBank` 或 localStorage，格式 `{题干指纹: 选项下标}`) 或 **配置 AI 端点**(`CONFIG.QUIZ_AI_ENDPOINT`，契约：请求 `{stem, options[]}`、响应 `{index|answer}` 回填并写入题库供下轮命中)。脚本不凭空编造答案。
    - ⚠️ **人卫慕课域名未确认**：`detectSite` 暂用 `pmphmooc.com` 占位，真实主域/学校镜像域需用户确认后补 `@match` 与路由。
    - ⚠️ **明确不做的平台**：学校教务系统(jw.xxx.edu.cn)、知网/万方/维普、智慧教育平台、腾讯会议/钉钉/QQ/Zoom——无「刷课视频」概念(选课/查分/论文/直播会议)，且考试防作弊系统会抓脚本，强行做无意义甚至违规。
+7. **rev3 抗题目文本混淆（视觉识别层）**：用户实测平台对题干做实时变换——复制粘贴出的字与肉眼所见"每一个字都不一样"（同形字替换 / 字体映射变形 / 题目以图片或 Canvas 呈现），使 rev2 基于题干指纹的题库(`bank`)匹配与纯文本 AI 接口全部失效。如何处理？
+   - ✅ **已落地（2026-08-05）**：新增 **`biz/quiz-vision.js` 视觉识别层**，专治混淆、服务于 `quiz.js` 真答题引擎（弹窗随机作答 `popup-quiz` 不读题干，不受影响）：① `quizSnapshot(el)` 用 `html2canvas` 按**可见字体**把题目节点渲染成图片（连 Canvas 题目也能截到位图，绕开字体映射/同形字/图片题）；② 两种识别后端——`endpoint` 模式 POST 截图到 `CONFIG.QUIZ_VISION_ENDPOINT`(多模态 AI，直接回 `{text, answer}`)，`tesseract` 模式本地 `Tesseract.js` OCR 还原文本；③ `quiz.js.quizTick` 在 `QUIZ_VISION_ENABLED` 时走异步视觉路径：先占坑防重复截图，`quizRecover` 还原出肉眼所见真实文本/答案 → 回查 `bank`(真实题干可命中) 或直接用端点 `answer` 索引 → 回填+提交；识别失败/未配置端点则**随机兜底保不卡**。④ `html2canvas`/`tesseract.js` 按需懒加载（仅启用且命中题目时注入 CDN），默认 `QUIZ_VISION_ENABLED=false`，核心**零运行时依赖**。新增配置 `QUIZ_VISION_ENABLED/QUIZ_VISION_OCR/QUIZ_VISION_ENDPOINT/QUIZ_OCR_LANG`，构建清单登记、版本升 4.13。回归：`sim-quiz-vision`(视觉+bank / 视觉+endpoint / 失败兜底 / 异步去重 / 跨站隔离) 14/14 PASS，`sim-quiz` 零回归。
+   - ⚠️ **多模态端点契约需用户自备**：`QUIZ_VISION_ENDPOINT` 接收 `{image: dataURL, options: string[]}`，须返回 `{text?: string, answer?: number}`（至少其一）。脚本不内置密钥/模型，用户自建或对接既有 AI；`tesseract` 模式则无需外部 AI，但仅能把"还原文本"回查本地题库(`bank`)，无法理解图形/公式/图表类题目。
+   - ⚠️ **同源策略/跨域截图**：`html2canvas` 截图需题目节点无跨域污染；遇 Canvas 跨域图需 `useCORS` 且服务器允许，否则截图可能空白（此时端点仍拿不到图，将走随机兜底）。真实站点需校准元素选择器与截图范围（同 SITES 收口思想）。
+   - **v4.14 新增 `deepseek-web` 后端（用户方案：同标签注入+轮询 DOM / 能传图 / 脚本内置提示词）**：`QUIZ_VISION_OCR` 新增取值 `'deepseek-web'`，新增 `biz/vision-deepseek-web.js` 实现跨标签页协作——课程页把题目截图 dataURL 经 `BroadcastChannel` 发给已登录的 DeepSeek 网页版(chat.deepseek.com，本次新增 `@match` 使脚本在其页内承载 responder)，responder 注入图片+内置提示词→发送→轮询回复完成→解析下标→回传。脚本**先落地登录态探测**：DeepSeek 页检测头像/登录按钮并广播状态，课程页渲染左下角状态徽标（未连接/未登录=红"不可用"，已登录=绿"可用"）；未登录时 `quiz.js` 直接随机兜底，绝不静默超时。`quizAskDeepSeek` 单次超时 `QUIZ_VISION_TIMEOUT`(默认 60s)。responder 的 DOM 驱动（输入框/发送按钮/回复容器/生成中指示/头像/登录按钮选择器，收口于 `DEEPSEEK` 映射）**待真实站点用 DevTools 校准一次**（已标 TODO），responder 当前为骨架（登录校验已生效，驱动作答留 TODO→返回 null 由课程页随机兜底）。
    - ✅ **已决策（2026-08-05）**：按设计建议**保持条件外提**——仅 `POLITE_MODE` 开启时把 `MARK` 移出函数体，默认（非礼貌）模式维持现状 `toString` 特征不变。理由：tamper-guard 的字符串扫描基线以默认模式为准，无条件外提会同时改变默认与礼貌两种模式的 `toString`，既无意义又引入回归风险；条件外提已满足「礼貌模式抗检测」目标且默认零回归（已通过 `sim-gentle`/`sim-polite` 验证）。无需代码变更。
 
 ---

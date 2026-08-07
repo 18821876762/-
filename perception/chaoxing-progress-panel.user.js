@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         学习通·进度只读面板（副脚本）
+// @name         学习通·进度只读面板（工具库）
 // @namespace    http://cx.local/
 // @version      3.6
 // @author       anon
-// @description  【副脚本·接入主控面板】【只读】作为「副面板」内嵌进 chaoxing-force-play 主控面板（按 P 呼出 → 副面板区）：拉取你自己的课程列表/章节任务点完成状态，纯 GET 不提交、不伪造、不改任何平台数据。
+// @description  【工具库·接入主控面板】【只读】作为「副面板」内嵌进 chaoxing-force-play 主控面板（按 P 呼出 → 副面板区）：拉取你自己的课程列表/章节任务点完成状态，纯 GET 不提交、不伪造、不改任何平台数据。
 // @match        *://*.chaoxing.com/*
 // @match        *://*.edu.cn/*
 // @run-at       document-idle
@@ -28,10 +28,11 @@
     } catch (e) { swallow(e); }
   }
   // 审查 JS1-2：把空 catch 的静默吞掉改为 DEBUG 下告警；生产默认静默，不污染控制台
-  function swallow(e, tag) {
+  var TK = (window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.toolkit) || {};
+  var swallow = TK.swallow || function (e, tag) {
     if (!DEBUG) return;
     try { console.warn('[CX-PANEL] ' + (tag || 'swallowed') + ':', (e && e.message) ? e.message : e); } catch (_) {}
-  }
+  };
 
   // —— 配置：只读端点（纯 GET，依赖浏览器已有登录态 cookie）。地址集中管理，便于版本间微调 ——
   var CONFIG = {
@@ -237,11 +238,11 @@
     return html;
   }
 
-  function escapeHTML(s) {
+  var escapeHTML = TK.escapeHTML || function (s) {
     return ('' + s).replace(/[&<>"']/g, function (m) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
     });
-  }
+  };
 
   // 拉取课程列表，渲染到 list 容器；rawBox 用于显示原始 JSON
   function loadCourses(list, rawBox) {
@@ -379,7 +380,7 @@
     container.querySelector('.cxP-refresh').addEventListener('click', function () { loadCourses(list, rawBox); });
   }
 
-  // ===== 副脚本接入主控面板：作为「副面板」内嵌（force-play v4.x 支持 subpanel 类型）=====
+  // ===== 工具库项接入主控面板：作为「副面板」内嵌（force-play v4.x 支持 subpanel 类型）=====
   // 不再自建 #cxProgressPanel 浮动窗，而是把内容渲染进主控面板内的可折叠副面板区块（通过 a.render 回调）。
   try {
     (window.__cxAddonQueue = window.__cxAddonQueue || []).push({
@@ -388,13 +389,13 @@
       render: function (container) { try { renderProgressContent(container); } catch (e) { dbg('render err', e); } }
     });
     // 自检：探测主脚本契约（force-play 暴露的 __cxRegisterAddon）。
-    // 立即缺失可能是「副脚本先于主脚本执行」所致，故延迟 3s 复核，确实缺失再告警，避免误报。
+    // 立即缺失可能是「工具库项先于主脚本执行」所致，故延迟 3s 复核，确实缺失再告警，避免误报。
     if (typeof window.__cxRegisterAddon === 'function') {
       window.__cxRegisterAddon();
     } else {
       setTimeout(function () {
         if (typeof window.__cxRegisterAddon !== 'function') {
-          try { console.warn('[progress-panel] 未检测到 chaoxing-force-play 主脚本(__cxRegisterAddon 缺失)，本副脚本不会生效；请确认主脚本已安装且与本脚本在相同的 @match 下运行。'); } catch (e) { swallow(e); }
+          try { console.warn('[progress-panel] 未检测到 chaoxing-force-play 主脚本(__cxRegisterAddon 缺失)，本工具库项不会生效；请确认主脚本已安装且与本脚本在相同的 @match 下运行。'); } catch (e) { swallow(e); }
         }
       }, 3000);
     }
