@@ -16,7 +16,7 @@
       - bootstrap/{core,main-loop}（自启动 + 主循环）
     ■ sites 站点域：{zhihuishu,zhihuishu-exam,icourse163,xuetangx,icve,renwei,unipus,ucampus,ilabx,popup-quiz}（各平台专属逻辑，含共享骨架 popup-quiz）
     ■ plugins 插件域：addons/{auto-next,zhihuishu-auto-next,keyboard-shortcuts,tamper-guard,video-ended-notify}（工具库项实现）+ registry.js（注册中心）
-    ■ presentation 呈现域：{styles,toast,panel,panel-template,panel-core,panel-ds-console,panel-controls,panel-drag,diagnostics,dashboard,commands,zhihuishu-fab}
+    ■ presentation 呈现域：{styles,toast,panel,panel-template,panel-toast-feed,panel-core,panel-ds-console,panel-controls,panel-drag,diagnostics,dashboard,commands,zhihuishu-fab}
 
   .PARAMETER SrcDir
     源目录（含 meta.js / bootstrap / 各能力域模块）。默认 ./src/chaoxing-force-play。CI 或本地可用备用路径。
@@ -97,6 +97,7 @@ $domainRel = @(
   'plugins/registry.js',                         # 插件·注册中心：renderAddons / drainAddonQueue（原 ui/addons.js）
   'presentation/panel.js',                       # 呈现·面板编排：共享状态 / 输入回填 / 显隐 / 热键 / 事件订阅
   'presentation/panel-template.js',             # 呈现·面板 HTML 模板：buildPanelHTML
+  'presentation/panel-toast-feed.js',            # 呈现·提示流反馈子系统（自 panel-core 拆分，治理红线合规）
   'presentation/panel-core.js',                 # 呈现·面板装配与事件绑定：ensurePanel（含导航 switchTab）
   'presentation/panel-ds-console.js',            # 呈现·DeepSeek 应答端控制台：bindDSConsole/_dsUpdateConsole（由 ensurePanel 运行时调用）
   'presentation/panel-controls.js',             # 呈现·控制区事件绑定：bindPanelControlEvents（入侵/礼貌模式 + 黑匣子）
