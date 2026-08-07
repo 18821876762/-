@@ -27,7 +27,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-07T11:52:05+08:00  commit: 07856ad  minify: off
+// Built: 2026-08-07T12:29:53+08:00  commit: 0fb9c66  minify: off
 
 
 (function () {
@@ -179,6 +179,21 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  /**
+   * fetch + AbortController + 超时：统一替代原始 XHR，避免请求挂起（超时后 abort）。
+   * 单一来源：quiz-vision / quiz 的离设备请求共用，避免重复轮子。
+   * @param {string} url - 请求地址
+   * @param {Object} [init] - fetch 的 init（会注入 signal）
+   * @param {number} [ms] - 超时毫秒（默认 15000）
+   * @returns {Promise<Response>}
+   */
+  function fetchWithTimeout(url, init, ms) {
+    var ac = new AbortController();
+    var id = setTimeout(function () { ac.abort(); }, ms || 15000);
+    init = init || {};
+    init.signal = ac.signal;
+    return fetch(url, init).then(function (r) { clearTimeout(id); return r; }, function (err) { clearTimeout(id); throw err; });
+  }
   // 输入焦点避让：文本框/文本域/下拉/可编辑区放行 Space（让用户输入空格），其余接管为快捷键
   /**
    * 判断元素是否为可输入文本域（input[type=text]/textarea 等），用于接管 opt-out 判定。
@@ -293,7 +308,7 @@
     window.__CX_FORCE_PLAY.toolkit = {
       dbg: dbg, swallow: swallow, safeCall: safeCall, throttle: throttle, debounce: debounce,
       escapeHTML: escapeHTML, isTextEntry: isTextEntry, isTopFrame: isTopFrame,
-      lsGet: lsGet, lsSet: lsSet, toast: toast,
+      lsGet: lsGet, lsSet: lsSet, toast: toast, fetchWithTimeout: fetchWithTimeout,
       h: h, setSafeText: setSafeText,   // 评审#2：DOM 构建/安全文本回填助手
       recentErrors: recentErrors, errorCount: errorCount   // 评审#1：只读暴露被吞错误遥测(含 stack)，供诊断/测试 inspect
     };
@@ -1714,12 +1729,7 @@
     }
     return best;
   }
-  // HTML 转义：防止动态内容经 innerHTML 注入（XSS）。与 progress-panel.escapeHTML 实现一致。
-  function escapeHTML(s) {
-    return ('' + (s == null ? '' : s)).replace(/[&<>"']/g, function (m) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-    });
-  }
+  // HTML 转义复用核心 toolkit.escapeHTML（utils.js 单一实现，避免重复轮子；含 '→&#39;）。
   function shortSrc(v) {
     var s = (v && (v.currentSrc || v.src)) || '';
     if (!s) return '(未知源)';
@@ -3076,25 +3086,29 @@
     try {
       var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_ENDPOINT) || '';
       if (!ep) return null;
+      // 协议校验：仅允许 http/https，避免题目/选项经 file:/javascript: 等非预期协议外泄
+      try {
+        var _u = new URL(ep, location.href);
+        if (_u.protocol !== 'http:' && _u.protocol !== 'https:') return null;
+      } catch (e) { return null; }
       // 同步环境无法 await；采用 fire-and-forget + 后续轮次回填（命中缓存即生效）。
       // 这里仅返回 null，交由调用方按 random 兜底；AI 异步结果写入 window.__CX_FORCE_PLAY.quizBank 供下轮命中。
       try {
         var payload = JSON.stringify({ stem: stem, options: options.map(function (o) { return (o.textContent || '').replace(/\s+/g, ' ').trim(); }) });
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', ep, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4 && xhr.status === 200) {
-            try {
-              var ans = JSON.parse(xhr.responseText);
-              if (ans && (ans.index != null || ans.answer != null)) {
-                var idx = ans.index != null ? ans.index : ans.answer;
-                try { window.__CX_FORCE_PLAY = window.__CX_FORCE_PLAY || {}; window.__CX_FORCE_PLAY.quizBank = window.__CX_FORCE_PLAY.quizBank || {}; window.__CX_FORCE_PLAY.quizBank[stem] = idx; } catch (e3) {}
-              }
-            } catch (e2) { swallow(e2); }
+        fetchWithTimeout(ep, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload
+        }, 15000).then(function (r) {
+          if (!r.ok) return null;
+          return r.json();
+        }).then(function (ans) {
+          if (ans && (ans.index != null || ans.answer != null)) {
+            var idx = ans.index != null ? ans.index : ans.answer;
+            try { window.__CX_FORCE_PLAY = window.__CX_FORCE_PLAY || {}; window.__CX_FORCE_PLAY.quizBank = window.__CX_FORCE_PLAY.quizBank || {}; window.__CX_FORCE_PLAY.quizBank[stem] = idx; } catch (e3) {}
           }
-        };
-        xhr.send(payload);
+          return null;
+        }).catch(function (e) { swallow(e); return null; });
       } catch (e) { swallow(e); }
     } catch (e) { swallow(e); }
     return null;
@@ -3341,10 +3355,17 @@
     });
   }
 
-  // 多模态 AI 端点：把截图 + 选项文本一起 POST，返回 {text, answer}（端点契约由用户配置，脚本不内置密钥）
+  // 多模态 AI 端点：把截图 + 选项文本一起 POST，返回 {text, answer}（端点契约由用户配置，脚本不内置密钥）。
+  // 安全：仅允许 http/https 端点，避免截图/题目经 file:/javascript: 等非预期协议外泄。
   function quizVisionAsk(dataUrl, qEl) {
     var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_VISION_ENDPOINT) || '';
     if (!ep) return Promise.reject(new Error('QUIZ_VISION_ENDPOINT 未配置'));
+    try {
+      var _u = new URL(ep, location.href);
+      if (_u.protocol !== 'http:' && _u.protocol !== 'https:') {
+        return Promise.reject(new Error('QUIZ_VISION_ENDPOINT 协议不被允许: ' + _u.protocol));
+      }
+    } catch (e) { return Promise.reject(new Error('QUIZ_VISION_ENDPOINT 非法: ' + e.message)); }
     var opts = [];
     try {
       if (qEl && qEl.querySelectorAll) {
@@ -3353,19 +3374,13 @@
       }
     } catch (e) { swallow(e); }
     var payload = JSON.stringify({ image: dataUrl, options: opts });
-    return new Promise(function (resolve, reject) {
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', ep, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4) {
-            if (xhr.status === 200) { try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); } }
-            else reject(new Error('vision endpoint ' + xhr.status));
-          }
-        };
-        xhr.send(payload);
-      } catch (e) { reject(e); }
+    return fetchWithTimeout(ep, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    }, 15000).then(function (r) {
+      if (!r.ok) throw new Error('vision endpoint ' + r.status);
+      return r.json();
     });
   }
 

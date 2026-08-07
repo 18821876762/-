@@ -57,10 +57,17 @@
     });
   }
 
-  // 多模态 AI 端点：把截图 + 选项文本一起 POST，返回 {text, answer}（端点契约由用户配置，脚本不内置密钥）
+  // 多模态 AI 端点：把截图 + 选项文本一起 POST，返回 {text, answer}（端点契约由用户配置，脚本不内置密钥）。
+  // 安全：仅允许 http/https 端点，避免截图/题目经 file:/javascript: 等非预期协议外泄。
   function quizVisionAsk(dataUrl, qEl) {
     var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_VISION_ENDPOINT) || '';
     if (!ep) return Promise.reject(new Error('QUIZ_VISION_ENDPOINT 未配置'));
+    try {
+      var _u = new URL(ep, location.href);
+      if (_u.protocol !== 'http:' && _u.protocol !== 'https:') {
+        return Promise.reject(new Error('QUIZ_VISION_ENDPOINT 协议不被允许: ' + _u.protocol));
+      }
+    } catch (e) { return Promise.reject(new Error('QUIZ_VISION_ENDPOINT 非法: ' + e.message)); }
     var opts = [];
     try {
       if (qEl && qEl.querySelectorAll) {
@@ -69,19 +76,13 @@
       }
     } catch (e) { swallow(e); }
     var payload = JSON.stringify({ image: dataUrl, options: opts });
-    return new Promise(function (resolve, reject) {
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', ep, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4) {
-            if (xhr.status === 200) { try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); } }
-            else reject(new Error('vision endpoint ' + xhr.status));
-          }
-        };
-        xhr.send(payload);
-      } catch (e) { reject(e); }
+    return fetchWithTimeout(ep, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    }, 15000).then(function (r) {
+      if (!r.ok) throw new Error('vision endpoint ' + r.status);
+      return r.json();
     });
   }
 

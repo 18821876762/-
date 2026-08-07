@@ -66,25 +66,29 @@
     try {
       var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_ENDPOINT) || '';
       if (!ep) return null;
+      // 协议校验：仅允许 http/https，避免题目/选项经 file:/javascript: 等非预期协议外泄
+      try {
+        var _u = new URL(ep, location.href);
+        if (_u.protocol !== 'http:' && _u.protocol !== 'https:') return null;
+      } catch (e) { return null; }
       // 同步环境无法 await；采用 fire-and-forget + 后续轮次回填（命中缓存即生效）。
       // 这里仅返回 null，交由调用方按 random 兜底；AI 异步结果写入 window.__CX_FORCE_PLAY.quizBank 供下轮命中。
       try {
         var payload = JSON.stringify({ stem: stem, options: options.map(function (o) { return (o.textContent || '').replace(/\s+/g, ' ').trim(); }) });
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', ep, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4 && xhr.status === 200) {
-            try {
-              var ans = JSON.parse(xhr.responseText);
-              if (ans && (ans.index != null || ans.answer != null)) {
-                var idx = ans.index != null ? ans.index : ans.answer;
-                try { window.__CX_FORCE_PLAY = window.__CX_FORCE_PLAY || {}; window.__CX_FORCE_PLAY.quizBank = window.__CX_FORCE_PLAY.quizBank || {}; window.__CX_FORCE_PLAY.quizBank[stem] = idx; } catch (e3) {}
-              }
-            } catch (e2) { swallow(e2); }
+        fetchWithTimeout(ep, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload
+        }, 15000).then(function (r) {
+          if (!r.ok) return null;
+          return r.json();
+        }).then(function (ans) {
+          if (ans && (ans.index != null || ans.answer != null)) {
+            var idx = ans.index != null ? ans.index : ans.answer;
+            try { window.__CX_FORCE_PLAY = window.__CX_FORCE_PLAY || {}; window.__CX_FORCE_PLAY.quizBank = window.__CX_FORCE_PLAY.quizBank || {}; window.__CX_FORCE_PLAY.quizBank[stem] = idx; } catch (e3) {}
           }
-        };
-        xhr.send(payload);
+          return null;
+        }).catch(function (e) { swallow(e); return null; });
       } catch (e) { swallow(e); }
     } catch (e) { swallow(e); }
     return null;

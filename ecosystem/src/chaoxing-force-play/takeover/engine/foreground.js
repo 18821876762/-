@@ -34,12 +34,7 @@
     }
     return best;
   }
-  // HTML 转义：防止动态内容经 innerHTML 注入（XSS）。与 progress-panel.escapeHTML 实现一致。
-  function escapeHTML(s) {
-    return ('' + (s == null ? '' : s)).replace(/[&<>"']/g, function (m) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-    });
-  }
+  // HTML 转义复用核心 toolkit.escapeHTML（utils.js 单一实现，避免重复轮子；含 '→&#39;）。
   function shortSrc(v) {
     var s = (v && (v.currentSrc || v.src)) || '';
     if (!s) return '(未知源)';

@@ -124,6 +124,21 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  /**
+   * fetch + AbortController + 超时：统一替代原始 XHR，避免请求挂起（超时后 abort）。
+   * 单一来源：quiz-vision / quiz 的离设备请求共用，避免重复轮子。
+   * @param {string} url - 请求地址
+   * @param {Object} [init] - fetch 的 init（会注入 signal）
+   * @param {number} [ms] - 超时毫秒（默认 15000）
+   * @returns {Promise<Response>}
+   */
+  function fetchWithTimeout(url, init, ms) {
+    var ac = new AbortController();
+    var id = setTimeout(function () { ac.abort(); }, ms || 15000);
+    init = init || {};
+    init.signal = ac.signal;
+    return fetch(url, init).then(function (r) { clearTimeout(id); return r; }, function (err) { clearTimeout(id); throw err; });
+  }
   // 输入焦点避让：文本框/文本域/下拉/可编辑区放行 Space（让用户输入空格），其余接管为快捷键
   /**
    * 判断元素是否为可输入文本域（input[type=text]/textarea 等），用于接管 opt-out 判定。
@@ -238,7 +253,7 @@
     window.__CX_FORCE_PLAY.toolkit = {
       dbg: dbg, swallow: swallow, safeCall: safeCall, throttle: throttle, debounce: debounce,
       escapeHTML: escapeHTML, isTextEntry: isTextEntry, isTopFrame: isTopFrame,
-      lsGet: lsGet, lsSet: lsSet, toast: toast,
+      lsGet: lsGet, lsSet: lsSet, toast: toast, fetchWithTimeout: fetchWithTimeout,
       h: h, setSafeText: setSafeText,   // 评审#2：DOM 构建/安全文本回填助手
       recentErrors: recentErrors, errorCount: errorCount   // 评审#1：只读暴露被吞错误遥测(含 stack)，供诊断/测试 inspect
     };
