@@ -40,7 +40,8 @@
   }
   function _quizOptions(qEl, sels) {
     var out = []; if (!qEl || !qEl.querySelectorAll) return out;
-    for (var i = 0; i < sels.length; i++) { try { var ns = qEl.querySelectorAll(sels[i]); for (var j = 0; j < ns.length; j++) out.push(ns[j]); } catch (e) { swallow(e); } }
+    var seen = [];   // 按引用去重：多 selector 并集命中同一节点时避免重复入数组（否则 idx<opts.length 判定与随机分布被污染）
+    for (var i = 0; i < sels.length; i++) { try { var ns = qEl.querySelectorAll(sels[i]); for (var j = 0; j < ns.length; j++) { if (seen.indexOf(ns[j]) < 0) { seen.push(ns[j]); out.push(ns[j]); } } } catch (e) { swallow(e); } }
     return out;
   }
 
@@ -103,14 +104,25 @@
   }
   function _quizResolveAnswer(stem, options) {
     var src = _quizSource();
-    if (src === 'bank') {
+    var answers = [];
+    // 本地题库：bank/ai 模式下作为高权重候选（本地缓存优先；random 模式尊重用户显式选择，不交叉查库避免"随机意图被题库覆盖"）
+    if (src === 'bank' || src === 'ai') {
       var b = _quizBankLookup(stem);
-      if (b != null) return (typeof b === 'number') ? b : parseInt(b, 10);
-    } else if (src === 'ai') {
-      var a = _quizAskAI(stem, options);
-      if (a != null) return a;
+      if (b != null) {
+        var bi = (typeof b === 'number') ? b : parseInt(b, 10);
+        if (!isNaN(bi)) answers.push({ idx: bi, score: 1.0, source: 'bank' });
+      }
     }
-    return null; // null → 调用方 random 兜底
+    // AI 接口：同步环境恒返回 null（异步写库，下轮命中）；非空时作为 ai 权重候选参与融合
+    if (src === 'ai') {
+      var a = _quizAskAI(stem, options);
+      if (a != null && !isNaN(Number(a))) answers.push({ idx: Number(a), score: 0.7, source: 'ai' });
+    }
+    if (!answers.length) return null;   // 无候选 → 调用方 random 兜底
+    // 加权融合 → { index, confidence, sources }；多来源同向累加、异向按占比降置信度
+    var m = mergeAnswers(answers);
+    if (!m) return null;
+    return { idx: m.index, confidence: m.confidence, source: m.sources.join('+') };
   }
 
   function _quizClick(optEls, idx) {
@@ -208,6 +220,7 @@
       var qs = _pqQueryAll(root, sels.questionSels);
       var scanned = qs.length;
       var src = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random';  // 提到循环外，避免全部跳过时 source 为 undefined
+      var _confAcc = 0, _confN = 0, _srcMap = {};   // 统计：平均置信度 + 实际命中来源集合（融合后可见，非仅配置值）
       for (var i = 0; i < qs.length; i++) {
         var qEl = qs[i];
         var fp = _quizFingerprint(qEl);
@@ -215,13 +228,15 @@
         var stem = _quizText(qEl, sels.stemSels);
         var opts = _quizOptions(qEl, sels.optionSels);
         if (!opts.length) continue;
-        var idx = _quizResolveAnswer(stem, opts);  // 文本路径(random/bank/ai)同步求答案
-        if (idx != null && idx >= 0 && idx < opts.length) {
-          _quizClick(opts, idx);
+        var idxObj = _quizResolveAnswer(stem, opts);  // 文本路径(random/bank/ai)同步求答案（融合后含 confidence/source）
+        if (idxObj && idxObj.idx != null && idxObj.idx >= 0 && idxObj.idx < opts.length) {
+          _quizClick(opts, idxObj.idx);
           _quizSubmit(qEl, sels.submitSels);
           _quizHandled[fp] = true;
           answered++;
-          try { Store.emit('ui:toast', '已作答 1 题（源=' + src + '）'); } catch (e) { swallow(e); }
+          _confAcc += (idxObj.confidence || 0); _confN++;
+          if (idxObj.source) _srcMap[idxObj.source] = true;
+          try { Store.emit('ui:toast', '已作答 1 题（源=' + idxObj.source + ' 置信度=' + Math.round((idxObj.confidence || 0) * 100) + '%）'); } catch (e) { swallow(e); }
           continue;
         }
         // 文本路径无果 + 视觉识别启用 → 截图还原后作答（异步；先占坑防重复触发截图）
@@ -237,6 +252,7 @@
         _quizSubmit(qEl, sels.submitSels);
         _quizHandled[fp] = true;
         answered++;
+        _srcMap['random'] = true;   // 随机兜底计入来源集合（置信度不累计，视为低可信）
         try { Store.emit('ui:toast', '已随机作答 1 题（无答案源）'); } catch (e) { swallow(e); }
       }
       // —— 运行/结束可观测 ——
@@ -250,7 +266,10 @@
         try {
           window.__CX_FORCE_PLAY.quizStats = {
             scanned: scanned, answered: answered, done: done, remaining: remaining,
-            doneAll: remaining === 0, source: src, ts: Date.now()
+            doneAll: remaining === 0, source: src,
+            answerSource: Object.keys(_srcMap).join('+') || 'random',   // 实际命中来源（融合后可见：bank/ai/random 等）
+            confidence: _confN ? (_confAcc / _confN) : 0,                // 已作答项平均置信度（0~1）
+            ts: Date.now()
           };
         } catch (e) {}
         if (!_quizDetectedNotified) { _quizDetectedNotified = true; try { Store.emit('ui:toast', '自动答题已启动：检测到 ' + scanned + ' 道题（源=' + src + '）'); } catch (e) {} }

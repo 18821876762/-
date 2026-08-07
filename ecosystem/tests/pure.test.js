@@ -24,6 +24,7 @@ const FILES = {
   urlParam: path.join(SRC, 'takeover', 'foundation', 'utils', 'url.js'),
   collectAttachmentIds: path.join(SRC, 'takeover', 'engine', 'targeting.js'),
   clampCfg: path.join(SRC, 'takeover', 'foundation', 'storage', 'storage.js'),
+  mergeAnswers: path.join(SRC, 'takeover', 'engine', 'quiz-merge.js'),
 };
 
 let failures = 0, count = 0;
@@ -55,6 +56,7 @@ const fg = load(FILES.shortSrc);
 const url = load(FILES.urlParam);
 const tgt = load(FILES.collectAttachmentIds);
 const store = load(FILES.clampCfg);
+const mrg = load(FILES.mergeAnswers);
 
 console.log('escapeHTML:');
 const eh = utils.escapeHTML;
@@ -130,6 +132,30 @@ assert('PANEL_W clamped to 220 (lo bound)', C.PANEL_W === 220, 'got ' + C.PANEL_
 assert('INTRUSION_MODE invalid -> auto', C.INTRUSION_MODE === 'auto', 'got ' + C.INTRUSION_MODE);
 assert('POLITE_MODE coerced to bool', C.POLITE_MODE === false, 'got ' + JSON.stringify(C.POLITE_MODE));
 assert('DEBUG coerced to bool', store.DEBUG === true, 'got ' + JSON.stringify(store.DEBUG));
+
+console.log('mergeAnswers / decisionFor:');
+const mergeAnswers = mrg.mergeAnswers;
+const decisionFor = mrg.decisionFor;
+assert('empty array -> null', mergeAnswers([]) === null, 'got ' + JSON.stringify(mergeAnswers([])));
+assert('null arg -> null', mergeAnswers(null) === null, 'got ' + JSON.stringify(mergeAnswers(null)));
+const ma = mergeAnswers([{ idx: 0, source: 'bank' }]);
+assert('single bank -> idx 0, conf 1.0', ma && ma.index === 0 && Math.abs(ma.confidence - 1.0) < 1e-9 && ma.sources.join() === 'bank', JSON.stringify(ma));
+const mb = mergeAnswers([{ idx: 2, source: 'ai' }]);
+assert('single ai -> idx 2, conf 0.7', mb && mb.index === 2 && Math.abs(mb.confidence - 0.7) < 1e-9, JSON.stringify(mb));
+const mc = mergeAnswers([{ idx: 1, source: 'random' }]);
+assert('single random -> conf 0.3', mc && Math.abs(mc.confidence - 0.3) < 1e-9, JSON.stringify(mc));
+const md = mergeAnswers([{ idx: 0, source: 'bank' }, { idx: 0, source: 'ai' }]);
+assert('bank+ai agree -> conf 1.0 (unanimous), idx 0', md && md.index === 0 && Math.abs(md.confidence - 1.0) < 1e-9, JSON.stringify(md));
+const me = mergeAnswers([{ idx: 0, source: 'bank' }, { idx: 1, source: 'ai' }]);
+// agg: bank 1.0*1.0=1.0 ; ai 0.7*0.7=0.49 → conf = 1.0/(1.0+0.49)=0.6711..., idx 0
+assert('bank vs ai disagree -> idx 0, conf≈0.671', me && me.index === 0 && Math.abs(me.confidence - (1.0 / 1.49)) < 1e-9, JSON.stringify(me));
+const mf = mergeAnswers([{ idx: '2', source: 'bank' }]);
+assert('string idx normalized to number', mf && mf.index === 2 && typeof mf.index === 'number', JSON.stringify(mf));
+assert('decisionFor 1.0 -> auto', decisionFor(1.0) === 'auto', decisionFor(1.0));
+assert('decisionFor 0.7 -> confirm', decisionFor(0.7) === 'confirm', decisionFor(0.7));
+assert('decisionFor 0.5 -> review', decisionFor(0.5) === 'review', decisionFor(0.5));
+assert('decisionFor NaN -> review', decisionFor(NaN) === 'review', decisionFor(NaN));
+assert('decisionFor custom thresholds', decisionFor(0.8, 0.9, 0.7) === 'confirm' && decisionFor(0.95, 0.9, 0.7) === 'auto', decisionFor(0.8, 0.9, 0.7));
 
 console.log('\n' + (failures === 0 ? 'ALL PASS (' + count + ' assertions)' : (failures + '/' + count + ' ASSERTION(S) FAILED')));
 process.exit(failures === 0 ? 0 : 1);

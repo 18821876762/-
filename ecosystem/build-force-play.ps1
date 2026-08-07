@@ -82,6 +82,7 @@ $domainRel = @(
   'sites/icourse163.js',                         # 站点·中国大学MOOC：弹窗随机作答，仅 icourse163 激活
   'sites/xuetangx.js',                           # 站点·学堂在线：弹窗随机作答，仅 xuetangx 激活
   'sites/icve.js',                               # 站点·智慧职教：弹窗随机作答，仅 icve 激活
+  'takeover/engine/quiz-merge.js',               # 接管·站点无关：答案决策融合 + 置信度（纯函数模块，可单测）
   'takeover/engine/quiz.js',                     # 接管·站点无关：真答题引擎（抓题+答案源 random/bank/ai 可插拔），答题平台复用
   'takeover/engine/quiz-vision.js',              # 接管·站点无关：抗题目文本混淆·图片化识别层，quiz 引擎在 QUIZ_VISION_ENABLED 时调用
   'takeover/engine/vision-deepseek-web.js',      # 接管·站点无关：DeepSeek 网页版视觉后端，QUIZ_VISION_OCR='deepseek-web' 时由 quiz-vision 调用

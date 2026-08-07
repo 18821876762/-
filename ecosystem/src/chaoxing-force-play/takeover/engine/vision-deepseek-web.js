@@ -190,7 +190,7 @@
     var _dsSetLock = function () { try { _dsNs().dsRoleInited = true; } catch (e) {} };
     if (!_dsLockOwner()) {
       _dsSetLock();
-      if (typeof location !== 'undefined' && location.host && new RegExp(DEEPSEEK.host + '$').test(location.host)) {
+      if (typeof location !== 'undefined' && location.host && (location.host === DEEPSEEK.host || location.host.endsWith('.' + DEEPSEEK.host))) {
         _dsBroadcastState();
         _dsInitResponder();
       } else {

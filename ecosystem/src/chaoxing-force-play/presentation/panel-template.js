@@ -131,6 +131,7 @@
             '<div style="display:flex;justify-content:space-between;"><span>已作答</span><b id="__cxQuizDone" class="cx-mono">—</b></div>' +
             '<div style="display:flex;justify-content:space-between;"><span>待作答</span><b id="__cxQuizRemain" class="cx-mono">—</b></div>' +
             '<div style="display:flex;justify-content:space-between;"><span>答案来源</span><b id="__cxQuizSrc" class="cx-mono">—</b></div>' +
+            '<div style="display:flex;justify-content:space-between;"><span>平均置信度</span><b id="__cxQuizConf" class="cx-mono">—</b></div>' +
           '</div>' +
           '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:4px;padding-top:8px;">' +
             '<div style="font-size:11px;color:' + STYLES.T.text2 + ';margin-bottom:4px;">答案来源（切到真答题需配置题库/接口）</div>' +

@@ -78,7 +78,7 @@
       var p = _cxPanel; if (!p) return;
       var total = p.querySelector('#__cxQuizTotal'), done = p.querySelector('#__cxQuizDone'),
           remain = p.querySelector('#__cxQuizRemain'), src = p.querySelector('#__cxQuizSrc'),
-          row = p.querySelector('#__cxQuizStatRow');
+          conf = p.querySelector('#__cxQuizConf'), row = p.querySelector('#__cxQuizStatRow');
       if (!total || !done || !remain || !src) return;
       // 弹窗作答计数（popupQuizStats.popups）始终刷新，与 quiz 进度互不依赖
       var pc = p.querySelector('#__cxPopupCount');
@@ -93,14 +93,17 @@
         total.textContent = done.textContent = remain.textContent = '—';
         var _s = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_source') : null;
         src.textContent = (_s === 'bank' || _s === 'ai') ? _s : 'random';
+        if (conf) conf.textContent = '—';
         if (row) row.style.opacity = on ? '1' : '.45';
         return;
       }
       total.textContent = (typeof st.scanned === 'number') ? st.scanned : '—';
       done.textContent = (typeof st.answered === 'number') ? st.answered : '—';
       remain.textContent = (typeof st.remaining === 'number') ? st.remaining : '—';
+      // 实际命中来源（融合后可见：bank/ai/random 等），回退到配置值
       var _ss = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_source') : null;
-      src.textContent = (_ss === 'bank' || _ss === 'ai') ? _ss : 'random';
+      src.textContent = (st.answerSource) ? st.answerSource : ((_ss === 'bank' || _ss === 'ai') ? _ss : 'random');
+      if (conf) conf.textContent = (typeof st.confidence === 'number') ? (Math.round(st.confidence * 100) + '%') : '—';
       if (row) row.style.opacity = on ? '1' : '.45';
     } catch (e) { swallow(e); }
   }
