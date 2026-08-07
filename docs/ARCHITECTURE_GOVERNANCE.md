@@ -125,3 +125,43 @@ cd ecosystem && powershell -File check-module-size.ps1
 | 2026-08-05 | rev2 多平台扩展：学银在线(并入 `chaoxing`)+中国大学MOOC+学堂在线+智慧职教(续播+弹窗随机作答) + 人卫/Unipus/U校园/实验空间(续播+真答题)。新增 `biz/popup-quiz.js`(站点无关弹窗随机作答共享骨架)、`biz/quiz.js`(真答题引擎：抓题+答案源 random/bank/ai 可插拔，默认 random 保不卡、配置题库/AI 变真答题)；各平台轻量模块仅定义选择器映射+调用共享引擎；`detectSite`/`SITES`/`main-loop` 按站点隔离调度；`sim-mooc`/`sim-quiz` 新增回归。版本升 4.12 |
 | 2026-08-05 | rev3 抗题目文本混淆·视觉识别层：新增 `biz/quiz-vision.js`(题目节点截图→本地Tesseract OCR/多模态AI端点还原肉眼所见文本·答案，对抗同形字/字体映射/Canvas题目)；`quiz.js` 在 `QUIZ_VISION_ENABLED` 时走异步视觉路径(还原→查bank/端点answer→回填+提交，失败随机兜底)；`html2canvas`/`tesseract.js` 按需懒加载、默认关、零运行时依赖；构建清单登记、版本升 4.13；`sim-quiz-vision`(14/14) 新增回归 |
 | 2026-08-05 | v4.14 DeepSeek 网页版视觉后端·登录探测：新增 `biz/vision-deepseek-web.js`(`QUIZ_VISION_OCR='deepseek-web'` 时由 quiz-vision 调用)；`meta.js` 加 `@match https://chat.deepseek.com/*` 使脚本在 DeepSeek 页内承载 responder；跨标签页 BroadcastChannel 广播登录态，课程页左下角渲染状态徽标(未连接/未登录=红"不可用"，已登录=绿"可用")；未登录时真答题直接随机兜底；responder DOM 驱动(输入框/发送/回复/生成中/头像/登录按钮)选择器待真实站点校准(标 TODO)，先落地登录探测+状态展示；`sim-quiz-vision`(+7=21/21) 回归 |
+| 2026-08-07 | 新增 §10「提交/上传前门禁自检清单」（汇总 `.github/workflows/ci.yml` 的 6 道门禁与本地等价命令）；修复模块体积门：`panel-core.js` 381>350 拆至 `presentation/panel-toast-feed.js`（326/61），CI 转绿 |
+
+---
+
+## 10. 提交/上传前门禁自检清单（对应 `.github/workflows/ci.yml`）
+
+> **原则**：CI 在每次 `push`/`PR` 到 `master` 时自动跑下列 6 道门禁。**全部必须在 `git push` 之前于本地跑通**，否则远程 CI 红灯。
+> **澄清**：CI 失败**不阻止 push 本身**（代码已上 GitHub），但会让门禁不通过、阻断依赖 CI 的下游（如 Artifact 发布/Release）。另：纯网络层 push 失败（无法连 `github.com:443`）与门禁无关，属环境问题。
+> **范围说明**：源模块是被拼接进同一 IIFE 的碎片，无法单独 `--check`/lint；故语法与静态分析门禁针对**完整构建产物** `ecosystem/chaoxing-force-play.user.js`。
+
+### 10.1 六道门禁与本地等价命令
+
+| # | CI 步骤 | 本地命令（在 `ecosystem/` 下） | 失败条件 |
+|---|---|---|---|
+| 1 | Build user script | `pwsh -File build-force-play.ps1` | 退出码 ≠ 0 |
+| 2 | Syntax check（产物） | `node --check chaoxing-force-play.user.js` | 退出码 ≠ 0 |
+| 3 | ESLint（产物，error 级） | `node node_modules/eslint/bin/eslint.js chaoxing-force-play.user.js` | error 级规则触发（exit≠0）；warn 级（已知 `no-redeclare` 技术债）不阻断 |
+| 4 | **Module size gate** | `pwsh -File check-module-size.ps1` | 非白名单文件 >350 行（RED）→ exit 1；300–350 标 YELLOW 仅提示 |
+| 5 | Built artifact size gate | `node tools/check-build-size.js` | 产物整体超上限 → exit 1 |
+| 6 | Pure-function unit tests | `node tests/pure.test.js` | 单测不通过 → exit 1 |
+
+- 门禁 #3 需先 `npm install`（安装 eslint 工具链）。
+- 门禁 #4 白名单仅 `takeover/dom/dom.js`（409 行，WHT 豁免，**不得新增**）；阈值见 §2（目标 300 / 硬上限 350）。
+- 门禁 #1–#4 已在本轮（2026-08-07）本地实跑通过（build exit 0 / size gate PASS / panel-core 326 YLW / panel-toast-feed 61 OK）。
+
+### 10.2 本地一键自检流（push 前）
+
+```powershell
+cd ecosystem
+pwsh -File build-force-play.ps1                              # 1 构建（exit 0）
+node --check chaoxing-force-play.user.js                    # 2 产物语法
+npm install --no-audit --no-fund                            # 3a 装 lint 工具链（仅需一次）
+node node_modules/eslint/bin/eslint.js chaoxing-force-play.user.js   # 3b ESLint（error 级 0）
+pwsh -File check-module-size.ps1                            # 4 模块体积门
+node tools/check-build-size.js                              # 5 产物体积门
+node tests/pure.test.js                                     # 6 纯函数单测
+# 上述全绿后，再 git push origin master
+```
+
+> 任一红灯先本地修（如 #4 超限按 §3 拆分流程处理），不要带门禁失败直接 push——否则远程 CI 红灯需回滚或补提修复提交。
