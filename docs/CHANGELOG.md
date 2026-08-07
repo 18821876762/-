@@ -551,5 +551,6 @@
 - **结论**：真实 bug 已修 / 误报核销 / 设计取舍暂缓 三档分流，无技术阻断。
 - **已修**：`routeBySite` 接线暴露、renwei `@match` 补全、`urlParam` 单键名字符串兼容、键盘暂停改用 `v.__cxUserPaused` 契约、zhihuishu 选项正则词边界（防 `option`/`secure` 误判）、构建 Minify 括号优先级、`h()` `on` 前缀仅绑真实事件、`isVisible`/`handledUrls`/`walkVideos` 快照、`_ovForegroundGate` 注释。
 - **误报核销**（单 IIFE 误判 / 双重定时器）：#6 / #7 / #13 / #12。
-- **设计取舍暂缓**：#2 `edu.cn→chaoxing` 默认、#9 `popup-quiz` 删前不校验、#14 `video-ended` 静音恢复、`isTopFrame` 跨域 `catch→true`。
+- **已落地**：#2 `edu.cn→chaoxing`（site-router.js:27 已实现 `edu.cn→chaoxing` 路由、meta.js:8 `@match *.edu.cn`，非待决；评测稿原「设计取舍」标记作废）。
+- **设计取舍暂缓**：#9 `popup-quiz` 删前不校验、#14 `video-ended` 静音恢复、`isTopFrame` 跨域 `catch→true`。
 - **注释精简**：各修复源码注释收为单行意图，详细核验留临时文档。构建通过、lint 0、sim 全 PASS。
