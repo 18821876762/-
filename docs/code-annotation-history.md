@@ -15,7 +15,7 @@
 | `命令面板（原 v4.7）` | `/` 唤起命令下拉、↑↓/Tab/Enter/Esc、参数解析 | `force-play v4.7`（命令面板） |
 | `运维仪表盘（原 v4.8）` | 实时 CPU/内存/网速监控小面板 | `force-play v4.8`（运维仪表盘） |
 | `命令收藏夹（原 v4.8）` | 星标系统，持久化到 localStorage | `force-play v4.8`（星标收藏） |
-| `副脚本注册中心（原 v4.0 主脚本架构）` | 主/副脚本架构，`__cxAddonQueue`/`__cxRegisterAddon` | `force-play v4.0` |
+| `工具库项注册中心（原 v4.0 主脚本架构）` | 主/工具库项架构，`__cxAddonQueue`/`__cxRegisterAddon` | `force-play v4.0` |
 | `面板设置持久化（原 v4.1）` | 刷新后保持 AUTO_STOP_MIN/RESUME_AFTER_MIN/RESCAN_INTERVAL/END_RELEASE_SEC/DEBUG | `force-play v4.1` |
 | `近尾 ended 监听（原 v4.7.replay）` | `nearEndEndedGuard` 只装一次 | `force-play v4.7.replay` |
 | `主控面板命名（原 v4.0/v4.4 主从式）` | 顶部导航 + 分区块、`switchTab` 持久化 | `force-play v4.0 / v4.4` |

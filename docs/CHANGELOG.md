@@ -37,17 +37,24 @@
 | v3.30 | 面板计时修复 + 进度显示 | 修复面板"已看"恒为 0：`__cxWatchMs` 原先只在 `AUTO_STOP_MIN>0` 时才累计（默认 0 → 计时器从不运行）。改为 `autoStopTick` 每轮始终累计观看时长（自动暂停判定移入 tick 内部按开关生效），并用真实墙钟差值 `Date.now()` 代替固定 `RESCAN_INTERVAL` 步长（后台节流下不再少算，>60s 大跳视为休眠唤醒丢弃）。状态区与诊断文本新增视频播放进度 `currentTime/duration`（新 `fmtTime` m:ss / h:mm:ss） | 用户反馈：面板播放时间一直为 0 |
 | v3.31 | 用户暂停锁加固 | 用户诊断实锤矛盾态：`状态: playing` 而 `UserPaused=true`——脚本只拦"暂停"从不拦"播放"，`userPause` 停一次后平台播放器自调 `video.play()` 即拉回播放，暂停锁形同虚设。三重修复：① `userPause` 在实例上装"播放闸门"（defineProperty 遮蔽 `play`，暂停期一律拒绝并返回 resolved Promise；`userResume` 时 `delete v.play` 还原）；② document 捕获级 `play` 监听对 `__cxUserPaused` 视频立即原生 pause 压回（防平台绕过闸门直接触发播放）；③ overrideVideo 的用户暂停分支加每轮看门狗：发现"暂停锁挂着却在播"立即压回。新增 `NATIVE_PLAY` 原型备份 | 用户反馈：诊断信息显示 playing+UserPaused 并存 |
 | v3.32 | 进度到底关闭续播 | 新增 `END_RELEASE_SEC`（默认 15s，面板滑块可调，0=禁用）：视频距结尾 ≤ 该秒数且未真正 ended 时，脚本主动 `releaseVideo` 撤销强制续播接管、交还平台原生 pause，让用户能自然暂停/结束（应对"视频不必一次性看完"——接近看完时停手，避免 pauseNoop 吞掉原生暂停导致无法停）。每轮到底仍持续释放 + 提前返回，绕过 F-B1 重新接管逻辑；用户往回拖（离开到底区间）则自动恢复续播；真正 ended 仍由 ended 锁分支防重播。新增 `nearEnd()` 判定，诊断 CONFIG 行与标志行(`EndRel=`)同步显示 | 用户建议：进度到底时关闭续播 |
-| v3.33 | 面板滑块数值显示修复 | 修复拖动摇杆（轮询间隔/自动停止/自动恢复/进度到底释放）时旁边 `<b>` 数值文字不跟随变化：原 `refreshPanelState` 只刷新状态/诊断区，数值标签仅靠 `syncPanelInputs` 在面板创建时回填一次。新增 `refreshPanelLabels()` 在 `refreshPanelState` 内调用，拖动即时刷新全部滑块数值；四个滑块统一受益 | 用户反馈：拖动面板改变数据时显示不变 |\n| v4.0 | 主/副脚本架构重组 | 升格为**主脚本**：面板更名「学习通·主控面板」，新增副脚本注册中心（`window.__cxAddonQueue` 队列 + `window.__cxRegisterAddon()`，加载顺序无关），面板新增「副脚本」区块统一渲染各副脚本的开关/按钮（toggle/button + note）。副脚本：auto-next(3.0) 总开关、progress-panel(3.0) 显隐、deceive-api(2.0) SPOOF 开关（刷新生效）。弃置并删除：no-pause、visibility-resume（功能被主脚本覆盖）、allinone（既有弃置分叉）；browser-media-collector 因与学习通无关、属其他用途，单独保留（不废弃、不接入面板） | 用户要求：面板脚本为主、其余适配面板、不能适配/过时全弃置 |
-| v4.1 | 面板设置持久化 | 控制面板改动（自动停止/自动恢复/轮询间隔/进度到底释放/调试日志）写入 `localStorage.cx_panel_cfg`，脚本启动即载入，刷新网页后保持不变；`loadPanelCfg()` 在轮询定时器启动前执行使间隔立即生效，越界值 clamp 回控件范围。精简模式与副脚本开关此前已各自持久化 | 用户需求：刷新后控制数据不变 |
-| v4.2 | 副面板（subpanel）架构能力 | 主脚本 addon 机制新增 `subpanel` 类型：`renderAddons` 拆出「副面板」容器（`#__cxSubPanels`），副脚本通过 `render(container)` 把内容直接嵌进主控面板的可折叠副面板区（标题栏点击展开/折叠，默认展开）；主面板模板新增「副面板（内嵌显示，可折叠）」标题。`chaoxing-progress-panel` 由 v3.1 的**独立浮动窗**改为 v3.2 **内嵌副面板**：移除 `#cxProgressPanel` 浮动窗与拖拽/最小化/SPA 重建逻辑，`renderProgressContent(container)` 把课程列表/章节/刷新/原始JSON 渲染进主控面板；顶层 + realm 守卫保留（防 iframe/重复注入注册多个副面板）；原「副脚本」区的显示/隐藏开关一并移除。清理 `positionPanel`（独立浮动窗已不存在，无需避让）。刷新网页后副面板内容随主控面板重建（需重新点「刷新课程列表」拉取） | 用户需求：控制面板添加副面板 |
+| v3.33 | 面板滑块数值显示修复 | 修复拖动摇杆（轮询间隔/自动停止/自动恢复/进度到底释放）时旁边 `<b>` 数值文字不跟随变化：原 `refreshPanelState` 只刷新状态/诊断区，数值标签仅靠 `syncPanelInputs` 在面板创建时回填一次。新增 `refreshPanelLabels()` 在 `refreshPanelState` 内调用，拖动即时刷新全部滑块数值；四个滑块统一受益 | 用户反馈：拖动面板改变数据时显示不变 |\n| v4.0 | 主/工具库项架构重组 | 升格为**主脚本**：面板更名「学习通·主控面板」，新增工具库项注册中心（`window.__cxAddonQueue` 队列 + `window.__cxRegisterAddon()`，加载顺序无关），面板新增「工具库项」区块统一渲染各工具库项的开关/按钮（toggle/button + note）。工具库项：auto-next(3.0) 总开关、progress-panel(3.0) 显隐、deceive-api(2.0) SPOOF 开关（刷新生效）。弃置并删除：no-pause、visibility-resume（功能被主脚本覆盖）、allinone（既有弃置分叉）；browser-media-collector 因与学习通无关、属其他用途，单独保留（不废弃、不接入面板） | 用户要求：面板脚本为主、其余适配面板、不能适配/过时全弃置 |
+| v4.1 | 面板设置持久化 | 控制面板改动（自动停止/自动恢复/轮询间隔/进度到底释放/调试日志）写入 `localStorage.cx_panel_cfg`，脚本启动即载入，刷新网页后保持不变；`loadPanelCfg()` 在轮询定时器启动前执行使间隔立即生效，越界值 clamp 回控件范围。精简模式与工具库项开关此前已各自持久化 | 用户需求：刷新后控制数据不变 |
+| v4.2 | 副面板（subpanel）架构能力 | 主脚本 addon 机制新增 `subpanel` 类型：`renderAddons` 拆出「副面板」容器（`#__cxSubPanels`），工具库项通过 `render(container)` 把内容直接嵌进主控面板的可折叠副面板区（标题栏点击展开/折叠，默认展开）；主面板模板新增「副面板（内嵌显示，可折叠）」标题。`chaoxing-progress-panel` 由 v3.1 的**独立浮动窗**改为 v3.2 **内嵌副面板**：移除 `#cxProgressPanel` 浮动窗与拖拽/最小化/SPA 重建逻辑，`renderProgressContent(container)` 把课程列表/章节/刷新/原始JSON 渲染进主控面板；顶层 + realm 守卫保留（防 iframe/重复注入注册多个副面板）；原「工具库项」区的显示/隐藏开关一并移除。清理 `positionPanel`（独立浮动窗已不存在，无需避让）。刷新网页后副面板内容随主控面板重建（需重新点「刷新课程列表」拉取） | 用户需求：控制面板添加副面板 |
 | v4.3 | 可控循环播放 | 新增 `CONFIG.LOOP_PLAY` 开关（面板「循环播放（播完从头重播）」复选框，localStorage 持久化，默认关闭）。开启后：① 正常续播与每轮重扫的 `v.loop` 改为受 `LOOP_PLAY` 控制（开即 `loop=true`，关则钳回 `false`）；② `ended` 分支不再锁死防重播，改为清空 `__cxEndedLock`、置 `loop=true`、回到开头重播（浏览器 loop 与手动复位双保险，pause 仍被 no-op 拦截）；③ `nearEnd` 进度到底分支在循环模式下不提前释放，让视频真正 ended 后重播；④ `isRebuildFinished` 重建去重分支在循环模式下不锁死（允许重播）；新增 `applyLoopAll()` 供开关即时生效。关闭时自动恢复原有防重播/与 auto-next 跳课协同 | 用户需求：可控制的循环播放 |
 | v4.4 | 主从式导航面板 + 取消精简模式 | 面板改为顶部导航栏 + 四个分区块（暂停设置 / 副面板 / 高级 / 其他）的主从式布局：点击导航按钮切换下方内容区（`switchTab` 通过 `.cx-tab` 显隐 + 按钮高亮，当前 tab 存 localStorage `cx_panel_tab` 持久化）。移除精简模式（`PANEL_COMPACT`、`#__cxCompact` 复选框、`applyCompact()`、`cx_panel_compact` 持久化全部删除），所有控件常显；`#__cxPanelInfo` 移入「高级」区块，`#__cxAddonsWrap/#__cxSubPanelsWrap` 移入「副面板」区块。移动端适配补充 `.cx-nav-btn` 放大点按区 | 用户需求：上侧导航栏（主从式布局）+ 分区块 + 取消精简模式 |
 | v4.5 | 诊断/状态/暂停按钮漏算视频修复 | `allVideos()` 原仅从 `window.top` 下钻同源 iframe、不进 Shadow DOM，导致视频位于 Shadow DOM（或脚本运行在子 iframe 而 `window.top` 跨域不可达）时，续播接管成功（视频在播、手动暂停被接管）但诊断显示「视频总数: 0 / 当前无视频」、`currentVideo()` 返回 null 使面板「暂停/恢复」按钮无法操控该视频。重写 `allVideos()` 复用 `scanVideos` 的枚举口径（递归进 Shadow DOM + 同源 iframe），并以本帧 `document` 为主、再并入 `window.top` 同源文档，去重聚合。诊断、状态区、面板暂停按钮（`activeVideo`/`currentVideo`）三者口径一致修复。视频自带暂停按钮被接管拦截属强制续播预期，手动暂停请改用面板「暂停/恢复」按钮 | 用户反馈：有视频却显示无视频、手动暂停失效 |
+| v4.6 | 状态机逻辑审查 + 两处轻缺陷修复 | 逐一审视 6 个状态机（视频接管管道 / 用户暂停恢复 / 自动停复计时器 / 主循环调度 / 答题引擎 / auto-next 导航）：核心 4 个状态机逻辑严谨、无回退/原地踏步/死锁。**两处轻缺陷修复**：① `takeover/engine/quiz.js` 的 `var src`（答案源标识）原在 `for` 循环**内部**声明、却在循环**外部**（`quizStats.source` 与 toast 提示）使用，当所有题目被 `continue` 跳过（已作答/无选项）时 `src` 为 `undefined`，导致状态面板/提示显示"源=undefined"——改为循环前声明并初始化为 `(CONFIG.QUIZ_ANSWER_SOURCE) || 'random'`；② `plugins/addons/auto-next.js` 状态机 `setState(NAVIGATING)` 后：SPA 路由点击成功分支只 `lockNav()` 未 `setState(IDLE)`，状态永久卡在 `NAVIGATING`（虽有 navLock/seenVideos 兜底不影响跳课，但状态不一致）→ 补 `setState(IDLE)`；`resolveNext(cid).then(...)` 缺 `.catch`，then 回调内同步异常会 unhandled rejection 且 state 卡死 → 补 `.catch`（异常时 `setState(LOCKED)` 安全停机）。均为逻辑等价安全增强，正常流程行为不变 | 用户需求：检查脚本状态机逻辑
 | progress-panel v3.3 | 课程列表解析修复 | `backclazzdata` 接口真实结构为 `channelList[].course.data[]`，课程字段（name/id/clazzId/cpi）嵌套在深层；原 `extractCourses` 只取 `channelList` 顶层壳对象，导致显示「(无名课程) / cid=? / clazzid=? / 进度 ?」。`extractCourses` 改为递归下钻 `_walkCourses`：以「含 `clazzId`，或含 `cpi` 且含 name 类字段」为课程指纹（排除无 name 的 cpi 壳），按 `cpi`（缺则 `clazzId`）去重并保留字段最多的对象；`courseName/courseId/classId` 候选键拓宽（`courseTitle/kclazzName/kclazzId/cid` 等）。修复后课程名/ID/班级ID/进度正常显示 | 用户反馈：课程列表解析异常（原实现即有此问题） |
 | progress-panel v3.4 | 增强错误提示 | 新增 `describeError(err)` 集中映射：网络层失败（fetch throw / `Failed to fetch`）→「网络异常」；HTTP 401/302/301 →「登录过期」；HTTP 403 →「权限不足」；HTTP 404 →「接口地址失效」；5xx →「服务器异常」；其余 →「请求被拒绝」。原 `getJSON` 的 `JSON_PARSE_ERROR` 分支（2xx 却非 JSON，最常被登录页 HTML 顶替）改为明确提示「登录过期或接口结构变化」，并引导重新登录 + 用原始JSON 确认。课程/章节两处 `.catch` 均改用语义化文案，保留「重试」按钮 | 用户方向清单：🔍 增强错误提示 |
 | progress-panel v3.5 + force-play v4.3 | 可视化图表 + 移动端适配 | **CSS 图表（纯 CSS，无外部库）**：① 课程卡片加入「完成率」CSS 进度条（`.cx-pbar`，`progressToNum()` 把 `进度 70%` 转成 0~100 数值驱动宽度，渐变填充）；② 章节列表顶部新增「已完成 X / 共 Y（pct%）」CSS 汇总条（`.cx-cbar`，按 `done` 计数算完成率）。**移动端适配**：progress-panel 在 `.cxPContent` 样式块追加 `@media (max-width:480px)`（缩字号 11px、放大按钮点按区、缩小进度条最小宽度）；force-play 在 `ensurePanel` 注入一次性 `#__cxPanelMobileStyle`，对 `#__cxPanel` 在窄屏下改为 `left/right/top:8px;width:auto;max-width:none`（铺满屏宽）、放大按钮与滑块点按区、缩字号，使主控面板 + 副面板在手机上可读可点 | 用户方向清单：📊 可视化图表 + 📱 移动端适配 |
 | force-play v4.4 | 倍速调节（自定义播放速率） | 新增面板控件「播放速率」下拉（0.5/0.75/1/1.25/1.5/1.75/2x），配 `CONFIG.USER_RATE`（默认 1，钳制 0.25~4），经 `savePanelCfg` 持久化到 `localStorage.cx_panel_cfg`（刷新后保持）。**与防暂停契约融合**：三处伪暂停回拉目标（原型 setter / `ratechange` 监听 / 轮询断言）由硬编码 `1` 改为 `USER_RATE`——平台用 `rate≤0.01` 伪暂停时拉回用户设定速率，使用户倍速在伪暂停事件中存活；用户手动正常调速（>0.01）始终放行。新增 `applyUserRateAll()`：调节后即时遍历主文档+iframe 的「已强制接管」视频施加 `USER_RATE`；轮询新增 `else-if` 分支，对 `USER_RATE≠1` 的已接管视频持续把速率拉回用户值（不动广告 / auto-next 锁定 / 用户暂停 / 伪暂停视频）。调试常量新增 `USER_RATE` | 用户方向清单：🚀 播放速率调节 |
 | force-play v4.5 + progress-panel v3.6 | 进度同步·本地估算 | **仅做本地估算（方案 B），不读取/上报平台观看时长**（合规红线）。force-play 新增 `recordWatchMs(src,dt,courseId)`：在 `autoStopTick` 累加 `v.__cxWatchMs` 的同时，按「视频源」把已看毫秒写入 `window.__cxWatchStats[src]={ms,courseId,updated}`，节流（10s）持久化到 `localStorage.cx_watch_stats`（跨会话累计）；`loadWatchStats()` 启动时载入。`urlParam(topHref(),['courseId'])` 提供课程关联键。progress-panel 新增 `courseWatchMin(cid)` 汇总同课程已看分钟，在课程卡片展示「本机已看 Xmin · 效率≈Y%/min（本地估算）」（`效率=进度%÷已看分钟`），并在副面板顶部注明「本地估算，非平台同步，清缓存即丢失」。force-play 未加载 / 无本地数据时该卡片不显示估算行，零影响 | 用户方向清单：📈 进度同步（可行性调研结论：平台无读接口 + 写路径违规，仅本地估算可行） |
+| force-play 评审#7 | 桥探测节流（去重守卫） | `probeBridgeBase` 新增并发/重复去重：① `_bridgeProbeInFlight` 守卫——同一会话瞬间多次探测只跑一轮端口轮询，其余直接回调 null，消除 top+iframe 或重复 init 叠加刷 ERR_CONNECTION_REFUSED 噪声；② `_bridgeAllDead` 记忆——整轮候选端口全失败后置位，后续探测直接跳过不再轮询；③ `bridgeInit` 层 per-base 去重——已知可达/已死 base 跳过 ping/probe 噪声。桥探测接口（probeBridgeBase/bridgeInit/状态）暴露到 `toolkit.bridge` 供仿真 inspect。新增 `sim-bridge-probe.js`（11 断言全绿） | 第三方 AI 代码审查 14 项逻辑/健壮性审查 #7 |
+| force-play 评审#9 | ESLint / CI 静态检查门禁 | 引入 `eslint@8` + `ecosystem/.eslintrc.cjs`（渐进式门禁：error 级 `no-undef`/`no-dupe-keys`/`no-dupe-args`/`no-irregular-whitespace`；warn 级 `no-redeclare` 等，已知 3 处跨模块重复定义技术债登记）；新增 `ecosystem/package.json`（`npm install`/`npm run lint`）；CI 加 ESLint 步骤。本地 `node --check` + lint 0 error（3 warn 已知） | 第三方 AI 代码审查 14 项逻辑/健壮性审查 #9 |
+| force-play 评审#10 | 关键函数 JSDoc | 为 utils/url/targeting/bridge/dom/state 关键公共函数补 JSDoc（约 30 处）：`dbg`/`swallow`/`safeCall`/`throttle`/`debounce`/`escapeHTML`/`isTextEntry`/`isTopFrame`/`lsGet`/`lsSet`/`toast`/`topHref`/`urlParam`/`keyRe`/`collectAttachmentIds`/`refreshTargets`/`videoBelongsToTask`/`resolveBridgeBase`/`probeBridgeBase`/`bridgeFetch`/`bridgeInit`/`restoreNativePause`/`overrideVideo`/`neutralizeGlobalPause`/`walkVideos`/`Store` 模块与方法。纯注释，不影响运行，已随构建验证 0 回归 | 第三方 AI 代码审查 14 项逻辑/健壮性审查 #10 |
+| force-play 评审#2 | 面板 innerHTML→DOM（运行时动态回填 DOM 化） | 引入 `h()`（DOM 构建助手）+ `setSafeText()`（textContent 回填），暴露到 `toolkit`；`dashboard` 诊断块（`#__cxPanelInfo`）与 `DS 登录态`（`#__cxDsLogin`）两个运行时动态点从 `innerHTML` 拼接迁移到 DOM/textContent（XSS 免疫）。静态骨架 `buildPanelHTML`（约 140 行）保留一次性 `innerHTML` 注入——所有插值已 `escapeHTML`，属安全基线，避免大面积重写回归。`html.js` 无新增；新增 `sim-innerhtml-audit.js`（15 断言：h 正确性 + 注入文本化） | 第三方 AI 代码审查 14 项逻辑/健壮性审查 #2 |
+| force-play 评审#8 | E2E 测试（轻量端到端装配） | 新增 `sim-e2e.js`：jsdom 加载完整构建产物→触发初始化→插入视频，断言 ①端到端装配零错误（window/jsdom）②面板渲染（`#__cxPanel`/`#__cxCmd`/`#__cxPanelInfo`）③视频被接管（`__cxForcePaused` 为布尔）④诊断块无注入 `<img>/<script>`（#2 DOM 化生效）⑤`toolkit.h`/`setSafeText` 随构建打包（11 断言全绿）。jsdom 环境性未实现错误（canvas.getContext 等）已过滤，仅统计真实异常 | 第三方 AI 代码审查 14 项逻辑/健壮性审查 #8 |
+| force-play 审计 | 跨平台侵入性分级回归 | 新增 `sim-invasion-per-site.js`：对 11 个域（含 `*.edu.cn` 高校域、未知域共 12 用例）逐一核对 `detectSite()` 解析 + `usePrototypeNeutralize()` 决策 + `buildInvasionReport()` 运行时侵入面 + `uninstall()` 还原闭环；验证 `INTRUSION_MODE='auto'` 下仅 `chaoxing`/`zhihuishu` 包装 `HTMLMediaElement.prototype.pause`/`playbackRate`（激进，闭包 pause 单点全覆盖），其余站点（icourse163/xuetangx/icve/renwei/unipus/ucampus/ilabx）降级温和（仅实例 own-property + 事件级、**不碰原型**），DeepSeek 应答端（仅承载 responder、不接管视频）/未知域走安全基线；卸载后 `prototype.pause` 均还原（72 断言 / 12 用例 × 6 项，PASS）。站点隔离：`sites/*.js` 各 biz 模块 `if (detectSite()!=='X') return` 二层守卫，跨站零副作用；分级唯一决策点 `usePrototypeNeutralize()`（`config.js:164`）已随 `sim-gentle/polite/intrusion-switch/audit` 零回归 | 跨平台侵入性核查（新增 `_sim` 回归） |
 | v3.35 | 撤销 v3.34 多实例守卫回归 | v3.34 的"同源 iframe 副本直接 return"使视频播放页（常嵌同源 iframe）整段退出、面板建不出（用户：有视频页面板打不开，无视频页可开）。撤销该 return，每 frame 完整运行使面板在视频页可见；视频接管由 __cxForcePaused 幂等保护、顶层下钻 iframe 处理其视频，重复注入不崩，桥/定时器重复开销极小且幂等 | 用户反馈：有视频页面板打不开 |\n| v3.34 | 复审问题修复（6 项） | ①【中高危】iframe 签名传递：`videoIframeSrcsOf`/`videoBelongsToTask` 的 `while(parentElement)` 永远够不到父文档 iframe（死代码），导致 MSE/blob: 视频重建去重失效；`scanVideos` 下钻时把宿主 iframe `signatureOf(f)` 作为 `hostSigs` 传入并挂到 `v.__cxHostSigs`，定向/重建去重据此命中，MSE 防重播恢复。②【中危】多实例：同源 iframe 副本提前 `return`（顶层实例下钻处理），消除双面板/双桥/双倍定时器；跨域 iframe 保留接管。③【低-中危】`userResume` 清 `v.__cxEndedLock` 并解除 `ENDED_SRCS` 黑名单、重置进度，恢复续播可重看已播完视频。④【易修】DEBUG 改为运行时判定（`dbg` 不再固化为 no-op），面板勾选即时生效。⑤ 定向 fallback：全部暂停时 `matchedAny` 恒 false 误触回退全量——`overrideVideo` 在用户暂停提前 return 前先统计 `matchedAny`。⑥【低危】play 即时接管下钻到 iframe 文档（`installPlayWatch(doc)`，首钻安装、防重复） | 用户复审报告（force_play_review_333_new.md） |\n| 2.3 | 审查加固 | cx_crawler：S1 新增 `save_cookies()` 在 `verify_login` 后持久化 warmup 刷新的补充 cookie（rose/route/k8s），免去重复手动登录；健壮性修复（见下「审查加固 2026-07-28」）；progress-panel 移除无效 Referer 伪造 + cur 节点正则收紧 | 全工作区代码审查（高优 5 项） |
 
 ---
@@ -376,17 +383,17 @@
 
 ---
 
-## 主/副脚本架构重组（2026-07-30）
+## 主/工具库项架构重组（2026-07-30）
 
-> 用户要求：带控制面板的脚本设为主脚本，其余适配其面板成为副脚本，不能适配或过时的全部弃置。
+> 用户要求：带控制面板的脚本设为主脚本，其余适配其面板成为工具库项，不能适配或过时的全部弃置。
 
 ### 主脚本：`chaoxing-force-play.user.js` v4.0
-- 面板更名「学习通·主控面板」，新增**副脚本注册中心**：
-  - 副脚本向 `window.__cxAddonQueue` 推入 `{id, type:'toggle'|'button', label, note, get, set, onClick}` 并调用 `window.__cxRegisterAddon()`；
+- 面板更名「学习通·主控面板」，新增**工具库项注册中心**：
+  - 工具库项向 `window.__cxAddonQueue` 推入 `{id, type:'toggle'|'button', label, note, get, set, onClick}` 并调用 `window.__cxRegisterAddon()`；
   - 主脚本启动与面板建成时均排空队列 → **加载顺序无关**；`id` 去重防重复注册；
-  - 面板新增「副脚本」区块（无注册时隐藏），统一渲染复选框/按钮。
+  - 面板新增「工具库项」区块（无注册时隐藏），统一渲染复选框/按钮。
 
-### 副脚本（已适配主面板）
+### 工具库项（已适配主面板）
 | 脚本 | 版本 | 面板开关 | 生效方式 |
 |---|---|---|---|
 | `chaoxing-auto-next.user.js` | 2.3 → 3.0 | 「自动下一课」总开关（`localStorage.cx_an_on`，默认开），门控 `run()` 与 `checkOverlay()` | 即时 |
@@ -403,5 +410,146 @@
 ### 保留的独立用途脚本（与学习通无关，不接入主控面板）
 - `browser-media-collector.user.js`（1.2）：常驻后台的浏览器媒体采集器（捕获视频/音频源地址、时长等元信息，本地存储、不联网），`@match` 覆盖全网。作为独立工具单独启用，不随本套超星架构更新。
 
-- `USAGE.md` §1 脚本表重写为「主脚本 / 副脚本 / 其他用途」三段式；排错表「切后台停播」指向主脚本。
+- `USAGE.md` §1 脚本表重写为「主脚本 / 工具库项 / 其他用途」三段式；排错表「切后台停播」指向主脚本。
 - 校验：5 个 `*.user.js`（force-play、auto-next、progress-panel、deceive-api、browser-media-collector）lint 全 0。
+
+## 主控面板布局重构（续播 / 做题 双区 + 钉底提示，v4.x 面板线）
+
+> 用户要求：自动做题与自动续播重要程度相等，都应置于主控面板（主控中分出「续播」「做题」两个区域）；并据面板布局审计补全各模块在控制面板的暴露度与对称性。
+
+### 主控分双区（续播 / 做题 并列）
+- 面板「主控」tab 由单区拆分**两张并列卡片**，二者视觉权重对等：
+  - **续播卡**（蓝点）：暂停/恢复按钮 + 视频开关列表（仅播此轨 / 全部续播 / 锁定）+ 「播放设置」子区（速率 / 循环 / 自动停止计时 / 暂停后恢复）。
+  - **做题卡**（绿点）：按站点显隐两个子块——
+    - `__cxQuizBlock`（真实答题）：自动答题开关 + 实时统计（总数/已做/剩余/来源）+ 来源下拉（随机/题库/AI）+ 提示；仅 `_quizSites`（chaoxing/renwei/unipus/ucampus/ilabx）显示。
+    - `__cxPopupBlock`（弹窗随堂题自动作答）：自动作答开关 + 实时计数；仅 `_popupSites`（zhihuishu/icourse163/xuetangx/icve）显示。
+  - 两张卡均不显示时整张「做题」卡隐藏。
+- 原题卡里的「自动化」tab 仅保留**工具库项**（已接入主面板），续播精细控制收拢进续播卡（见下方 Rec A）。
+
+### 布局建议落地（Rec A / B / C）
+- **Rec A（续播卡对称）**：把原先散落在「自动化」tab 的续播精细控制（自动停止计时 / 暂停后恢复 / 循环播放 / 播放速率）迁入「续播」卡的「播放设置」子区，使「续播」卡与「做题」卡在结构上对称；「自动化」tab 退化为仅承载工具库项。`panel-controls.js` 按 `id` 取元素，移位不影响任何绑定。
+- **Rec B（智慧树作业/考试引导）**：「做题」卡新增 `#__cxZhExamHint` 引导条（默认隐藏），仅 `_site==='zhihuishu'` 时显示，提示用户「作业/考试作答请用页面右下角悬浮的『作业/考试助手』按钮打开专属面板（自动作答 + 手动交卷）」，与随堂题弹窗作答互不冲突。
+  - **Rec B 强化（直接入口）**：引导块内新增「打开作业 / 考试助手」按钮（`#__cxBtnZhExam`，仅智慧树站点显示并绑定），点击复用已暴露的 `window.__CX_FORCE_PLAY.zhihuishuFabTick(0)` 引擎（幂等：handledCount=0 不污染「本次自动作答」计数；主题隔离 + 现场模式），无需用户再去页面右下角找悬浮球；引擎未就绪时提示稍后重试。
+- **Rec C（提示流钉底）**：面板底部新增常驻「最近提示」条（`#__cxTipPin` / `#__cxTipPinText`），跨 tab 始终可见，解决原「提示流」仅在洞察 tab 难以及时看见的问题。`panel-core.js` 新增 `_updateTipPin()`，在每条 `ui:toast` 到达时实时刷新（颜色按分级）、面板构建后回放缓冲时同步最后一条；写入走 `textContent` 防 XSS。
+
+### 涉及文件
+- `presentation/panel-template.js`：`buildPanelHTML` 主控双卡结构 + 续播播放设置子区 + 智慧树引导 + 钉底提示条。
+- `presentation/panel-controls.js`：`_applyQuizVisibility` 按站点显隐 做题子块与 智慧树引导；做题开关/来源持久化（`cx_quiz_auto` / `cx_quiz_source`）；弹窗作答开关持久化（`cx_popup_quiz`）。
+- `presentation/dashboard.js`：`_refreshQuizZone` 映射 `window.__CX_FORCE_PLAY.quizStats` / `popupQuizStats` 到实时统计；做题关闭时整块降透明度。
+- `presentation/panel-core.js`：`_updateTipPin` 钉底提示实时刷新 + 缓冲回放同步。
+- `sites/chaoxing-exam.js`（前置）：`CHAOXING_EXAM` 选择器并集 + `chaoxingTickQuiz()` 站点隔离调度（best-effort，待真机校准）。
+- `sites/popup-quiz.js`（前置）：`popupQuizTick` 加 `cx_popup_quiz` 闸门 + `popupQuizStats` 实时计数。
+- `takeover/engine/quiz.js`（前置）：`_quizSource()` 由 `cx_quiz_source` 驱动作答来源。
+
+## 沙箱独立性加固（全局符号收敛 + 卸载清理，v4.x 治理）
+
+> 用户要求：检查脚本沙箱独立性。审查发现全局符号未完全收敛、卸载还原不彻底、沙箱模式注释过时三类问题，本次一并修复使「全脚本全局面 = A 命名空间(`__CX_FORCE_PLAY`) + B 契约（4 个 `window.__cx*`）」，可审计、可整体 `delete`、回到注入前全局态。
+
+### 问题（沙箱独立性审查）
+- **C 类散落全局符号（11 个）**：智慧树题目引擎接口 `window.__cxZhExamEnabled/Tick/AutoSubmitTick/SubmitNow/State`、题库 `window.__CX_QUIZ_BANK`、DS 角色锁 `window.__cxDsRoleInited` 直接挂在 `window` 顶层，既不属于命名空间 A 也不属于受控契约 B，卸载不回滚、且与同前缀第三方脚本存在软冲突风险。
+- **卸载清理遗漏**：`lifecycle.js` 卸载序列仅清理 B 类契约与面板/样式，遗漏 7 个模块/工具库项私有启动守卫标志（`*Started`），违背「完全回到注入前全局态」自述。
+- **过时注释**：`lifecycle.js` 注释误写「@grant none」，与实际 `@grant GM_setValue / GM_addValueChangeListener`（GM_* 沙箱隔离模式）不符，误导沙箱形态判断。
+
+### 修复落地
+- **修复1（卸载清理补齐）**：`lifecycle.js` 新增 `⑨-b` 段，用数组循环 `delete` 7 个 `*Started` 私有标志（`__cxAutoNextStarted`/`__cxZhAutoNextStarted`/`__cxEndedNotifyStarted`/`__cxTgStarted`/`__cxQuietPopupsStarted`/`__cxKbStarted`/`__zheStarted`）。接口符号已收敛进命名空间，删 FP 即整体清除。
+- **修复2（接口符号收敛进命名空间）**：
+  - 智慧树题目引擎 `window.__cxZhExamEnabled/Tick/AutoSubmitTick/SubmitNow/State` → `window.__CX_FORCE_PLAY.zhihuishuExamEnabled/Tick/AutoSubmitTick/SubmitNow/State`（def 在 `sites/zhihuishu-exam.js`，引用同步改 `main-loop.js`/`presentation/zhihuishu-fab.js`/`presentation/diagnostics.js`）。
+  - 题库 `window.__CX_QUIZ_BANK` → `window.__CX_FORCE_PLAY.quizBank`（`takeover/engine/quiz.js` 读写 + `sites/zhihuishu-exam.js` 引用）。
+  - DS 角色锁 `__cxDsRoleInited`（top/iframe 双写）→ `window.__CX_FORCE_PLAY.dsRoleInited`，去掉 top 双写，跨 frame 共用同一命名空间对象（`takeover/engine/vision-deepseek-web.js`）。
+  - 每个引用处加 `typeof window.__CX_FORCE_PLAY !== 'undefined'` 存在性守卫，行为等价且更健壮。
+- **修复3（注释修正）**：`lifecycle.js` 的 `@grant none` 误述改为 GM_* 沙箱隔离模式说明。
+
+### 文档同步
+- `docs/design-gentle-polite-mode.md`（两处）：本地题库符号 `window.__CX_QUIZ_BANK` → `window.__CX_FORCE_PLAY.quizBank`。
+
+### 涉及文件
+- `takeover/dom/lifecycle.js`：卸载清理 `⑨-b` + `@grant` 注释修正。
+- `sites/zhihuishu-exam.js`、`takeover/bootstrap/main-loop.js`、`presentation/zhihuishu-fab.js`、`presentation/diagnostics.js`、`takeover/engine/quiz.js`、`takeover/engine/vision-deepseek-web.js`：接口符号收敛 + 存在性守卫。
+- `docs/design-gentle-polite-mode.md`、`docs/CHANGELOG.md`：文档同步。
+
+### 验证
+- 构建 `build-force-play.ps1` → `build done`，exitCode 0；lint 0 错误。
+- 产物 `chaoxing-force-play.user.js` 中旧符号 `__cxZhExam*` / `__CX_QUIZ_BANK` / `__cxDsRoleInited` 全部 0 匹配（仅保留 DOM id `__cxZhExamHint`）；新符号 `zhihuishuExam*` / `quizBank` / `dsRoleInited` 均就位。
+- `_sim` 沙箱回归 22/22 PASS；`sim-iframe`（jsdom 版）因 jsdom 不支持跨 frame 为环境 SKIP，但其跨 frame 真机回归已由 Playwright 版 `sim-iframe-pw.js` 覆盖并通过（详见下节）。与本次改动直接相关的 `sim-zhihuishu` / `sim-quiz` / `sim-ds-console` / `sim-lifecycle` / `sim-idempotency` 均 PASS，无回归。
+
+## 跨 frame 续播真机回归（Playwright，补 sim-iframe 缺口）
+
+> 用户要求用 Playwright 补 `sim-iframe` 真机回归。jsdom 版因不支持 `<iframe>` 真实跨 frame 长期 SKIP；本次以真实 chromium 构造「顶层页 + 嵌套同源 iframe 播放器」（route 拦截 `mooc1.chaoxing.com` 返回构造 HTML），注入产物并验证跨 frame 能力。
+
+### 实现要点
+- 用项目内置 node 装 `playwright`（`npm install playwright --no-save`）+ 下载完整 chromium（`chromium-1234`，`chrome-win64/chrome.exe`）；因 `chromium_headless_shell` 下载较大易超时，测试直接指定 `executablePath` 指向完整 chromium 规避。
+- 注入时加 `GM_*` / `unsafeWindow` stub（模拟 Tampermonkey 环境）+ `play` 调用探针。同源 iframe 有独立 JS realm，其 `HTMLMediaElement.prototype.play` 不被主 frame 探针 patch，故断言改用结果态：`iframe 内 video 经脚本续播后 paused===false`。
+- iframe 内 `<video>` 经 `canvas.captureStream` 注入可播放流（不依赖网络/外部文件），使脚本续播 tick 真正主动 `play`，触发跨 frame 续播。
+
+### 验证结果（真实 chromium, headless）
+- 命名空间加载 ✓；运行无未捕获错误（已排除无效 src 资源错误）✓
+- chaoxing 激进模式原型包装在真机生效：`HTMLMediaElement.prototype.pause` 不再是 `[native code]`（全局、含 iframe video）✓
+- **iframe 内 video 经脚本续播处于播放态（paused=false）= 跨 frame 续播生效** ✓（填补 jsdom 长期 SKIP 的缺口）
+- 信息性：iframe 焦点下按 P → 顶层面板出现（跨 frame 键盘协调实际生效，比 jsdom 预期更好）✓
+- exitCode 0 → **PASS**。
+
+### 运行方式
+- 前置：`cd ecosystem/_sim && npm install playwright --no-save && npx playwright install chromium`
+- 运行：`node sim-iframe-pw.js`（需在已下载 chromium 的机器；CI 建议单独 e2e job）
+
+## 状态机逻辑审查（v4.6，用户需求：检查脚本状态机逻辑）
+
+> 用户要求系统检查脚本各状态机逻辑是否存在回退/原地踏步/死锁等问题。逐一审视 6 个状态机，结论：**核心 4 个状态机逻辑严谨、无严重逻辑缺陷**；边缘模块发现 2 处轻缺陷并就地修复。
+
+### 审查对象与结论
+| 状态机 | 文件 | 结论 |
+|-------|------|------|
+| 视频接管管道（overrideVideo 门控链） | `takeover/dom/dom.js` | ✅ 正确（管道-过滤器 early-return，顺序互斥正确；released 重接管、ended 锁换源检测、play 封锁先于 pause 均正确） |
+| 用户暂停/恢复意图 | `takeover/dom/session.js` | ✅ 正确（播放闸门防暂停期平台 play；userResume 重置 watchMs 避免立刻再停） |
+| 自动停/复计时器 | `takeover/dom/session.js` | ✅ 正确（真实墙钟差值 + 休眠/回拨保护 dt>60000 重置） |
+| 主循环调度 | `takeover/bootstrap/main-loop.js` | ✅ 正确（每轮重装原型中和为 F-B4 抗反篡改设计；单步 try/catch 隔离） |
+| 答题引擎 | `takeover/engine/quiz.js` | ⚠️ 修复 `src` 变量作用域 bug |
+| auto-next 导航 | `plugins/addons/auto-next.js` | ⚠️ 修复 2 处状态转移缺口 |
+
+### 修复明细
+1. **quiz.js `src` 变量作用域 bug**：`var src` 原在 `for` 循环内部声明、却在循环外部（`quizStats.source` / toast 提示）使用。当所有题目被 `continue` 跳过（已作答或无选项）时 `src` 为 `undefined`，状态面板/提示显示"源=undefined"。→ 提到循环前声明并初始化为 `(CONFIG.QUIZ_ANSWER_SOURCE) || 'random'`。
+2. **auto-next.js 状态机缺口**：
+   - SPA 路由点击成功后只 `lockNav()` 未 `setState(IDLE)`，状态永久卡在 `NAVIGATING`（navLock/seenVideos 兜底不影响跳课，但状态不一致）→ 补 `setState(IDLE)`。
+   - `resolveNext(cid).then(...)` 缺 `.catch`，then 回调内同步异常会 unhandled rejection 且 state 卡死 → 补 `.catch`（异常时 `setState(LOCKED)` 安全停机）。
+
+### 验证
+- Lint：0 错误；构建：`build-force-play.ps1` 通过（exitCode 0，产物已重建）。
+- sim 回归：批量跑全部非浏览器类 sim（`sim-iframe-pw.js` 除外），我实际改动对应的 `sim-quiz`、`sim-ds-console`（14/14）等均 PASS；`sim-quiz-vision.js` 单独重跑 22/22 PASS（批量并发下的 1 FAIL 为异步时序抖动，与本次改动无关——quiz-vision 逻辑未触碰）。
+
+---
+
+## 2026-08-05 功能扩展（三阶段：DeepSeek 应答端控制台 / 智慧树题目页面板 / 工具库项迁移）
+
+> 本批为评测稿验证（见下节）之前的最新功能迭代，对应一批历史提问；此前散见于未提交工作区与 AI 记忆，本次补入 CHANGELOG 固化。
+
+### 1. DeepSeek 应答端控制台专项
+- `site-router.js`：`detectSite()` 新增 `chat.deepseek.com → 'deepseek'`；`SITES.deepseek` 配置 `title:'DeepSeek 应答端控制台'`、`taskContainerSel:''`（无网课视频容器，面板特化消费）。
+- `meta.js`：`@match` 新增 `https://chat.deepseek.com/*`。
+- `panel-template.js`：新增 `buildDSConsoleHTML()`，并在 `buildPanelHTML` 顶部按 `detectSite()==='deepseek'` 分支渲染（隐藏视频控制，显示登录态/频道/responder/最近应答状态区 + 应答端开关 `#__cxDsEnable` + 工具库区 + 系统区）。
+- `panel-ds-console.js`（新文件）：`bindDSConsole()` 绑定应答端开关持久化到 `localStorage` 并写入 `window.__CX_FORCE_PLAY.DS_RESPONDER_ENABLED`；订阅实时刷新 `#__cxDsLogin/#__cxDsChannel/#__cxDsResponder/#__cxDsLast`。
+- `panel-core.js`：`ensurePanel()` 内 5 处 DS 控制台缺失元素（`#__cxPanelClose/#__cxBtnPause/#__cxResume/#__cxRescan/#__cxEndRel`）加 `null` 守卫（否则 DS 页 `ensurePanel` 抛错中断）；末尾按 `detectSite()==='deepseek'` 调 `bindDSConsole(el)`。
+- `vision-deepseek-web.js`：`_dsInitResponder` 加 `DS_RESPONDER_ENABLED===false` 闸门（回 `responder-disabled`）；记 `DS_LAST_ASK/DS_LAST_ANSWER`；`_dsIsLoggedIn` 改真实 DOM 启发式（原扫描整页「登录」文案 + TODO 占位选择器误判，已修）。
+- `_sim/sim-ds-console.js`（新，14/14 PASS），沙箱全 16 PASS。
+
+### 2. 智慧树作业/考试题目页面板（FAB 场景自适应）
+- `presentation/zhihuishu-fab.js`（新）：FAB 按场景自适应——视频页显示「强制续播」面板、题目页（`dohomework`/`webExamList`/`stuExamWeb` 等 URL）显示「作业/考试助手」面板（自动作答/自动交卷开关、DeepSeek 连接状态、作答进度、确认交卷按钮），两套互斥不混用。
+- `sites/zhihuishu-exam.js`：去通用 addon 注册，暴露 `window.__CX_FORCE_PLAY.zhihuishuExamEnabled/Tick/AutoSubmitTick/SubmitNow/State` 五接口（沙箱收敛阶段已就位）；状态机含作答态 `IDLE/ACTIVE` 与自动交卷子态 `OFF/ANSWERING/READY/DONE`；`dsAvailable()` 硬闸门——未连 DeepSeek 时开关灰禁用且不执行任何操作；自动交卷默认关，末页所有题答完才 `READY`，由用户手动「确认交卷」二次确认提交（不自动交卷）。
+- `main-loop.js` zhihuishu 分支改读上述接口（修复旧裸函数名 `zhihuishuExamEnabled/zhihuishuExamDraft` 失效 bug）。
+- 翻页/下一页/交卷按钮/题目容器/选项均为 best-effort 并集，待真机校准。
+
+### 3. 工具库项迁移进核心脚本（`decision/` → `plugins/addons/`）
+- `decision/` 下 4 个独立 `.user.js`（chaoxing-auto-next/chaoxing-keyboard-shortcuts/chaoxing-tamper-guard/chaoxing-video-ended-notify）改写并移入 `src/chaoxing-force-play/plugins/addons/`（auto-next.js/keyboard-shortcuts.js/tamper-guard.js/video-ended-notify.js），随 `chaoxing-force-play.user.js` 一并构建分发，`decision/` 目录删除。
+- 每个 addon 保留嵌套 IIFE 防命名冲突；用 `window.__CX_FORCE_PLAY.detectSite()==='chaoxing'`（zhihuishu 用 `'zhihuishu'`）做站点隔离，忠实翻译原 `@match`，避免跨平台误触发；移除「未检测到核心脚本」自检告警。
+- 运行时优先复用 `window.__CX_FORCE_PLAY.toolkit`（escapeHTML/isTextEntry/isTopFrame/lsGet/lsSet/toast），核心脚本未注入时回退本地最小实现（`utils/utils.js` 已挂 `window.__CX_FORCE_PLAY.toolkit`）。
+- `build-force-play.ps1` 的 `$domainRel` 登记 4 个新文件（反向校验通过）；`docs/USAGE.md`、`ecosystem/README.md` 同步：标注为内置工具库项（无需单独安装），「主脚本」→「核心脚本」。
+- `node --check` 校验 4 源码 + 产物语法全 PASS。
+
+## 评测稿验证与修复（2026-08-06/07）
+
+> 对第三方「网课强制续播」评测稿（14 项审查）逐条核验；详细过程与分类见 `ecosystem/评测稿验证与修复计划临时文档.md`。
+
+- **结论**：真实 bug 已修 / 误报核销 / 设计取舍暂缓 三档分流，无技术阻断。
+- **已修**：`routeBySite` 接线暴露、renwei `@match` 补全、`urlParam` 单键名字符串兼容、键盘暂停改用 `v.__cxUserPaused` 契约、zhihuishu 选项正则词边界（防 `option`/`secure` 误判）、构建 Minify 括号优先级、`h()` `on` 前缀仅绑真实事件、`isVisible`/`handledUrls`/`walkVideos` 快照、`_ovForegroundGate` 注释。
+- **误报核销**（单 IIFE 误判 / 双重定时器）：#6 / #7 / #13 / #12。
+- **设计取舍暂缓**：#2 `edu.cn→chaoxing` 默认、#9 `popup-quiz` 删前不校验、#14 `video-ended` 静音恢复、`isTopFrame` 跨域 `catch→true`。
+- **注释精简**：各修复源码注释收为单行意图，详细核验留临时文档。构建通过、lint 0、sim 全 PASS。

@@ -11,12 +11,12 @@ $root = Join-Path $PSScriptRoot 'src/chaoxing-force-play'
 $SOFT = 300
 $HARD = 350
 
-# whitelist: high-cohesion historical files pending refactor (do NOT add new entries; only dom/dom.js)
-# dom/dom.js: 513 -> 368 after extracting biz/session.js + ui/toast.js + dom/lifecycle.js.
+# whitelist: high-cohesion historical files pending refactor (do NOT add new entries; only takeover/dom/dom.js)
+# takeover/dom/dom.js: 513 -> 368 after extracting biz/session.js + ui/toast.js + dom/lifecycle.js.
 # Still 18 lines over HARD(350); remaining content is the cohesive takeover engine
 # (overrideVideo / walkVideos / neutralizeGlobalPause / MO), which should not be split further
 # without a clear seam. Keep whitelisted until a justified seam appears.
-$whitelist = @('dom/dom.js')
+$whitelist = @('takeover/dom/dom.js')
 # deprecated: old files superseded by the refactored domain modules; NOT built. Delete to comply.
 $deprecated = @()
 

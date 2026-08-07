@@ -1,6 +1,6 @@
 // 礼貌模式回归（建议#1）：验证 POLITE_MODE 真实抗检测行为(P2) ——
 //   pause/rate setter 的 toString() 不再含 '__cxForcePaused' 字面量（抗平台 toString 字串扫描），
-//   且改用行为/引用探测(probePauseNeutralized)作为「中性化是否在位」判据，供审计面板/副脚本 tamper-guard 使用；
+//   且改用行为/引用探测(probePauseNeutralized)作为「中性化是否在位」判据，供审计面板/工具库项 tamper-guard 使用；
 //   故即使 toString 伪装，审计不撒谎、被平台还原仍可检出。
 // 与 sim-gentle.js / sim-audit.js 同源：jsdom 加载完整产物，注入 mediaSession 模拟。
 const fs = require('fs');

@@ -4,18 +4,18 @@
 // 因此以最小 stub 提供 ctx 即可安全加载并捕获函数声明到沙箱全局。
 //
 // 覆盖（来自 code review 的"为纯函数加测试"建议）：
-//   - escapeHTML  (biz/foreground.js)  HTML 转义，防 XSS
-//   - fmtTime     (ui/dashboard.js)    秒 → m:ss / h:mm:ss
-//   - signatureOf (biz/dedup.js)       收集视频/iframe 的可定位签名（id/name/title/data-*）
+//   - escapeHTML  (takeover/engine/foreground.js)  HTML 转义，防 XSS
+//   - fmtTime     (presentation/dashboard.js)      秒 → m:ss / h:mm:ss
+//   - signatureOf (takeover/engine/dedup.js)       收集视频/iframe 的可定位签名（id/name/title/data-*）
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const SRC = path.join(__dirname, '..', 'src', 'chaoxing-force-play');
 const FILES = {
-  escapeHTML: path.join(SRC, 'biz', 'foreground.js'),
-  fmtTime: path.join(SRC, 'ui', 'dashboard.js'),
-  signatureOf: path.join(SRC, 'biz', 'dedup.js'),
+  escapeHTML: path.join(SRC, 'takeover', 'engine', 'foreground.js'),
+  fmtTime: path.join(SRC, 'presentation', 'dashboard.js'),
+  signatureOf: path.join(SRC, 'takeover', 'engine', 'dedup.js'),
 };
 
 let failures = 0;
