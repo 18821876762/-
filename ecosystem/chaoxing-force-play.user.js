@@ -27,7 +27,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-07T11:18:45+08:00  commit: 6eeecd0  minify: off
+// Built: 2026-08-07T11:52:05+08:00  commit: 07856ad  minify: off
 
 
 (function () {
@@ -4887,12 +4887,11 @@
     );
   }
 
-  // ===== DOMAIN: presentation/panel-core (panel assembly + control/command events + navigation) =====
-  // Panel assembly: create DOM, inject styles, bind video/control/command events and main-sub navigation.
-  // DeepSeek 应答端控制台绑定(bindDSConsole/_dsUpdateConsole)已抽到 presentation/panel-ds-console.js（行数红线合规）。
-
-  // —— 提示流（洞察页）：把所有 Store.emit('ui:toast') 集中到「洞察」页回看，
+  // ===== DOMAIN: presentation/panel-toast-feed (toast feed + tip-pin) =====
+  // 提示流（洞察页）：把所有 Store.emit('ui:toast') 集中到「洞察」页回看，
   // 既保留悬浮 toast 的即时反馈，又解决其"一闪而过/难追溯/分散"的问题（用户诉求：提示集中到洞察页）。
+  // 自 panel-core.js 拆分（治理·单文件红线 >350 合规）；与 ensurePanel 同打包作用域，函数/状态互相可达。
+
   var _toastFeedBuf = [];     // 面板未构建时缓冲，开面板再 flush
   var _toastFeedCap = 80;
   var _feedSubscribed = false;
@@ -4948,6 +4947,13 @@
       _toastFeedBuf.length = 0;
     } catch (e) { swallow(e); }
   }
+
+  // ===== DOMAIN: presentation/panel-core (panel assembly + control/command events + navigation) =====
+  // Panel assembly: create DOM, inject styles, bind video/control/command events and main-sub navigation.
+  // DeepSeek 应答端控制台绑定(bindDSConsole/_dsUpdateConsole)已抽到 presentation/panel-ds-console.js（行数红线合规）。
+
+  // 提示流（洞察页 toast 反馈子系统）已拆分至 presentation/panel-toast-feed.js（治理·单文件红线 >350 合规）。
+  // ensurePanel 仍通过同打包作用域调用 _onToastForFeed / _flushToastFeed / _findFeedBox，行为不变。
 
   function ensurePanel() {
     if (_cxPanel) return _cxPanel;
