@@ -13,13 +13,16 @@
   var STORAGE_KEY = 'cx_quiet_popups';
 
   function isOn() {
-    try { return (typeof window.__CX_FORCE_PLAY !== 'undefined' && typeof window.__CX_FORCE_PLAY.isQuietPopups === 'function') ? window.__CX_FORCE_PLAY.isQuietPopups() : (localStorage.getItem(STORAGE_KEY) === '1'); }
+    try {
+      if (typeof window.__CX_FORCE_PLAY !== 'undefined' && typeof window.__CX_FORCE_PLAY.isQuietPopups === 'function') return window.__CX_FORCE_PLAY.isQuietPopups();
+      return lsFlag(STORAGE_KEY, false);   // 回退：统一收口到 toolkit.lsFlag
+    }
     catch (e) { return false; }
   }
   function setOn(v) {
     try {
       if (typeof window.__CX_FORCE_PLAY !== 'undefined' && typeof window.__CX_FORCE_PLAY.setQuietPopups === 'function') window.__CX_FORCE_PLAY.setQuietPopups(v);
-      else localStorage.setItem(STORAGE_KEY, v ? '1' : '0');
+      else lsSetFlag(STORAGE_KEY, v);      // 回退：统一收口到 toolkit.lsSetFlag
       if (window.Store && window.Store.emit) window.Store.emit('ui:toast', v ? '已关闭脚本弹窗（仅留洞察页提示流）' : '已恢复悬浮提示', v ? 'info' : 'success');
     } catch (e) {}
   }

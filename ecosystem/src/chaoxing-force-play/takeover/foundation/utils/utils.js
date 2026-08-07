@@ -182,6 +182,31 @@
   function lsSet(k, v) {
     try { window.localStorage.setItem(k, String(v)); return true; } catch (e) { return false; }
   }
+
+  // ===== 安全 LS 封装（审查整改：统一收口 localStorage 访问）=====
+  // 此前 isOn/setOn 等散落各处各自 try/catch 包裹 localStorage，易遗漏异常/配额处理。
+  // 现集中到 toolkit：布尔开关 + JSON 感知读写 + 删除，全部吞掉异常经 swallow 兜底；
+  // 结构化数据统一加命名空间前缀 cx_fp_ 避免与页面自有键冲突。
+  var LS_NS = 'cx_fp_';
+  function _lsRaw(k) { try { return window.localStorage.getItem(LS_NS + k); } catch (e) { swallow(e, 'ls'); return null; } }
+  function _lsSetRaw(k, v) { try { window.localStorage.setItem(LS_NS + k, v); return true; } catch (e) { swallow(e, 'ls'); return false; } }
+  // 布尔开关：'1'/'0' 持久化（与既有 toggle 语义一致；用无前缀原始键以兼容历史存储，避免开关态迁移回退）
+  function lsFlag(k, def) {
+    try { var s = window.localStorage.getItem(k); return s == null ? !!def : s === '1'; } catch (e) { return !!def; }
+  }
+  function lsSetFlag(k, v) {
+    try { window.localStorage.setItem(k, v ? '1' : '0'); return true; } catch (e) { return false; }
+  }
+  // JSON 感知读写（结构化对象安全存取；命名空间隔离，避免覆盖页面自有 JSON 键）
+  function lsGetJSON(k, d) {
+    var s = _lsRaw(k);
+    if (s == null) return d;
+    try { return JSON.parse(s); } catch (e) { swallow(e, 'ls.json'); return d; }
+  }
+  function lsSetJSON(k, v) { return _lsSetRaw(k, JSON.stringify(v)); }
+  // 删除键（命名空间内）
+  function lsRemove(k) { try { window.localStorage.removeItem(LS_NS + k); return true; } catch (e) { return false; } }
+
   /**
    * 轻提示：经事件总线 emit('ui:toast') 触发面板/toast 组件展示；未注入核心时降级为 console。
    * @param {string} msg - 提示文本
@@ -253,7 +278,7 @@
     window.__CX_FORCE_PLAY.toolkit = {
       dbg: dbg, swallow: swallow, safeCall: safeCall, throttle: throttle, debounce: debounce,
       escapeHTML: escapeHTML, isTextEntry: isTextEntry, isTopFrame: isTopFrame,
-      lsGet: lsGet, lsSet: lsSet, toast: toast, fetchWithTimeout: fetchWithTimeout,
+      lsGet: lsGet, lsSet: lsSet, lsGetJSON: lsGetJSON, lsSetJSON: lsSetJSON, lsRemove: lsRemove, lsFlag: lsFlag, lsSetFlag: lsSetFlag, toast: toast, fetchWithTimeout: fetchWithTimeout,
       h: h, setSafeText: setSafeText,   // 评审#2：DOM 构建/安全文本回填助手
       recentErrors: recentErrors, errorCount: errorCount   // 评审#1：只读暴露被吞错误遥测(含 stack)，供诊断/测试 inspect
     };

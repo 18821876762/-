@@ -50,8 +50,8 @@
     catch (e) { try { console.log('[auto-next] ' + msg); } catch (e2) {} }
   }
   var $storage = {
-    isOn: function () { try { return '1' === localStorage[CFG.LS_KEY]; } catch (e) { return false; } },
-    setOn: function (v) { try { localStorage[CFG.LS_KEY] = v ? '1' : '0'; } catch (e) {} },
+    isOn: function () { try { return lsFlag(CFG.LS_KEY, false); } catch (e) { return false; } },
+    setOn: function (v) { try { lsSetFlag(CFG.LS_KEY, v); } catch (e) {} },
     listen: function (fn) { try { window.addEventListener('storage', function (e) { if (e.key === CFG.LS_KEY) fn(); }); } catch (e) {} },
   };
   var $dom = {

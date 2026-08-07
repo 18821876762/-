@@ -17,12 +17,12 @@
   var LS_KEY = 'cx_zh_auto_next';
 
   function isOn() {
-    try { return '1' === localStorage[LS_KEY]; } catch (e) { return false; }
+    try { return lsFlag(LS_KEY, false); } catch (e) { return false; }
   }
 
   // 写入持久化 + 同步核心标志位（dom.js 每轮 _loopTick 读最新值，故时序无碍）
   function setOn(v) {
-    try { localStorage[LS_KEY] = v ? '1' : '0'; } catch (e) {}
+    try { lsSetFlag(LS_KEY, v); } catch (e) {}
     try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.zhsAllowEndedReplay = !!v; } catch (e) {}
   }
 

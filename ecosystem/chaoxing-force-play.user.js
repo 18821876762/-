@@ -27,7 +27,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-07T12:29:53+08:00  commit: 0fb9c66  minify: off
+// Built: 2026-08-07T12:51:03+08:00  commit: 5fae08b  minify: off
 
 
 (function () {
@@ -237,6 +237,31 @@
   function lsSet(k, v) {
     try { window.localStorage.setItem(k, String(v)); return true; } catch (e) { return false; }
   }
+
+  // ===== 安全 LS 封装（审查整改：统一收口 localStorage 访问）=====
+  // 此前 isOn/setOn 等散落各处各自 try/catch 包裹 localStorage，易遗漏异常/配额处理。
+  // 现集中到 toolkit：布尔开关 + JSON 感知读写 + 删除，全部吞掉异常经 swallow 兜底；
+  // 结构化数据统一加命名空间前缀 cx_fp_ 避免与页面自有键冲突。
+  var LS_NS = 'cx_fp_';
+  function _lsRaw(k) { try { return window.localStorage.getItem(LS_NS + k); } catch (e) { swallow(e, 'ls'); return null; } }
+  function _lsSetRaw(k, v) { try { window.localStorage.setItem(LS_NS + k, v); return true; } catch (e) { swallow(e, 'ls'); return false; } }
+  // 布尔开关：'1'/'0' 持久化（与既有 toggle 语义一致；用无前缀原始键以兼容历史存储，避免开关态迁移回退）
+  function lsFlag(k, def) {
+    try { var s = window.localStorage.getItem(k); return s == null ? !!def : s === '1'; } catch (e) { return !!def; }
+  }
+  function lsSetFlag(k, v) {
+    try { window.localStorage.setItem(k, v ? '1' : '0'); return true; } catch (e) { return false; }
+  }
+  // JSON 感知读写（结构化对象安全存取；命名空间隔离，避免覆盖页面自有 JSON 键）
+  function lsGetJSON(k, d) {
+    var s = _lsRaw(k);
+    if (s == null) return d;
+    try { return JSON.parse(s); } catch (e) { swallow(e, 'ls.json'); return d; }
+  }
+  function lsSetJSON(k, v) { return _lsSetRaw(k, JSON.stringify(v)); }
+  // 删除键（命名空间内）
+  function lsRemove(k) { try { window.localStorage.removeItem(LS_NS + k); return true; } catch (e) { return false; } }
+
   /**
    * 轻提示：经事件总线 emit('ui:toast') 触发面板/toast 组件展示；未注入核心时降级为 console。
    * @param {string} msg - 提示文本
@@ -308,7 +333,7 @@
     window.__CX_FORCE_PLAY.toolkit = {
       dbg: dbg, swallow: swallow, safeCall: safeCall, throttle: throttle, debounce: debounce,
       escapeHTML: escapeHTML, isTextEntry: isTextEntry, isTopFrame: isTopFrame,
-      lsGet: lsGet, lsSet: lsSet, toast: toast, fetchWithTimeout: fetchWithTimeout,
+      lsGet: lsGet, lsSet: lsSet, lsGetJSON: lsGetJSON, lsSetJSON: lsSetJSON, lsRemove: lsRemove, lsFlag: lsFlag, lsSetFlag: lsSetFlag, toast: toast, fetchWithTimeout: fetchWithTimeout,
       h: h, setSafeText: setSafeText,   // 评审#2：DOM 构建/安全文本回填助手
       recentErrors: recentErrors, errorCount: errorCount   // 评审#1：只读暴露被吞错误遥测(含 stack)，供诊断/测试 inspect
     };
@@ -1917,10 +1942,11 @@
         err: function () { try { console.error.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} }
       };
       var $storage = {
-        isOn: function () { try { return '1' === localStorage[LS_ON]; } catch (e) { return false; } },
-        setOn: function (v) { try { localStorage[LS_ON] = v ? '1' : '0'; } catch (e) {} },
-        isSub: function () { try { return '1' === localStorage[LS_SUB]; } catch (e) { return false; } },
-        setSub: function (v) { try { localStorage[LS_SUB] = v ? '1' : '0'; } catch (e) {} },
+        // 统一收口到 toolkit.lsFlag/lsSetFlag（安全 LS 封装：异常/配额兜底，'1'/'0' 语义不变，免迁移）
+        isOn: function () { try { return lsFlag(LS_ON, false); } catch (e) { return false; } },
+        setOn: function (v) { try { lsSetFlag(LS_ON, v); } catch (e) {} },
+        isSub: function () { try { return lsFlag(LS_SUB, false); } catch (e) { return false; } },
+        setSub: function (v) { try { lsSetFlag(LS_SUB, v); } catch (e) {} },
         listen: function (fn) {
           try {
             window.addEventListener('storage', function (e) {
@@ -2214,8 +2240,8 @@
     catch (e) { try { console.log('[auto-next] ' + msg); } catch (e2) {} }
   }
   var $storage = {
-    isOn: function () { try { return '1' === localStorage[CFG.LS_KEY]; } catch (e) { return false; } },
-    setOn: function (v) { try { localStorage[CFG.LS_KEY] = v ? '1' : '0'; } catch (e) {} },
+    isOn: function () { try { return lsFlag(CFG.LS_KEY, false); } catch (e) { return false; } },
+    setOn: function (v) { try { lsSetFlag(CFG.LS_KEY, v); } catch (e) {} },
     listen: function (fn) { try { window.addEventListener('storage', function (e) { if (e.key === CFG.LS_KEY) fn(); }); } catch (e) {} },
   };
   var $dom = {
@@ -2462,12 +2488,12 @@
   var LS_KEY = 'cx_zh_auto_next';
 
   function isOn() {
-    try { return '1' === localStorage[LS_KEY]; } catch (e) { return false; }
+    try { return lsFlag(LS_KEY, false); } catch (e) { return false; }
   }
 
   // 写入持久化 + 同步核心标志位（dom.js 每轮 _loopTick 读最新值，故时序无碍）
   function setOn(v) {
-    try { localStorage[LS_KEY] = v ? '1' : '0'; } catch (e) {}
+    try { lsSetFlag(LS_KEY, v); } catch (e) {}
     try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.zhsAllowEndedReplay = !!v; } catch (e) {}
   }
 
@@ -2949,13 +2975,16 @@
   var STORAGE_KEY = 'cx_quiet_popups';
 
   function isOn() {
-    try { return (typeof window.__CX_FORCE_PLAY !== 'undefined' && typeof window.__CX_FORCE_PLAY.isQuietPopups === 'function') ? window.__CX_FORCE_PLAY.isQuietPopups() : (localStorage.getItem(STORAGE_KEY) === '1'); }
+    try {
+      if (typeof window.__CX_FORCE_PLAY !== 'undefined' && typeof window.__CX_FORCE_PLAY.isQuietPopups === 'function') return window.__CX_FORCE_PLAY.isQuietPopups();
+      return lsFlag(STORAGE_KEY, false);   // 回退：统一收口到 toolkit.lsFlag
+    }
     catch (e) { return false; }
   }
   function setOn(v) {
     try {
       if (typeof window.__CX_FORCE_PLAY !== 'undefined' && typeof window.__CX_FORCE_PLAY.setQuietPopups === 'function') window.__CX_FORCE_PLAY.setQuietPopups(v);
-      else localStorage.setItem(STORAGE_KEY, v ? '1' : '0');
+      else lsSetFlag(STORAGE_KEY, v);      // 回退：统一收口到 toolkit.lsSetFlag
       if (window.Store && window.Store.emit) window.Store.emit('ui:toast', v ? '已关闭脚本弹窗（仅留洞察页提示流）' : '已恢复悬浮提示', v ? 'info' : 'success');
     } catch (e) {}
   }

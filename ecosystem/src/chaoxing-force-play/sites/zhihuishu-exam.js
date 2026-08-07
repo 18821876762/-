@@ -51,10 +51,11 @@
         err: function () { try { console.error.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} }
       };
       var $storage = {
-        isOn: function () { try { return '1' === localStorage[LS_ON]; } catch (e) { return false; } },
-        setOn: function (v) { try { localStorage[LS_ON] = v ? '1' : '0'; } catch (e) {} },
-        isSub: function () { try { return '1' === localStorage[LS_SUB]; } catch (e) { return false; } },
-        setSub: function (v) { try { localStorage[LS_SUB] = v ? '1' : '0'; } catch (e) {} },
+        // 统一收口到 toolkit.lsFlag/lsSetFlag（安全 LS 封装：异常/配额兜底，'1'/'0' 语义不变，免迁移）
+        isOn: function () { try { return lsFlag(LS_ON, false); } catch (e) { return false; } },
+        setOn: function (v) { try { lsSetFlag(LS_ON, v); } catch (e) {} },
+        isSub: function () { try { return lsFlag(LS_SUB, false); } catch (e) { return false; } },
+        setSub: function (v) { try { lsSetFlag(LS_SUB, v); } catch (e) {} },
         listen: function (fn) {
           try {
             window.addEventListener('storage', function (e) {
