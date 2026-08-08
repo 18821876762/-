@@ -46,9 +46,9 @@
     function createContainer() {
       var noop = function () {};
       var $log = {
-        info: CFG.DEBUG ? function () { try { console.info.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} } : noop,
-        warn: function () { try { console.warn.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} },
-        err: function () { try { console.error.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} }
+        info: CFG.DEBUG ? function () { try { console.info.apply(console, ['[ZHEXAM]'].concat(Array.from(arguments))); } catch (e) {} } : noop,
+        warn: function () { try { console.warn.apply(console, ['[ZHEXAM]'].concat(Array.from(arguments))); } catch (e) {} },
+        err: function () { try { console.error.apply(console, ['[ZHEXAM]'].concat(Array.from(arguments))); } catch (e) {} }
       };
       var $storage = {
         // 统一收口到 toolkit.lsFlag/lsSetFlag（安全 LS 封装：异常/配额兜底，'1'/'0' 语义不变，免迁移）
@@ -125,7 +125,7 @@
         var btns = c.$dom.all(CFG.nextSels.join(','), document.documentElement);
         for (var i = 0; i < btns.length; i++) {
           var t = (btns[i].textContent || '').replace(/\s/g, '');
-          if (/下一页|下一题|下一项|next/i.test(t)) { btns[i].click(); return true; }
+          if (/下一页|下一题|下一项|next/i.test(t)) { btns[i].click(); return true; }   // 翻页成功；作答指纹清空交由闭包内 autoSubmitTick 处理（避免在模块级函数内访问闭包变量 handled，严格模式下会抛 ReferenceError 被静默吞掉）
         }
       } catch (e) {}
       return false;
@@ -190,14 +190,53 @@
       var state = IDLE;
       var asub = ASUB_OFF;
       var handled = {};   // 已勾选题目指纹去重
+      var submitting = false;            // 交卷防重入锁
+      var _lastSubmitTs = 0;            // 最近一次成功交卷时间戳（与 submitting 锁双重防极端竞态）
+      var _SUBMIT_MIN_GAP = 1500;       // 交卷最小间隔（ms）：防止 click 同步冒泡/双击造成二次提交
+      var _listeners = [];               // onStateChange 订阅者
+      var _errBox = [];                  // 最近错误黑匣子（DEBUG 下可观测，最多保留 10 条）
+      var _lastActive = null, _lastSub = null;  // 状态变更去重（同值不重复 emit）
+      var _lastSyncTs = 0, _SYNC_MIN_GAP = 120;  // sync 节流（ms）：history 事件在 SPA 中可密集触发
+      var _examPage = _isExamPage();     // 页面态缓存：由路由事件刷新，免每次同步读 location
+
+      // 错误黑匣子：记录最近 N 条异常（含来源），便于排错；DEBUG 模式下额外向控制台冒泡
+      function _recordErr(e, where) {
+        try {
+          var msg = (e && e.message) ? e.message : ('' + e);
+          _errBox.push({ ts: Date.now(), where: where || '', msg: msg });
+          if (_errBox.length > 10) _errBox.shift();
+          if (CFG.DEBUG) { try { console.error('[ZHEXAM]' + (where ? '(' + where + ')' : '') + ': ' + msg); } catch (e2) {} }
+        } catch (e3) {}
+      }
 
       function isActive() { return state === ACTIVE && _dsOk(); }          // 作答态（含 DeepSeek 闸门）
-      function asubOn() { return c.$storage.isSub() && _isExamPage() && _dsOk(); }  // 自动交卷态（含 DeepSeek 闸门）
 
-      function transition(s) { if (state !== s) { var p = state; state = s; c.$log.info('zh-exam answer state: ' + p + ' → ' + s); } }
-      function asubTransition(s) { if (asub !== s) { var p = asub; asub = s; c.$log.info('zh-exam autosub state: ' + p + ' → ' + s); } }
+      // 自动交卷态判定（含 DeepSeek 闸门）。DS/页面态来自事件更新（_examPage 缓存 + _dsOk 闸门），不在此同步重算。
+      // 关键修复：用实时 _isExamPage() 而非缓存 _examPage。智慧树翻页/切题为局部 DOM 刷新(不走 history)，
+    // onRoute 不会触发，_examPage 可能永远停在初始化时的 false，导致自动交卷子态卡死在 OFF。
+    // 与 sync() 的作答态判定口径统一为实时 location，保证任意翻页方式都能进入 ANSWERING→READY。
+    function asubOn() { return c.$storage.isSub() && _isExamPage() && _dsOk(); }
+
+      function transition(s) { if (state !== s) { var p = state; state = s; c.$log.info('zh-exam answer state: ' + p + ' → ' + s); _emitIfChanged(); } }
+      function asubTransition(s) { if (asub !== s) { var p = asub; asub = s; c.$log.info('zh-exam autosub state: ' + p + ' → ' + s); _emitIfChanged(); } }
+
+      // 状态变更可观测：仅在真正变化时 emit，避免刷屏
+      function _emitIfChanged() {
+        var a = (state === ACTIVE), s = asub;
+        if (a === _lastActive && s === _lastSub) return;
+        _lastActive = a; _lastSub = s;
+        var snap = getState();
+        try { if (typeof Store !== 'undefined' && Store.emit) Store.emit('zh-exam:state', snap); } catch (e) { _recordErr(e, 'emit'); }
+        for (var i = 0; i < _listeners.length; i++) { try { _listeners[i](snap); } catch (e) { _recordErr(e, 'onStateChange'); } }
+      }
+      function onStateChange(fn) { if (typeof fn === 'function') _listeners.push(fn); }
+      function offStateChange(fn) { for (var i = _listeners.length - 1; i >= 0; i--) { if (_listeners[i] === fn) { _listeners.splice(i, 1); break; } } }
 
       function sync() {
+        // 节流：history.pushState/replaceState 在 SPA 中可能短时间内密集触发，合并更新
+        var now = Date.now();
+        if (now - _lastSyncTs < _SYNC_MIN_GAP) { if (!_syncTimer) _syncTimer = setTimeout(function () { _syncTimer = null; sync(); }, _SYNC_MIN_GAP); return; }
+        _lastSyncTs = now;
         // 作答态
         if (c.$storage.isOn() && _isExamPage() && _dsOk()) { if (state !== ACTIVE) { handled = {}; transition(ACTIVE); } }
         else { if (state === ACTIVE) { handled = {}; transition(IDLE); } }
@@ -205,6 +244,7 @@
         if (asubOn()) { if (asub === ASUB_OFF) asubTransition(ASUB_ANSWERING); }
         else asubTransition(ASUB_OFF);
       }
+      var _syncTimer = null;
 
       // —— 作答：勾选当前页所有题（依赖 isActive 闸门）——
       function tickAnswerPage() {
@@ -234,8 +274,8 @@
         if (asub === ASUB_DONE) return;
         var last = !_peekNext(c);
         if (!last) {
-          // 非末页：当前页答完则翻页
-          if (_allAnsweredHere(c)) _goNextPage(c);
+          // 非末页：当前页答完则翻页；翻页成功后清空作答指纹，避免跨页同题干片段误判"已答"而漏答
+          if (_allAnsweredHere(c)) { if (_goNextPage(c)) handled = {}; }
           asubTransition(ASUB_ANSWERING);
         } else {
           // 末页：当前页所有题答完 → READY（等用户确认交卷）
@@ -243,11 +283,29 @@
           else asubTransition(ASUB_ANSWERING);
         }
       }
+      // 交卷：返回 Promise，带 submitting 防重入锁，避免快速重复点击/并发提交导致重复交卷
       function submitNow() {
-        if (asub !== ASUB_READY) return false;     // 仅 READY（所有页答完）才允许交卷
-        var b = _findSubmitBtn(c);
-        if (b) { try { b.click(); asubTransition(ASUB_DONE); return true; } catch (e) {} }
-        return false;
+        if (asub !== ASUB_READY) return Promise.resolve(false);   // 仅 READY（所有页答完）才允许交卷
+        if (submitting) return Promise.resolve(false);            // 防重入：正在提交则忽略重复请求
+        var _now = Date.now();
+        if (_now - _lastSubmitTs < _SUBMIT_MIN_GAP) return Promise.resolve(false); // 极端竞态（click 冒泡/双击）二次保护
+        submitting = true;
+        return new Promise(function (resolve) {
+          var b = _findSubmitBtn(c);
+          if (!b) { submitting = false; resolve(false); return; }
+          try {
+            b.click();
+            asubTransition(ASUB_DONE);
+            _lastSubmitTs = Date.now();
+            c.$log.info('zh-exam submit clicked (DONE)');
+            resolve(true);
+          } catch (e) {
+            submitting = false;   // 失败释放锁，允许重试（幂等：非 READY 即拒，不会重复交卷）
+            _recordErr(e, 'submitNow');
+            c.$log.err('zh-exam submit failed: ' + (e && e.message));
+            resolve(false);
+          }
+        });
       }
 
       function getState() {
@@ -255,6 +313,7 @@
           ds: _dsOk(),
           answering: state === ACTIVE,
           asub: asub,
+          submitting: submitting,
           lastPage: !_peekNext(c),
           allAnswered: _allAnsweredHere(c, handled),
           confirmReady: asub === ASUB_READY
@@ -263,7 +322,10 @@
 
       return {
         isActive: isActive, sync: sync, tickAnswerPage: tickAnswerPage,
-        autoSubmitTick: autoSubmitTick, submitNow: submitNow, getState: getState
+        autoSubmitTick: autoSubmitTick, submitNow: submitNow, getState: getState,
+        onStateChange: onStateChange, offStateChange: offStateChange,
+        lastErrors: function () { return _errBox.slice(); },
+        refreshExamPage: function () { _examPage = _isExamPage(); }
       };
     }
 
@@ -280,15 +342,21 @@
       window.__CX_FORCE_PLAY.zhihuishuExamAutoSubmitTick = function () { sm.autoSubmitTick(); };
       window.__CX_FORCE_PLAY.zhihuishuExamSubmitNow = function () { return sm.submitNow(); };
       window.__CX_FORCE_PLAY.zhihuishuExamState = function () { return sm.getState(); };
+      window.__CX_FORCE_PLAY.zhihuishuExamOnStateChange = function (fn) { sm.onStateChange(fn); };
+      window.__CX_FORCE_PLAY.zhihuishuExamOffStateChange = function (fn) { sm.offStateChange(fn); };
+      window.__CX_FORCE_PLAY.zhihuishuExamLastErrors = function () { return sm.lastErrors(); };
 
       function reSync() { sm.sync(); }
       reSync();
       c.$storage.listen(reSync);
       try {
         window.addEventListener('hashchange', reSync);
+        // 路由变化刷新页面态缓存（_examPage），并 reSync；sync 内部已节流，避免密集触发重复过渡
+        function onRoute() { sm.refreshExamPage(); reSync(); }
+        window.addEventListener('popstate', onRoute);
         var _op = history.pushState, _or = history.replaceState;
-        history.pushState = function () { var r = _op.apply(this, arguments); reSync(); return r; };
-        history.replaceState = function () { var r = _or.apply(this, arguments); reSync(); return r; };
+        history.pushState = function () { var r = _op.apply(this, arguments); onRoute(); return r; };
+        history.replaceState = function () { var r = _or.apply(this, arguments); onRoute(); return r; };
       } catch (e) {}
 
       c.$log.info('v4.15 zhihuishu-exam booted');

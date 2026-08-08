@@ -23,7 +23,10 @@
     submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn', '.next-btn']
   };
 
-  var _quizHandled = {};   // 已作答题目指纹去重（防重复提交）
+  var _quizHandled = {};       // 已作答题目指纹去重（防重复提交）
+  var _quizAIPending = {};     // AI 异步题解进行中：fp→发起时间戳（超时则随机兜底）
+  var _quizPendingSubmit = {}; // 二次确认：已作答未提交：fp→{qEl,sels}（待用户「确认提交」）
+  var _quizReviewItems = {};   // 人工复核队列：fp→{fp,stem,opts,guessedIdx,ts}（置信度<0.6 随机兜底后待用户确认/入题库）
   function _quizFingerprint(qEl) {
     try { var s = (qEl.textContent || '').replace(/\s+/g, '').slice(0, 120); return 'quiz:' + s.length + ':' + s; }
     catch (e) { return 'quiz:err'; }
@@ -45,6 +48,91 @@
     return out;
   }
 
+  // —— 隐私合规：离线优先 + 端点白名单（默认不外发题目/选项）——
+  function _quizOfflineOnly() {
+    // 默认仅离线作答（cx_quiz_offline 未置 '0' 即不外发）。需用户显式允许才向外发送题目数据。
+    try { if (typeof localStorage === 'undefined') return true; var v = localStorage.getItem('cx_quiz_offline'); return v === null ? true : (v !== '0'); } catch (e) { return true; }
+  }
+  function _quizEndpointAllowed(ep) {
+    if (!ep) return false;
+    try {
+      if (_quizOfflineOnly()) return false;   // 离线优先：默认不外发（隐私合规硬缺口闭合）
+      var _base = (typeof location !== 'undefined' && location.href) ? location.href : 'https://localhost/';
+      var _u = new URL(ep, _base);
+      if (_u.protocol !== 'http:' && _u.protocol !== 'https:') return false;   // 仅 http/https，防 file:/javascript: 泄漏
+      var wl = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ENDPOINT_WHITELIST) || [];
+      if (!wl.length) return false;            // 未配置白名单 → 禁外发（需明确授权）
+      for (var i = 0; i < wl.length; i++) {
+        var h = wl[i]; if (!h) continue;
+        if (_u.host === h || _u.host.endsWith('.' + h)) return true;
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+
+  // —— 提交二次确认（隐私/防误交卷）：默认自动提交；关闭后「作答但不提交」，挂起待用户「确认提交」——
+  function _quizAutoSubmit() {
+    // 默认自动提交（cx_quiz_autosubmit 未置 '0' 即自动）。考试/高风险场景建议关，由人工确认。
+    try { if (typeof localStorage === 'undefined') return true; var v = localStorage.getItem('cx_quiz_autosubmit'); return v === null ? true : (v !== '0'); } catch (e) { return true; }
+  }
+  function _quizMaybeSubmit(qEl, submitSels, fp) {
+    if (_quizAutoSubmit()) {
+      var _ok = _quizSubmit(qEl, submitSels);
+      if (fp != null) { try { delete _quizPendingSubmit[fp]; } catch (e) {} }
+      return _ok;
+    }
+    // 二次确认模式：已作答未提交，挂起等待「确认提交」
+    if (fp != null) _quizPendingSubmit[fp] = { qEl: qEl, sels: submitSels };
+    return false;
+  }
+  function quizSubmitPending() {
+    // 用户「确认提交」：批量提交所有已作答待确认的题（按记录复找提交按钮）
+    var n = 0;
+    try {
+      if (typeof _quizPendingSubmit !== 'object' || !_quizPendingSubmit) return 0;
+      for (var fp in _quizPendingSubmit) {
+        try {
+          var rec = _quizPendingSubmit[fp];
+          if (!rec || !rec.qEl) { try { delete _quizPendingSubmit[fp]; } catch (e2) {} continue; }
+          if (_quizSubmit(rec.qEl, rec.sels)) { n++; try { delete _quizPendingSubmit[fp]; } catch (e3) {} }
+        } catch (e) { swallow(e); }
+      }
+      try {
+        if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) {
+          window.__CX_FORCE_PLAY.quizStats = window.__CX_FORCE_PLAY.quizStats || {};
+          window.__CX_FORCE_PLAY.quizStats.pendingSubmit = Object.keys(_quizPendingSubmit).length;
+        }
+      } catch (e) {}
+      if (n > 0) try { Store.emit('ui:toast', '已确认提交 ' + n + ' 题'); } catch (e) {}
+    } catch (e) { swallow(e); }
+    return n;
+  }
+
+  // —— MutationObserver：题目动态出现即触发作答，替代仅靠 2s 全文档轮询的空窗 ——
+  var _quizObserver = null, _quizMOBusy = false;
+  function _quizMOTick() {
+    try {
+      var disp = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.quizObserveDispatch === 'function') ? window.__CX_FORCE_PLAY.quizObserveDispatch : quizTick;
+      disp();
+    } catch (e) { swallow(e); }
+  }
+  function _quizMOHandle() {
+    if (_quizMOBusy) return;
+    _quizMOBusy = true;
+    setTimeout(function () { _quizMOBusy = false; _quizMOTick(); }, 300);   // 300ms 防抖，合并批量 DOM 变更
+  }
+  function quizObserve(root) {
+    if (typeof MutationObserver === 'undefined') return false;
+    try {
+      if (_quizObserver) { try { _quizObserver.disconnect(); } catch (e) {} }
+      var r = root || (typeof document !== 'undefined' ? (document.body || document.documentElement) : null);
+      if (!r) return false;
+      _quizObserver = new MutationObserver(function () { _quizMOHandle(); });
+      _quizObserver.observe(r, { childList: true, subtree: true });
+      return true;
+    } catch (e) { swallow(e); return false; }
+  }
+
   // ---- 答案源解析 ----
   function _quizBankLookup(stem) {
     try {
@@ -63,25 +151,21 @@
     return null;
   }
   function _quizAskAI(stem, options) {
-    // 预留 AI 答案源接口：CONFIG.QUIZ_AI_ENDPOINT 由用户配置，脚本不内置密钥。
+    // AI 答案源接口：CONFIG.QUIZ_AI_ENDPOINT 由用户配置，脚本不内置密钥。
+    // 同步环境无法 await：采用 fire-and-forget + 异步结果写回 quizBank，下轮命中回填；
+    // 返回 'pending' 表示已发起异步请求（调用方暂不下发、不下坑，等下轮命中），其余返回 null。
     try {
       var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_ENDPOINT) || '';
       if (!ep) return null;
-      // 协议校验：仅允许 http/https，避免题目/选项经 file:/javascript: 等非预期协议外泄
-      try {
-        var _u = new URL(ep, location.href);
-        if (_u.protocol !== 'http:' && _u.protocol !== 'https:') return null;
-      } catch (e) { return null; }
-      // 同步环境无法 await；采用 fire-and-forget + 后续轮次回填（命中缓存即生效）。
-      // 这里仅返回 null，交由调用方按 random 兜底；AI 异步结果写入 window.__CX_FORCE_PLAY.quizBank 供下轮命中。
+      if (!_quizEndpointAllowed(ep)) return null;   // 离线优先 / 非白名单 → 不外发题目（隐私合规）
       try {
         var payload = JSON.stringify({ stem: stem, options: options.map(function (o) { return (o.textContent || '').replace(/\s+/g, ' ').trim(); }) });
         fetchWithTimeout(ep, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload
-        }, 15000).then(function (r) {
-          if (!r.ok) return null;
+        }, (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_TIMEOUT) || 15000).then(function (r) {
+          if (!r || !r.ok) return null;
           return r.json();
         }).then(function (ans) {
           if (ans && (ans.index != null || ans.answer != null)) {
@@ -90,6 +174,7 @@
           }
           return null;
         }).catch(function (e) { swallow(e); return null; });
+        return 'pending';   // 已发起异步题解，下一轮从 quizBank 命中回填
       } catch (e) { swallow(e); }
     } catch (e) { swallow(e); }
     return null;
@@ -113,9 +198,10 @@
         if (!isNaN(bi)) answers.push({ idx: bi, score: 1.0, source: 'bank' });
       }
     }
-    // AI 接口：同步环境恒返回 null（异步写库，下轮命中）；非空时作为 ai 权重候选参与融合
+    // AI 接口：同步环境发起异步请求（返回 'pending'）→ 下一轮命中 quizBank 回填；同步命中时作为 ai 权重候选参与融合
     if (src === 'ai') {
       var a = _quizAskAI(stem, options);
+      if (a === 'pending') return { pending: true };   // 异步题解进行中：调用方暂不下发、不下坑
       if (a != null && !isNaN(Number(a))) answers.push({ idx: Number(a), score: 0.7, source: 'ai' });
     }
     if (!answers.length) return null;   // 无候选 → 调用方 random 兜底
@@ -158,8 +244,10 @@
       quizRecover(qEl).then(function (res) {
         if (!res || (res.text == null && res.answer == null)) throw new Error('empty recover');
         var useIdx = null;
-        if (res.answer != null) {                       // 多模态端点直接给答案索引
-          useIdx = (typeof res.answer === 'number') ? res.answer : parseInt(res.answer, 10);
+        if (res.answer != null) {                       // 多模态端点直接给答案索引（DeepSeek 返回字母 A-D，需转换为数字索引）
+          useIdx = (typeof res.answer === 'number') ? res.answer :
+            ({ A: 0, B: 1, C: 2, D: 3, a: 0, b: 1, c: 2, d: 3 })[res.answer] != null
+              ? ({ A: 0, B: 1, C: 2, D: 3, a: 0, b: 1, c: 2, d: 3 })[res.answer] : parseInt(res.answer, 10);
         } else {
           // 还原文本 → 查本地题库（题干已还原为真实文本，可命中 bank）；仍无则对原(可能混淆)题干再查一次
           var src = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random';
@@ -220,7 +308,7 @@
       var qs = _pqQueryAll(root, sels.questionSels);
       var scanned = qs.length;
       var src = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random';  // 提到循环外，避免全部跳过时 source 为 undefined
-      var _confAcc = 0, _confN = 0, _srcMap = {};   // 统计：平均置信度 + 实际命中来源集合（融合后可见，非仅配置值）
+      var _confAcc = 0, _confN = 0, _srcMap = {}, _lvlMap = {};   // 统计：平均置信度 + 实际命中来源集合 + 分级分布(auto/confirm/review)
       for (var i = 0; i < qs.length; i++) {
         var qEl = qs[i];
         var fp = _quizFingerprint(qEl);
@@ -230,13 +318,61 @@
         if (!opts.length) continue;
         var idxObj = _quizResolveAnswer(stem, opts);  // 文本路径(random/bank/ai)同步求答案（融合后含 confidence/source）
         if (idxObj && idxObj.idx != null && idxObj.idx >= 0 && idxObj.idx < opts.length) {
+          // —— 置信度分级决策（评估建议#3：置信度驱动行为，而非无差别点选+提交）——
+          //   auto(≥0.9)：点选 + 按二次确认开关提交/挂起
+          //   confirm(0.6~0.9)：点选但强制挂起待用户确认（即便自动提交开着也不直接交，避免中置信误交）
+          //   review(<0.6)：低可信，转随机兜底保不卡，但标记"人工复核"（不计入高可信来源）
+          var _c = (typeof idxObj.confidence === 'number') ? idxObj.confidence : 1;
+          var _lvl = (typeof decisionFor === 'function') ? decisionFor(_c) : (_c >= 0.9 ? 'auto' : (_c >= 0.6 ? 'confirm' : 'review'));
+          if (_lvl === 'review') {
+            // 低置信：不盲选"正确"，随机兜底保不卡进度，但标记为人工复核
+            var _guessed = Math.floor(Math.random() * opts.length);
+            _quizClick(opts, _guessed);
+            _quizMaybeSubmit(qEl, sels.submitSels, fp);
+            _quizHandled[fp] = true; answered++;
+            _srcMap['review'] = true; _lvlMap['review'] = true;
+            // 登记到人工复核队列：供面板「一键采纳/导出」闭环（评估建议#6 增量进本地题库）
+            _quizReviewItems[fp] = { fp: fp, stem: stem, opts: opts, guessedIdx: _guessed, ts: Date.now() };
+            try { Store.emit('ui:toast', '低置信度(' + Math.round(_c * 100) + '%)·已随机兜底·标记人工复核（源=' + (idxObj.source || '?') + '）'); } catch (e) { swallow(e); }
+            continue;
+          }
           _quizClick(opts, idxObj.idx);
-          _quizSubmit(qEl, sels.submitSels);
+          if (_lvl === 'confirm') {
+            // 中置信：点选但不提交，强制挂起待用户「确认提交」（_quizMaybeSubmit 的挂起语义天然满足；此处额外绕过自动提交开关）
+            _quizPendingSubmit[fp] = { qEl: qEl, sels: sels.submitSels };
+            _quizHandled[fp] = true; answered++;
+            _confAcc += _c; _confN++;
+            if (idxObj.source) { _srcMap[idxObj.source] = true; }
+            _lvlMap['confirm'] = true;
+            try { Store.emit('ui:toast', '中置信度(' + Math.round(_c * 100) + '%)·已点选·待你确认提交（源=' + idxObj.source + '）'); } catch (e) { swallow(e); }
+            continue;
+          }
+          // auto：点选 + 按二次确认开关提交/挂起
+          _quizMaybeSubmit(qEl, sels.submitSels, fp);
           _quizHandled[fp] = true;
+          if (_quizAIPending[fp]) { try { delete _quizAIPending[fp]; } catch (e) {} }
           answered++;
-          _confAcc += (idxObj.confidence || 0); _confN++;
+          _confAcc += _c; _confN++;
           if (idxObj.source) _srcMap[idxObj.source] = true;
-          try { Store.emit('ui:toast', '已作答 1 题（源=' + idxObj.source + ' 置信度=' + Math.round((idxObj.confidence || 0) * 100) + '%）'); } catch (e) { swallow(e); }
+          _lvlMap['auto'] = true;
+          try { Store.emit('ui:toast', '已作答 1 题（源=' + idxObj.source + ' 置信度=' + Math.round(_c * 100) + '%）'); } catch (e) { swallow(e); }
+          continue;
+        }
+        // AI 异步题解进行中：暂不下发、不下坑，记录待回填；超过 QUIZ_AI_WAIT 未命中则随机兜底（不空题）
+        if (idxObj && idxObj.pending) {
+          if (!_quizAIPending[fp]) _quizAIPending[fp] = Date.now();
+          else {
+            var _wait = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_WAIT) || 20000;
+            if (Date.now() - _quizAIPending[fp] > _wait) {
+              delete _quizAIPending[fp];
+              _quizClick(opts, Math.floor(Math.random() * opts.length));
+              _quizMaybeSubmit(qEl, sels.submitSels, fp);   // 超时随机兜底 + 自动提交/挂起
+              _quizHandled[fp] = true;
+              answered++;
+              _srcMap['random'] = true;
+              try { Store.emit('ui:toast', 'AI 题解超时，已随机兜底 1 题'); } catch (e) { swallow(e); }
+            }
+          }
           continue;
         }
         // 文本路径无果 + 视觉识别启用 → 截图还原后作答（异步；先占坑防重复触发截图）
@@ -249,7 +385,7 @@
         }
         // 兜底随机：保证不卡进度 / 不空题
         _quizClick(opts, Math.floor(Math.random() * opts.length));
-        _quizSubmit(qEl, sels.submitSels);
+        _quizMaybeSubmit(qEl, sels.submitSels, fp);   // 自动提交或挂起待二次确认
         _quizHandled[fp] = true;
         answered++;
         _srcMap['random'] = true;   // 随机兜底计入来源集合（置信度不累计，视为低可信）
@@ -269,6 +405,10 @@
             doneAll: remaining === 0, source: src,
             answerSource: Object.keys(_srcMap).join('+') || 'random',   // 实际命中来源（融合后可见：bank/ai/random 等）
             confidence: _confN ? (_confAcc / _confN) : 0,                // 已作答项平均置信度（0~1）
+            levels: Object.keys(_lvlMap).join('+') || 'auto',           // 本次分级分布（auto=直接提交/confirm=待确认/review=人工复核）
+            pendingSubmit: Object.keys(_quizPendingSubmit).length,       // 已作答待二次确认提交数
+            reviewCount: Object.keys(_quizReviewItems).length,           // 待人工复核题数（置信度<0.6 随机兜底，需用户确认/入题库）
+            offline: _quizOfflineOnly(),                                 // 是否仅离线作答（题目不外发）
             ts: Date.now()
           };
         } catch (e) {}
@@ -282,15 +422,62 @@
   // 配置默认值注入（CONFIG 可能尚未含这些字段，安全补默认值）
   try {
     if (typeof CONFIG !== 'undefined') {
+      // 从 localStorage 读取用户持久化配置（由面板「用 DeepSeek 作答」开关写入），覆盖默认值，刷新后保持
+      var _lsGet = function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
+      var _lsBool = function (k, d) { var v = _lsGet(k, null); if (v === null) return d; return v === '1' || v === 'true'; };
       if (CONFIG.QUIZ_ANSWER_SOURCE == null) CONFIG.QUIZ_ANSWER_SOURCE = 'random';
       if (CONFIG.QUIZ_AI_ENDPOINT == null) CONFIG.QUIZ_AI_ENDPOINT = '';
       // rev3 抗题目文本混淆（视觉识别）配置默认值
-      if (CONFIG.QUIZ_VISION_ENABLED == null) CONFIG.QUIZ_VISION_ENABLED = false;            // 启用截图→识别对抗混淆；默认关（零运行时依赖）
-      if (CONFIG.QUIZ_VISION_OCR == null) CONFIG.QUIZ_VISION_OCR = 'endpoint';               // 'endpoint'=多模态AI直接答；'tesseract'=本地OCR还原文本查题库
-      if (CONFIG.QUIZ_VISION_ENDPOINT == null) CONFIG.QUIZ_VISION_ENDPOINT = '';             // 多模态识别端点（接收 {image,options}，返回 {text,answer}）
-      if (CONFIG.QUIZ_OCR_LANG == null) CONFIG.QUIZ_OCR_LANG = 'chi_sim';                    // Tesseract 语言包
+      if (CONFIG.QUIZ_VISION_ENABLED == null) CONFIG.QUIZ_VISION_ENABLED = _lsBool('cx_quiz_vision_enabled', false);   // 启用截图→识别对抗混淆；默认关（零运行时依赖）
+      if (CONFIG.QUIZ_VISION_OCR == null) CONFIG.QUIZ_VISION_OCR = _lsGet('cx_quiz_vision_ocr', 'endpoint');         // 'endpoint'=多模态AI直接答；'tesseract'=本地OCR还原文本查题库；'deepseek-web'=DeepSeek 网页版应答端
+      if (CONFIG.QUIZ_VISION_ENDPOINT == null) CONFIG.QUIZ_VISION_ENDPOINT = _lsGet('cx_quiz_vision_endpoint', '');   // 多模态识别端点（接收 {image,options}，返回 {text,answer}）
+      if (CONFIG.QUIZ_OCR_LANG == null) CONFIG.QUIZ_OCR_LANG = _lsGet('cx_quiz_ocr_lang', 'chi_sim');                // Tesseract 语言包
       if (CONFIG.QUIZ_VISION_TIMEOUT == null) CONFIG.QUIZ_VISION_TIMEOUT = 60000;            // deepseek-web 单次问答超时(ms)
+      if (CONFIG.QUIZ_VISION_PRIVACY_OK == null) CONFIG.QUIZ_VISION_PRIVACY_OK = _lsBool('cx_quiz_vision_privacy', false);  // 外部 CDN 脚本(html2canvas)加载须显式授权，默认关（隐私优先）
+      // 隐私合规 / 提交控制默认值
+      if (CONFIG.QUIZ_OFFLINE_ONLY == null) CONFIG.QUIZ_OFFLINE_ONLY = true;                  // 默认仅离线作答，题目/选项不外发
+      if (CONFIG.QUIZ_ENDPOINT_WHITELIST == null) CONFIG.QUIZ_ENDPOINT_WHITELIST = [];        // 允许外发的 AI 端点域名白名单（空=禁外发）
+      if (CONFIG.QUIZ_AI_WAIT == null) CONFIG.QUIZ_AI_WAIT = 20000;                           // AI 异步题解最长等待(ms)，超时则随机兜底
+      if (CONFIG.QUIZ_AUTO_SUBMIT == null) CONFIG.QUIZ_AUTO_SUBMIT = true;                    // 作答后自动提交；关闭→挂起待用户「确认提交」
     }
   } catch (e) {}
 
   try { window.__CX_FORCE_PLAY.quizTick = quizTick; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizObserve = quizObserve; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizSubmitPending = quizSubmitPending; } catch (e) {}
+
+  // —— 人工复核闭环 API（评估建议#6：增量学习——用户纠正结果入本地题库）——
+  // 写入题库：内存对象 + localStorage['cx_quiz_bank'] 同步持久化（与 _quizAskAI 回填路径一致）
+  function _quizBankWrite(stem, idx) {
+    try {
+      window.__CX_FORCE_PLAY = window.__CX_FORCE_PLAY || {};
+      window.__CX_FORCE_PLAY.quizBank = window.__CX_FORCE_PLAY.quizBank || {};
+      window.__CX_FORCE_PLAY.quizBank[stem] = idx;
+      if (typeof localStorage !== 'undefined') {
+        try { localStorage.setItem('cx_quiz_bank', JSON.stringify(window.__CX_FORCE_PLAY.quizBank)); } catch (e2) {}
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  // 列出待人工复核项：[{fp,stem,opts,guessedIdx,ts}]
+  function quizReviewList() { try { return Object.keys(_quizReviewItems).map(function (k) { return _quizReviewItems[k]; }); } catch (e) { return []; } }
+  // 采纳指定答案入题库（correctIdx 缺省=采用当前随机猜测值），并移出复核队列；成功返回 true
+  function quizReviewAccept(fp, correctIdx) {
+    try {
+      var it = _quizReviewItems[fp]; if (!it) return false;
+      var idx = (correctIdx == null) ? it.guessedIdx : correctIdx;
+      var ok = _quizBankWrite(it.stem, idx);
+      if (ok) { delete _quizReviewItems[fp]; try { Store.emit('ui:toast', '已采纳入本地题库（fp=' + fp.slice(0, 16) + '）'); } catch (e2) {} }
+      return ok;
+    } catch (e) { return false; }
+  }
+  // 导出待复核题为 JSON 文本（供用户核对/外部维护题库），返回字符串
+  function quizReviewExport() {
+    try {
+      var arr = quizReviewList().map(function (it) { return { stem: it.stem, options: it.opts, guessedIdx: it.guessedIdx }; });
+      return JSON.stringify(arr, null, 2);
+    } catch (e) { return '[]'; }
+  }
+  try { window.__CX_FORCE_PLAY.quizReviewList = quizReviewList; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizReviewAccept = quizReviewAccept; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizReviewExport = quizReviewExport; } catch (e) {}

@@ -185,6 +185,7 @@
       CONFIG.RESCAN_INTERVAL = +resc.value;
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }   // 实时重启轮询，使间隔立即生效
       try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+      try { Store.state._loopTimer = _loopTimer; } catch (e) {}                       // 同步镜像到 Store.state，避免诊断区看到旧定时器 id
       savePanelCfg(); Store.emit('panel:refresh');
     });
     var endrel = el.querySelector('#__cxEndRel');
@@ -242,7 +243,9 @@
         if (el.classList.contains('cx-dragging')) return;
         if (el._cxDragMoved) { el._cxDragMoved = false; return; }  // 拖拽结束后的误触，跳过
         if (e && e.button !== undefined && e.button !== 0) return;
+        var _wasOpen = el.classList.contains('ninja-open');
         el.classList.toggle('ninja-open');
+        if (!_wasOpen) { try { Store.emit('panel:refresh'); } catch (e2) { swallow(e2); } }   // 折叠→展开：刷新动态内容，避免胶囊展开后三页空白
       });
     }
     try {
@@ -252,6 +255,13 @@
         }
       });
     } catch (e3) { swallow(e3); }
+    // ninja 纯 hover 展开（CSS :hover，不触发 titlebar mouseup）时，鼠标进入面板刷新一次动态内容，
+    // 否则用户悬停胶囊看到的是上次填充的快照或模板静态占位，洞察/系统页显得"空/不更新"。
+    // mouseenter 不冒泡，只在真正进入面板根元素时触发一次，无需节流。
+    el.addEventListener('mouseenter', function () {
+      if (!el.classList.contains('ninja')) return;   // 非 ninja 不处理（常驻面板由主循环节流刷新）
+      try { Store.emit('panel:refresh'); } catch (e) { swallow(e); }
+    });
     var dbg = el.querySelector('#__cxDebug');
     if (dbg) dbg.addEventListener('change', function () { try { DEBUG = !!dbg.checked; Store.emit('ui:toast', DEBUG ? '调试日志已开' : '调试日志已关'); } catch (e) { swallow(e); } savePanelCfg(); });
     var sv = el.querySelector('#__cxSingleVideo');
@@ -291,8 +301,18 @@
     function switchTab(name) {
       if (!_cxPanel) return;
       try {
+        // 守卫：无效 tab 名（如残留 localStorage cx_panel_tab、/tab 传入非法值）会把所有 .cx-tab 设成 display:none → 整面板空白。
+        // 先扫描确认有匹配项，无匹配则回退 control，避免"切 tab 后全空白"。
         var tabs = _cxPanel.querySelectorAll('.cx-tab');
-        for (var i = 0; i < tabs.length; i++) tabs[i].style.display = (tabs[i].id === '__cxTab_' + name) ? 'block' : 'none';
+        var matched = false;
+        for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === '__cxTab_' + name) { matched = true; break; } }
+        if (!matched) { if (name !== 'control') { switchTab('control'); } return; }
+        for (var k = 0; k < tabs.length; k++) {
+          var _cur = (tabs[k].id === '__cxTab_' + name);
+          tabs[k].style.display = _cur ? 'block' : 'none';
+          // 标记当前活跃 tab，供 ninja 折叠态 CSS 例外放行（!important 压过内联 display 的修复）
+          if (_cur) tabs[k].classList.add('cx-tab--cur'); else tabs[k].classList.remove('cx-tab--cur');
+        }
         var btns = _cxPanel.querySelectorAll('.cx-nav-btn');
         for (var j = 0; j < btns.length; j++) {
           var _sel = (btns[j].getAttribute('data-tab') === name);
@@ -305,12 +325,21 @@
         _cxActiveTab = name;
       } catch (e) { swallow(e); }
     }
-    try { Store.onEv('ui:switchTab', function (name) { try { switchTab(name); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }   // 供命令框 /tab 调用
+    try { Store.onEv('ui:switchTab', function (name) { try { switchTab(name); try { if (el.classList.contains('ninja') && !el.classList.contains('ninja-open')) el.classList.add('ninja-open'); } catch (e3) { swallow(e3); } try { Store.emit('panel:refresh'); } catch (e2) { swallow(e2); } } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }   // 供命令框 /tab 调用
     var navBtns = el.querySelectorAll('.cx-nav-btn');
     for (var ni = 0; ni < navBtns.length; ni++) {
-      (function (b) { b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); }); })(navBtns[ni]);
+      // 切 tab 时同步刷新动态内容：洞察/系统/自动化页靠 panel:refresh 填充，否则切过去是"面板打开那一刻"的快照，甚至从未填充→空白
+      (function (b) { b.addEventListener('click', function () {
+        switchTab(b.getAttribute('data-tab'));
+        // ninja 模式：切到非默认 tab 后，鼠标移开面板会被 CSS `:not(:hover):not(.ninja-open)` 把 .cx-tab 重新 display:none!important 隐藏，
+        // 导致"点开又空回去"。这里粘性展开 ninja-open，让用户能留在展开态看内容（移出面板由 document mouseup 关闭）。
+        try { if (el.classList.contains('ninja') && !el.classList.contains('ninja-open')) el.classList.add('ninja-open'); } catch (e2) { swallow(e2); }
+        try { Store.emit('panel:refresh'); } catch (e) { swallow(e); }
+      }); })(navBtns[ni]);
     }
-    el.querySelector('#__cxBtnCopy').addEventListener('click', copyDiagnostics);
+    // 防御：复制诊断按钮缺失不应中断 ensurePanel（否则 _cxPanel/switchTab/panel:refresh 全不执行 → 整面板空白）
+    var btnCopy = el.querySelector('#__cxBtnCopy');
+    if (btnCopy) btnCopy.addEventListener('click', copyDiagnostics);
     // 安全审计（建议#10）：刷新「洞察」页侵入点清单
     var btnAudit = el.querySelector('#__cxBtnAudit');
     if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
@@ -320,6 +349,7 @@
     switchTab(_cxActiveTab || 'control');   // 主从式导航：应用上次选中的区块（默认 主控）
     if (typeof detectSite === 'function' && detectSite() === 'deepseek') bindDSConsole(el);   // DS 页特化：绑定应答端控制台逻辑
     positionPanel();   // 适配 progress-panel：若其已挂载，则下沉避让避免同角重叠
+    try { Store.emit('panel:refresh'); } catch (e) { swallow(e); }   // 面板建成即填充动态内容（洞察/系统页的 #__cxPanelState/__cxPanelInfo/__cxInvasionReport 等），否则面板可见但只显示模板静态占位，要等 showPanel 或主循环 videos:scanned 才刷新
     return el;
   }
 

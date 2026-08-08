@@ -13,7 +13,7 @@
    */
   function dbg() {
     if (!DEBUG) return;
-    try { console.log.apply(console, ['[CX-FORCE]'].concat([].slice.call(arguments))); } catch (e) { swallow(e); }
+    try { console.log.apply(console, ['[CX-FORCE]'].concat(Array.from(arguments))); } catch (e) { swallow(e); }
   }
   /**
    * 安全吞掉异常并记录到环形缓冲，避免单点错误中断主流程（评审#1 可观测化：记录 e.stack）。
@@ -83,12 +83,15 @@
         if (timer) { clearTimeout(timer); timer = null; }
         last = now;
         safeCall(function () { fn.apply(ctx, args); }, 'throttle');
-      } else if (!timer) {
+      } else {
+        // 始终捕获最新参数：若等待期间多次调用，只执行最后一次（而非首次调用的陈旧参数）
         ctxA = ctx; argsA = args;
-        timer = setTimeout(function () {
-          last = Date.now(); timer = null;
-          safeCall(function () { fn.apply(ctxA, argsA); }, 'throttle');
-        }, remaining);
+        if (!timer) {
+          timer = setTimeout(function () {
+            last = Date.now(); timer = null;
+            safeCall(function () { fn.apply(ctxA, argsA); }, 'throttle');
+          }, remaining);
+        }
       }
     };
   }

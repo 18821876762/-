@@ -313,6 +313,21 @@ def _maybe_render_backfill(courseid, clazzid, cpi, tasks):
     _render_and_backfill(courseid, clazzid, cpi, tasks)
 
 
+def _task_course_key(t):
+    """PY1 修复：分组键优先 courseid；断点 task 缺 courseid 时回退 clazzid（前缀 'c:' 防与数字 id 碰撞）。
+
+    否则缺 courseid 的任务会被归入 key=0，而 courses 循环里 cid=_to_int(ch.courseid)≠0，
+    导致这些章节被静默丢弃，force-play 续播遗漏。
+    """
+    cid = _to_int(t.get("courseid"))
+    if cid:
+        return ("id", cid)
+    clazzid = t.get("clazzid")
+    if clazzid:
+        return ("clazz", str(clazzid))
+    return ("id", 0)
+
+
 def _emit_playlists(courses, tasks):
     """按课程导出 playlist_{cid}.json + 汇总 playlist_index.json（原子写）。
 
@@ -323,13 +338,22 @@ def _emit_playlists(courses, tasks):
     """
     import time
     by_course = {}
+    dropped = 0
     for t in tasks:
-        by_course.setdefault(_to_int(t.get("courseid")), []).append(t)
+        key = _task_course_key(t)
+        if key[0] == "id" and key[1] == 0:
+            dropped += 1  # 既无 courseid 也无 clazzid 的真实孤儿任务（极少见），计入告警
+            continue
+        by_course.setdefault(key, []).append(t)
+    if dropped:
+        logger.warning(f"[playlist] 跳过 {dropped} 个既无 courseid 也无 clazzid 的孤儿任务点")
     gen_at = time.strftime("%Y-%m-%d %H:%M:%S")
     index = []
     for ch in courses:
         cid = _to_int(ch.get("courseid"))
-        cts = by_course.get(cid, [])
+        clazzid = ch.get("clazzid")
+        # 优先按 courseid 匹配，缺失时按 clazzid 兜底匹配（PY1）
+        cts = by_course.get(("id", cid)) or (by_course.get(("clazz", str(clazzid))) if clazzid else None) or []
         if not cts:
             continue
         cname = ch.get("course_name") or ch.get("name") or ch.get("courseName") or str(cid)
@@ -382,11 +406,12 @@ def _write_readme(courses, tasks):
     lines.append("## 课程任务点汇总")
     by_course = {}
     for t in tasks:
-        by_course.setdefault(_to_int(t.get("courseid")), []).append(t)
+        by_course.setdefault(_task_course_key(t), []).append(t)
     for ch in courses:
         cid = _to_int(ch.get("courseid"))
+        clazzid = ch.get("clazzid")
+        cts = by_course.get(("id", cid)) or (by_course.get(("clazz", str(clazzid))) if clazzid else None) or []
         cname = ch.get("course_name") or ch.get("name") or ch.get("courseName") or str(cid)
-        cts = by_course.get(cid, [])
         cc = sum(1 for t in cts if t.get("completed"))
         unf = sum(t.get("unfinishedCount", 0) for t in cts)
         lines.append(f"- {cname}（cid={cid}）：章节 {len(cts)} 个，已完成 {cc}，"

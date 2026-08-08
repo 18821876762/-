@@ -132,9 +132,13 @@
     } catch (e) { swallow(e); }
     // ⑪ 终态：删除本脚本命名空间对象本身（含 uninstall 钩子）。_cleaned 守卫已保证幂等；
     //    删除后页面全局即完全回到注入前状态（仅遗留配置类 localStorage，可由 /cleardata 命令主动清除）。
+    // ⑪-b 清空事件总线订阅（H3 修复）：uninstall / 页面软卸载 / 热禁用重注入时，若不清 subs，
+    //    重注入会叠加订阅导致同一事件被多次处理（如面板重复刷新、toast 重复推送），属典型内存与行为泄漏。
+    //    跨帧透传监听（子帧→顶层 ui:toast）保留，避免顶层帧接收子帧提示能力丢失。
+    try { if (typeof Store !== 'undefined' && Store.clearSubs) Store.clearSubs('__ev:ui:toast'); } catch (e) { swallow(e); }
     try { delete window.__CX_FORCE_PLAY; } catch (e) { swallow(e); }
   }
-  try { window.addEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
-  try { window.addEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+  try { window.addEventListener('pagehide', cleanupListeners, { once: true }); } catch (e) { swallow(e); }
+  try { window.addEventListener('beforeunload', cleanupListeners, { once: true }); } catch (e) { swallow(e); }
   try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._uninstallHooked = true; } catch (e) { swallow(e); }   // 安全审计(建议#10)：标记卸载钩子已装
   try { window.__CX_FORCE_PLAY.uninstall = cleanupListeners; } catch (e) { swallow(e); }   // 暴露手动卸载还原钩子（应对热禁用）

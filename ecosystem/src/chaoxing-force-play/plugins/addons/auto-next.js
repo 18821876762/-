@@ -1,4 +1,4 @@
-// ===== 工具库项：超星(学习通)自动下一课（v4.15 重写） =====
+// ===== 工具库项：超星(学习通)自动下一课（v4.16 选择器时效性更新 2026-08-07） =====
 // 站点归属：超星/学习通（detectSite()==='chaoxing'），与智慧树 zhihuishu-auto-next.js 并列、互不干扰。
 //
 // 需求（用户原话）：学习通是「视频 → 题目 → 视频」的闭环——视频播完跳到题目(或下一节)，处理完再回/进下一个视频。
@@ -32,10 +32,28 @@
     QUIZ_PROBE_TIMEOUT: 8000,     // 题目入口探测超时（到则直接跳下一节）
     BRIDGE_PORTS: [7531, 7532, 7530, 17531],
     BRIDGE_PROBE_TIMEOUT: 1500,
-    // 下一节 DOM 选择器（best-effort 并集，待真实站点校准）
-    NEXT_SELECTORS: ['.nextChapter', '#prevNextChapterNext', '.next_prev_b .nextChapter', '.nextChapterBtn', 'a[title*="下一节"]', 'a[title*="下一章"]'],
-    // 题目入口 DOM 选择器（best-effort 并集，待真实站点校准）
-    QUIZ_ENTRY_SELECTORS: ['.ans-job-icon', '.jobUnfinished', '.chapterLaunage', 'a[href*="work"]', 'a[href*="exam"]'],
+    // 下一节 DOM 选择器（并集：新版 study 页 + 历史版本 + 通用属性兜底）
+    // 说明：超星页面结构多年多次改版，此处按「新版优先、旧版兜底」的顺序覆盖已知稳定入口，
+    //       最终仍有关键词文本兜底(findNextDOM 第 2/3 段)抗未知改版。
+    NEXT_SELECTORS: [
+      '#prevNextFocusNext',            // 新版 study 页「下一节」聚焦按钮（较稳定）
+      '.prev_next .next',              // 新版上/下节容器内的 next
+      '.next_prev_b .nextChapter',    // 旧版容器
+      '#prevNextChapterNext',
+      '.nextChapterBtn', '.nextChapter',
+      'a[title*="下一节"]', 'a[title*="下一章"]', 'a[title*="下一"]',
+      '[class*="next"][class*="chapter" i]',   // 属性模糊兜底（class 含 next+chapter）
+    ],
+    // 题目入口 DOM 选择器（并集：作业/考试图标 + 未完成标记 + 通用属性兜底）
+    QUIZ_ENTRY_SELECTORS: [
+      '.ans-job-icon',                 // 章节任务点图标
+      '.jobUnfinished', '.jobUnfinishCount', '.ans-job-finished ~ .jobUnfinished',
+      '.chapterLaunage',
+      'a[href*="work"]', 'a[href*="exam"]', 'a[href*="workset"]',
+      '[class*="job"][class*="unfinish" i]',   // 属性模糊兜底（class 含 job+unfinish）
+    ],
+    // 章节任务「已完成」态标记（用于 Bridge 判断跳过已完成节点）
+    FINISHED_SELECTORS: ['.ans-job-finished', '.icon_Completed', '[class*="finished" i]'],
     // 验证码/解锁页关键词
     BLOCK_KEYWORDS: ['验证码', '滑动验证', '请完成安全验证', '解锁'],
   };
@@ -56,7 +74,7 @@
   };
   var $dom = {
     one: function (sel) { try { return document.querySelector(sel); } catch (e) { return null; } },
-    all: function (sel) { try { return [].slice.call(document.querySelectorAll(sel)); } catch (e) { return []; } },
+    all: function (sel) { try { return Array.from(document.querySelectorAll(sel)); } catch (e) { return []; } },
     isVisible: function (el) { try { if (!el) return false; var cs = (typeof getComputedStyle === 'function') ? getComputedStyle(el) : null; var s = cs || el.style; if (s && (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0')) return false; var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; } catch (e) { return false; } },
   };
   var $nav = {
@@ -67,17 +85,40 @@
   };
   var $bridge = (function () {
     var base = null;
+    // 现代实现：fetch + AbortController 替代 XMLHttpRequest（超时取消、Promise 语义、可中止）
     function corsFetch(url, timeout) {
       return new Promise(function (resolve, reject) {
         var done = false;
-        var t = setTimeout(function () { if (!done) { done = true; reject(new Error('timeout')); } }, timeout || 8000);
-        try {
+        var ms = timeout || 8000;
+        if (typeof AbortController === 'undefined' || typeof fetch === 'undefined') {
+          // 极老环境兜底：退回 XHR（保持兼容，不阻塞主流程）
           var x = new XMLHttpRequest();
-          x.open('GET', url, true);
-          x.onload = function () { if (!done) { done = true; clearTimeout(t); try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(e); } } };
-          x.onerror = function () { if (!done) { done = true; clearTimeout(t); reject(new Error('xhr error')); } };
-          x.send();
-        } catch (e) { if (!done) { done = true; clearTimeout(t); reject(e); } }
+          var t0 = setTimeout(function () { if (!done) { done = true; reject(new Error('timeout')); } }, ms);
+          try {
+            x.open('GET', url, true);
+            x.onload = function () { if (!done) { done = true; clearTimeout(t0); try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(e); } } };
+            x.onerror = function () { if (!done) { done = true; clearTimeout(t0); reject(new Error('xhr error')); } };
+            x.send();
+          } catch (e) { if (!done) { done = true; clearTimeout(t0); reject(e); } }
+          return;
+        }
+        var ctrl = new AbortController();
+        var t = setTimeout(function () { if (!done) { done = true; ctrl.abort(); reject(new Error('timeout')); } }, ms);
+        fetch(url, { method: 'GET', signal: ctrl.signal, cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('bad status ' + r.status);
+            return r.text();
+          })
+          .then(function (txt) {
+            if (done) return;
+            done = true; clearTimeout(t);
+            try { resolve(JSON.parse(txt)); } catch (e) { reject(e); }
+          })
+          .catch(function (err) {
+            if (done) return;
+            done = true; clearTimeout(t);
+            reject(err && err.name === 'AbortError' ? new Error('timeout') : err);
+          });
       });
     }
     return {
@@ -116,22 +157,43 @@
   }
 
   // ---- 下一节查找（DOM 优先，Bridge 补充）----
+  // 抗改版三段式：显式选择器 → 关键词文本(可点击链接) → 关键词文本(任意可点击元素，click 触发)
+  var NEXT_TEXT_RE = /下一章|下一节|下一课|下一页|下一个|后一章|继续学习|继续播放/;
+  function usableHref(el) {
+    var href = el.getAttribute && (el.getAttribute('href') || el.href);
+    if (href && href !== '#' && !/^javascript:/i.test(href)) return href;
+    return null;
+  }
   function findNextDOM() {
-    // 1) 显式选择器
+    // 1) 显式选择器（有 href → 直接导航）
     for (var i = 0; i < CFG.NEXT_SELECTORS.length; i++) {
       var el = $dom.one(CFG.NEXT_SELECTORS[i]);
       if (el && $dom.isVisible(el)) {
-        var href = el.getAttribute('href') || el.href;
-        if (href && href !== '#' && !/javascript:/.test(href)) return { url: href, label: (el.textContent || '下一节').trim() || '下一节(DOM)' };
+        var href = usableHref(el);
+        if (href) return { url: href, label: (el.textContent || '下一节').trim() || '下一节(DOM)' };
+        // 无 href 的按钮/span：作为可点击节点返回（doNavigate 会 click）
+        return { url: null, el: el, label: (el.textContent || '下一节').trim() || '下一节(按钮)' };
       }
     }
-    // 2) 关键词兜底
+    // 2) 关键词兜底：可点击链接（<a>）
     var as = $dom.all('a');
     for (var j = 0; j < as.length; j++) {
       var t = (as[j].textContent || as[j].title || '').trim();
-      if (/下一章|下一节|下一课|后一章|继续学习/.test(t)) {
-        var h = as[j].getAttribute('href') || as[j].href;
-        if (h && h !== '#' && !/javascript:/.test(h)) return { url: h, label: t };
+      if (NEXT_TEXT_RE.test(t)) {
+        var h = usableHref(as[j]);
+        if (h) return { url: h, label: t };
+      }
+    }
+    // 3) 关键词兜底：任意可点击元素（button/span/li/[onclick]）—— 抗「非 a 标签做下一节」的改版
+    var clickable = $dom.all('button, [role="button"], [onclick], span, li, div');
+    for (var k = 0; k < clickable.length; k++) {
+      var c = clickable[k];
+      var ct = (c.textContent || c.title || '').trim();
+      // 仅匹配「短文本」节点，避免整段容器误命中（下一节按钮文本通常很短）
+      if (ct.length <= 8 && NEXT_TEXT_RE.test(ct) && $dom.isVisible(c)) {
+        var ch = usableHref(c);
+        if (ch) return { url: ch, label: ct };
+        return { url: null, el: c, label: ct };
       }
     }
     return null;
@@ -160,7 +222,16 @@
   }
 
   function doNavigate(next) {
-    if (!next || !next.url) { setState(LOCKED); toast('未找到下一节入口（已停止自动跳课，请手动点下一节）'); return; }
+    if (!next) { setState(LOCKED); toast('未找到下一节入口（已停止自动跳课，请手动点下一节）'); return; }
+    // 无 url 但有可点击节点：直接 click（新版多用按钮/span 触发 SPA 切换）
+    if (!next.url && next.el) {
+      lockNav(); setState(IDLE);
+      $log.info('click next element: ' + (next.label || ''));
+      toast('自动跳下一节：' + (next.label || ''));
+      try { next.el.click(); } catch (e) { setState(LOCKED); toast('下一节按钮点击失败'); }
+      return;
+    }
+    if (!next.url) { setState(LOCKED); toast('未找到下一节入口（已停止自动跳课，请手动点下一节）'); return; }
     var url = next.url;
     if (/^https?:\/\//.test(url) || url.charAt(0) === '/') {
       lockNav();
@@ -232,6 +303,9 @@
         swallow(e);
         $log.warn('resolveNext error → LOCKED'); setState(LOCKED); toast('查找下一节出错（停止自动跳课）');
       });
+    }).catch(function (e) {
+      swallow(e);
+      $log.warn('probeQuizEntry error → LOCKED'); setState(LOCKED); toast('探测题目入口出错（停止自动跳课）');
     });
   }
 

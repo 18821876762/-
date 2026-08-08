@@ -91,11 +91,20 @@
       'cursor:pointer!important;' +   // 折叠态明显可点，避免用户误以为面板"死了"
       'transition:width .28s ease,height .28s ease,padding .28s ease,border-radius .28s ease,max-height .28s ease,box-shadow .2s ease,background .2s ease;' +
     '}' +
-    '#__cxPanel.ninja .cx-title,' +
-    '#__cxPanel.ninja #__cxPanelClose,' +
-    '#__cxPanel.ninja .cx-cmd-wrap,' +
-    '#__cxPanel.ninja .cx-nav,' +
-    '#__cxPanel.ninja .cx-tab{display:none!important;}' +
+    // 折叠态(未悬停且未展开)才隐藏这些元素；展开态由下方 hover/.ninja-open 规则恢复显示。
+    // 注意：.cx-tab 不能在此用 display:none!important 一把梭，否则展开态(面板仍带 .ninja)也会被它藏住、
+    // 且会盖过 switchTab() 内联样式。这里用 :not(:hover):not(.ninja-open) 限定仅在折叠态隐藏。
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-title,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) #__cxPanelClose,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-cmd-wrap,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-nav,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-tab{display:none!important;}' +
+    // 根因修复：折叠规则用了 !important，会压过 switchTab() 的内联 display:block（无 !important）。
+    // 旧版靠 ninja-open/hover 时的 display:block!important 把「所有 tab」强制显示（堆叠但可见）掩盖了折叠；
+    // 新版为修堆叠去掉了那层 !important，改由 switchTab 内联控制，但折叠态的 display:none!important 仍会盖过内联，
+    // 一旦 ninja-open/hover 缺失（首次打开面板、panel:refresh 后时序差）当前 tab 即被压成空白。
+    // 给「当前活跃 tab」加 .cx-tab--cur 并例外放行 display:block!important，彻底不依赖 ninja-open 时序。
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-tab.cx-tab--cur{display:block!important;}' +
     '#__cxPanel.ninja .cx-titlebar{display:flex!important;align-items:center;justify-content:center;width:100%!important;height:100%!important;margin:0!important;}' +
     '#__cxPanel.ninja .cx-titlebar > div{display:flex!important;align-items:center;justify-content:center;gap:0!important;}' +
     '#__cxPanel.ninja .cx-titlebar > div > span:not(#__cxPanelBadge){display:none!important;}' +
@@ -153,9 +162,10 @@
     '#__cxPanel.ninja:hover .cx-cmd-wrap,' +
     '#__cxPanel.ninja.ninja-open .cx-cmd-wrap,' +
     '#__cxPanel.ninja:hover .cx-nav,' +
-    '#__cxPanel.ninja.ninja-open .cx-nav,' +
-    '#__cxPanel.ninja:hover .cx-tab,' +
-    '#__cxPanel.ninja.ninja-open .cx-tab{display:block!important;}' +
+    '#__cxPanel.ninja.ninja-open .cx-nav{display:block!important;}' +
+    // 注意：展开态不要把 .cx-tab 设成 display:block!important，否则会盖过 switchTab() 的内联 display:none，
+    // 导致四个标签页同时堆叠显示、且点导航切不动(看起来"只有主控/面板坏了")。标签页显隐交由 switchTab 内联样式控制；
+    // 折叠态的隐藏已由上方 `:not(:hover):not(.ninja-open)` 限定规则统一处理。
     '#__cxPanel.ninja:hover .cx-nav-btn,' +
     '#__cxPanel.ninja.ninja-open .cx-nav-btn{display:inline-block!important;}' +
     '#__cxPanel.ninja:hover .cx-titlebar,' +

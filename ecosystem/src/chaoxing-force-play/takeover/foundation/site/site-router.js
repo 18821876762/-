@@ -17,7 +17,12 @@
       if (/icourses\.cn$/i.test(h)) return 'icourse163';      // 爱课程备用域
       if (/xuetangx\.com$/i.test(h)) return 'xuetangx';       // 学堂在线
       if (/icve\.com\.cn$/i.test(h)) return 'icve';           // 智慧职教
-      if (/pmphmooc\.com$/i.test(h) || /renwei/i.test(h)) return 'renwei'; // 人卫慕课（真实主域待确认，先占位 pmphmooc.com；如学校镜像域含 renwei 亦匹配）
+      // L3 修复：原 /renwei/i 无锚点会误匹配任何含 "renwei" 子串的域名（如 myrenwei.com / renwei-shop.cn），
+      // 触发人卫慕课专属作答分支产生非预期 DOM 注入。改为带域名边界的精确匹配：
+      //   · pmphmooc.com（人卫慕课已知主域占位）
+      //   · *.renwei.com / *.renwei.cn（人卫自有域及其子域）
+      //   · *-renwei.* / renwei-*.*（医学院校镜像域，如 mooc-renwei.edu.cn）
+      if (/pmphmooc\.com$/i.test(h) || /(^|\.)renwei\.(com|cn)$/i.test(h) || /renwei[-.]/i.test(h)) return 'renwei'; // 人卫慕课
       if (/unipus\.cn$/i.test(h)) return 'unipus';            // 中国高校外语慕课 Unipus
       if (/ucampus\.cn$/i.test(h)) return 'ucampus';          // U校园
       if (/ilab-x\.com$/i.test(h)) return 'ilabx';            // 实验空间

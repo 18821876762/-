@@ -94,5 +94,33 @@ console.log('--- rev2 真答题引擎(quiz)回归 ---');
   assert('隔离: 超星页答题 tick 返回 0 且不动 DOM', r === 0 && window.document.body.children.length === before);
 }
 
+// 隐私合规 + 提交二次确认回归（需先重建 bundle 才纳入 quiz.js 新逻辑）
+{
+  const { window, ns } = loadAt('https://www.renwei.com/course/1');
+  // 隐私：离线优先默认开，即便配置了 AI 端点也不向外发题
+  let fetchCalls = 0;
+  window.fetch = function () { fetchCalls++; throw new Error('SHOULD_NOT_FETCH'); };
+  ns.CONFIG.QUIZ_ANSWER_SOURCE = 'ai';
+  ns.CONFIG.QUIZ_AI_ENDPOINT = 'https://evil.example.com/solve';
+  const { submitted: subA } = makeQuestion(window, '隐私离线题', 4);
+  const ansA = ns.renweiTickQuiz();
+  assert('隐私: 离线模式不外发题目(fetch=0)', ansA >= 1 && subA.val === true && fetchCalls === 0);
+  // 隐私：显式关闭离线但端点不在白名单 → 仍拒外发
+  try { window.localStorage.setItem('cx_quiz_offline', '0'); } catch (e) {}
+  ns.CONFIG.QUIZ_OFFLINE_ONLY = false;
+  ns.CONFIG.QUIZ_ENDPOINT_WHITELIST = ['allowed.example.com'];
+  fetchCalls = 0;
+  const { submitted: subB } = makeQuestion(window, '隐私白名单题', 4);
+  const ansB = ns.renweiTickQuiz();
+  assert('隐私: 非白名单端点被拒(fetch=0)', ansB >= 1 && subB.val === true && fetchCalls === 0);
+  // 提交二次确认：关闭自动提交 → 作答但不提交，挂起待确认
+  try { window.localStorage.setItem('cx_quiz_autosubmit', '0'); } catch (e) {}
+  const { submitted: subC } = makeQuestion(window, '二次确认题', 4);
+  const ansC = ns.renweiTickQuiz();
+  assert('二次确认: 作答但不提交', ansC >= 1 && subC.val !== true);
+  const n = (typeof ns.quizSubmitPending === 'function') ? ns.quizSubmitPending() : 0;
+  assert('二次确认: 确认提交生效', n >= 1 && subC.val === true);
+}
+
 console.log(fail === 0 ? '结论: PASS — 真答题引擎+4平台接入闭环' : ('结论: FAIL (' + fail + ')'));
 process.exit(fail ? 1 : 0);

@@ -16,7 +16,8 @@
   // v5 IA 重组：旧 tab 值迁移映射（pause→control, sub→automation, adv→insight, other→system），一次性改写后按新值持久化
   var _cxTabMigrate = { pause: 'control', sub: 'automation', adv: 'insight', other: 'system' };
   try {
-    var _savedTab = (localStorage.getItem('cx_panel_tab') || 'control');
+    var _savedTab = 'control';
+    try { var _t = localStorage.getItem('cx_panel_tab'); if (_t) _savedTab = _t; } catch (e) { swallow(e); }
     if (_cxTabMigrate[_savedTab]) { _savedTab = _cxTabMigrate[_savedTab]; try { localStorage.setItem('cx_panel_tab', _savedTab); } catch (e2) { swallow(e2); } }
     _cxActiveTab = _savedTab;
   } catch (e) { swallow(e); }
@@ -82,7 +83,24 @@
   }
   try { Store.onEv('panel:refresh', renderInvasionReport); } catch (e) { swallow(e); }
   try { Store.onEv('videos:scanned', throttle(renderInvasionReport, 1500)); } catch (e) { swallow(e); }
-  function togglePanel() { if (_cxPanel && _cxPanel.style.display !== 'none') hidePanel(); else showPanel(); }
+  // 开关键 = PAUSE_HOTKEY（默认 p）。
+  // 非 ninja：显示↔隐藏（原行为）。
+  // ninja 模式：胶囊常驻，P 在「展开(显示全部内容) ↔ 折叠(仅胶囊)」间切换，
+  // 避免旧逻辑只 toggle 折叠胶囊的 display，导致按键永远看不到面板正文(只有「主控」胶囊)。
+  function togglePanel() {
+    if (!_cxPanel) { try { showPanel(); } catch (e) { swallow(e); } return; }
+    if (_cxPanel.style.display === 'none') {            // 隐藏 → 显示（ninja 下直接展开）
+      try { showPanel(); } catch (e) { swallow(e); }
+      if (CONFIG.NINJA_MODE) _cxPanel.classList.add('ninja-open');
+      return;
+    }
+    if (CONFIG.NINJA_MODE) {                            // ninja：展开↔折叠
+      if (_cxPanel.classList.contains('ninja-open')) _cxPanel.classList.remove('ninja-open');
+      else _cxPanel.classList.add('ninja-open');
+      return;
+    }
+    hidePanel();                                        // 非 ninja：显示↔隐藏
+  }
   // 一键退出/进入 Ninja 模式：卡在窄条、够不到「系统」勾选框时的逃生通道（键盘 N / 面板内「退出 n 模式」按钮共用）
   function toggleNinjaMode() {
     try {

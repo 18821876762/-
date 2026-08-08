@@ -101,10 +101,18 @@
       wasBypassed = alarm;
     }
 
+    var _tgTimer = null;    // 保存定时器句柄，避免双重调度
+
     function init() {
       try {
-        document.addEventListener('DOMContentLoaded', function () { setInterval(guardTick, 2000); guardTick(); });
-        if (document.readyState !== 'loading') { setInterval(guardTick, 2000); guardTick(); }
+        function _startGuard() {
+          // 防止双重启动（DOMContentLoaded + readyState!==loading 两路并行导致定时器翻倍）
+          if (_tgTimer) { clearInterval(_tgTimer); _tgTimer = null; }
+          _tgTimer = setInterval(guardTick, 2000);
+          guardTick();
+        }
+        if (document.readyState !== 'loading') { _startGuard(); }
+        else { document.addEventListener('DOMContentLoaded', _startGuard); }
       } catch (e) {}
       // 首次进入请求通知权限（可选）
       try {

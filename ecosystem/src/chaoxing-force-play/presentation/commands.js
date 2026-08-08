@@ -77,6 +77,7 @@
       var ms = parseInt(arg, 10); if (isNaN(ms)) { Store.emit('ui:toast', '用法: /rescan 500~5000'); return; } CONFIG.RESCAN_INTERVAL = ms; clampCfg(); savePanelCfg();
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
       try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+      try { Store.state._loopTimer = _loopTimer; } catch (e) {}                       // 同步镜像到 Store.state
       syncPanelInputs(); Store.emit('panel:refresh'); Store.emit('ui:toast', '轮询 ' + CONFIG.RESCAN_INTERVAL + 'ms');
     });
     registerCommand('cleardata', '彻底清除脚本写入的 localStorage(cx_* 键)', false, function () {
@@ -124,7 +125,7 @@
     // —— 面板 / 模式控制 ——
     registerCommand('ninja', '切换 n 模式（可加 on/off）', true, function (raw, arg) {
       try { if (arg) { var on = !/^off$/i.test(arg.trim()); if (!!CONFIG.NINJA_MODE === on) { Store.emit('ui:toast', 'n 模式已是 ' + (on ? 'on' : 'off')); return; } }
-        toggleNinjaMode(); Store.emit('ui:toast', 'n 模式已' + (CONFIG.NINJA_MODE ? '关' : '开'));
+        toggleNinjaMode(); Store.emit('ui:toast', 'n 模式已' + (CONFIG.NINJA_MODE ? '开' : '关'));
       } catch (e) { swallow(e); }
     });
     registerCommand('single', '单视频模式 on/off（只控制前台视频）', true, function (raw, arg) {

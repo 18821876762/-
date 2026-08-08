@@ -58,7 +58,7 @@
       el.style.left = ax + 'px'; el.style.top = ay + 'px'; el.style.right = 'auto';  // 锚定为绝对定位，transform 在其上叠加
       sx = e.clientX; sy = e.clientY; dx = 0; dy = 0;
       e.preventDefault();
-      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mousemove', onMove, { passive: true });   // onMove 不调 preventDefault，passive 提升滚动/合成性能
       document.addEventListener('mouseup', onUp);
     });
   }

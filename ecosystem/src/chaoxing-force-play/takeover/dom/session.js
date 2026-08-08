@@ -48,6 +48,11 @@
       try { delete ENDED_SRCS[videoSrcOf(v)]; } catch (e) { swallow(e); }                                          // 解除本视频地址黑名单
       try { var _hsg = cxState(v).hostSigs; if (_hsg) { for (var _hg = 0; _hg < _hsg.length; _hg++) { try { delete ENDED_SRCS[_hsg[_hg]]; } catch (e2) { swallow(e2); } } } } catch (e) { swallow(e); }
     }
+    // 拆除 seeking 守卫（ovEnforce 对 ended 视频加的 listener，否则 seek 会把 currentTime 钉回 duration）
+    if (v.__seekArmed && v.__seekHandler) {
+      try { v.removeEventListener('seeking', v.__seekHandler, true); } catch (e) { swallow(e); }
+      try { delete v.__seekHandler; delete v.__seekArmed; } catch (e) { swallow(e); }
+    }
     try { delete v.play; } catch (e3) { swallow(e3); }          // 拆除播放闸门，还原原型 play
     try { safePlay(v); } catch (e) { swallow(e); }
     try { Store.emit('ui:toast', '已恢复续播', 'success'); } catch (e2) { swallow(e2); }

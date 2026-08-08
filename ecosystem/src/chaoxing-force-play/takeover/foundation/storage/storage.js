@@ -1,6 +1,65 @@
   // ===== 存储与 API 通讯 =====
   // 面板配置持久化（localStorage: cx_panel_cfg）。爬虫桥的 fetch 类 API 通讯仍在其业务模块(bridge)，
   // 此处集中「本地存储」基础能力；后续看播统计等本地存储也可统一收口到此。
+
+  // 依赖无关 KVS：异步优先的键值存储，作为 localStorage→IndexedDB 迁移的底座。
+  //   backend = 'local'（默认）：同步 localStorage，行为零变化；
+  //   backend = 'indexeddb'：异步 IndexedDB（更大配额、worker 友好），不可用时自动回退 localStorage。
+  // 通过 CONFIG.KVS_BACKEND 切换；暴露 kvs.get/set/del/ready/backend。
+  var KVS = (function () {
+    function backendName() {
+      try { return (typeof CONFIG !== 'undefined' && CONFIG.KVS_BACKEND) || 'local'; } catch (e) { return 'local'; }
+    }
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+    var idb = null;
+    function hasIDB() {
+      try { return backendName() === 'indexeddb' && typeof indexedDB !== 'undefined' && !!indexedDB; } catch (e) { return false; }
+    }
+    function initIDB() {
+      return new Promise(function (resolve) {
+        if (!hasIDB()) { resolve(false); return; }
+        try {
+          var req = indexedDB.open('cx_kvs', 1);
+          req.onupgradeneeded = function () { try { req.result.createObjectStore('kv'); } catch (e) {} };
+          req.onsuccess = function () { idb = req.result; resolve(true); };
+          req.onerror = function () { resolve(false); };
+          req.onblocked = function () { resolve(false); };
+        } catch (e) { resolve(false); }
+      });
+    }
+    var _ready = (backendName() === 'indexeddb') ? initIDB() : Promise.resolve(false);
+    function get(k) {
+      if (backendName() !== 'indexeddb') return Promise.resolve(lsGet(k));
+      return _ready.then(function (ok) {
+        if (!ok) return lsGet(k);
+        return new Promise(function (resolve) {
+          try {
+            var tx = idb.transaction('kv', 'readonly');
+            var rq = tx.objectStore('kv').get(k);
+            rq.onsuccess = function () { resolve(rq.result == null ? null : String(rq.result)); };
+            rq.onerror = function () { resolve(lsGet(k)); };
+          } catch (e) { resolve(lsGet(k)); }
+        });
+      });
+    }
+    function set(k, v) {
+      var val = String(v);
+      if (backendName() !== 'indexeddb') { lsSet(k, val); return Promise.resolve(); }
+      return _ready.then(function (ok) {
+        if (!ok) { lsSet(k, val); return; }
+        try { var tx = idb.transaction('kv', 'readwrite'); tx.objectStore('kv').put(val, k); }
+        catch (e) { lsSet(k, val); }
+      });
+    }
+    function del(k) {
+      if (backendName() !== 'indexeddb') { lsDel(k); return Promise.resolve(); }
+      return _ready.then(function (ok) { if (!ok) { lsDel(k); return; } try { var tx = idb.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); } catch (e) { lsDel(k); } });
+    }
+    return { get: get, set: set, del: del, ready: _ready, backend: backendName };
+  })();
+
   function clampCfg() {                            // 载入后把越界值夹回面板控件允许范围
     CONFIG.AUTO_STOP_MIN = Math.max(0, Math.min(120, +CONFIG.AUTO_STOP_MIN || 0));
     CONFIG.RESUME_AFTER_MIN = Math.max(0, Math.min(60, +CONFIG.RESUME_AFTER_MIN || 0));
@@ -52,3 +111,6 @@
       clampCfg();
     } catch (e) { swallow(e); }
   }
+
+  // 暴露 KVS 异步存储底座（IndexedDB 就绪/回退由 backend() 决定）
+  try { if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.kvs = KVS; } catch (e) {}

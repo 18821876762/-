@@ -11,8 +11,8 @@
     host: 'chat.deepseek.com',
     loginBtnSel: 'TODO',        // 未登录："登录"按钮（存在=未登录）
     avatarSel: 'TODO',          // 已登录：用户头像/账户菜单（存在=已登录）
-    // 以下为 responder DOM 驱动（待真实站点校准，先 TODO）
-    inputSel: 'TODO', fileInputSel: 'TODO', sendBtnSel: 'TODO',
+    // 以下为 responder DOM 驱动（用户已用 DevTools 校准输入框选择器，其余 best-effort 待校准）
+    inputSel: 'textarea[placeholder^="给 DeepSeek 发送消息"]', fileInputSel: 'TODO', sendBtnSel: 'TODO',
     msgListSel: 'TODO', lastReplySel: 'TODO', generatingSel: 'TODO'
   };
   var DS_CHANNEL = 'cx-deepseek-vision';
@@ -126,7 +126,12 @@
     } catch (e) { swallow(e); }
   }
 
-  // ---- DeepSeek 页侧 responder：收到答题请求 → 检查登录 → (TODO) 驱动 DOM 作答 → 回传 ----
+  // ---- DeepSeek 页侧 responder：收到答题请求 → 检查登录 → 驱动 DOM 作答 → 回传 ----
+  // 校准后的 DOM 驱动（选择器在真实 DeepSeek 页用 DevTools 校准；用户已提供输入框选择器）：
+  //   输入框：textarea[placeholder^="给 DeepSeek 发送消息"]（或其容器 textarea，统一用 [contenteditable] 与 textarea 兜底）
+  //   发送按钮：底部发送按钮（button，aria-label 含"发送"/"send"，或存在 svg 的最后一个主按钮）—— best-effort 待校准
+  //   回复气泡：对话区消息容器（[role="list"]/聊天容器）末尾最后一条 AI 回复，且非用户输入
+  //   生成中：回复气泡内出现"正在生成…/DeepSeek 正在思考"等占位或 loading 转圈 → 轮询等待消失
   function _dsInitResponder() {
     try {
       _onChannel(function (e) {
@@ -144,14 +149,181 @@
           var _li = _dsIsLoggedIn();
           if (_li === false) { reply.error = 'not-logged-in'; _postChannel(reply); return; }   // 明确未登录
           if (_li === undefined) { reply.error = 'login-unknown'; _postChannel(reply); return; }  // 登录态未知（DOM 未识别），如实上报而非误判未登录
-          // TODO(待真实站点校准选择器后实现)：注入图片+提示词→发送→轮询回复→解析下标
-          // 当前仅占位：返回 null → 课程页随机兜底；并提示尚未实现驱动逻辑
-          reply.text = null; reply.answer = null; reply.notImplemented = true;
-          if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.DS_LAST_ANSWER = '(尚未实现自动作答，待站点校准)';
-          _postChannel(reply);
+          // DOM 驱动作答：注入题目图(若提供) + 提示词 → 发送 → 轮询回复完成 → 解析答案下标回传
+          _dsRespond(m, function (ans) {
+            if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.DS_LAST_ANSWER = ans ? (ans.text || ans.answer || '已作答') : '未获取到回复';
+            _postChannel(ans || { type: 'ds-answer', reqId: m.reqId, error: 'no-answer' });
+          });
         } catch (e2) { swallow(e2); }
       });
     } catch (e) { swallow(e); }
+  }
+
+  // 向 DeepSeek 输入框注入内容并发送，轮询获取回复文本。
+  // dataUrl 为题目截图(可选)，promptText 为提示词/选项文本。
+  function _dsRespond(m, done) {
+    try {
+      var promptText = (m && m.prompt) || (m && m.options && m.options.join('\n')) || '请根据题目作答';
+      // 1) 定位输入框：优先校准选择器，回退通用 textarea/contenteditable
+      var DEEPSEEK = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.DEEPSEEK;
+      var inputSel = (DEEPSEEK && DEEPSEEK.inputSel && DEEPSEEK.inputSel !== 'TODO') ? DEEPSEEK.inputSel : 'textarea[placeholder^="给 DeepSeek 发送消息"], textarea, [contenteditable="true"]';
+      var ta = null;
+      try { ta = document.querySelector(inputSel); } catch (e) {}
+      if (!ta) { done({ type: 'ds-answer', reqId: m.reqId, error: 'no-input' }); return; }
+
+      // 2) 记录发送前消息条数（用于识别新回复）
+      var _countBefore = _dsCountMessages();
+
+      // 3) 注入文字：对 textarea 用原生 value + input 事件（React 受控），对 contenteditable 用 execCommand/textContent
+      var ok = false;
+      try {
+        if (ta.tagName === 'TEXTAREA') {
+          var proto = Object.getPrototypeOf(ta);
+          var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+          setter.call(ta, promptText);
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ok = true;
+        } else {
+          ta.focus();
+          ta.textContent = promptText;
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ok = true;
+        }
+      } catch (e) { swallow(e); }
+      if (!ok) { done({ type: 'ds-answer', reqId: m.reqId, error: 'inject-failed' }); return; }
+
+      // 4) 注入图片（若提供 dataUrl）：DeepSeek 支持粘贴图片到输入框 → 触发 paste 事件构造 File
+      if (m && m.image) {
+        try {
+          _dsPasteImage(ta, m.image);
+        } catch (e) { swallow(e); }   // 图片注入失败不阻断文字作答
+      }
+
+      // 5) 点击发送按钮：优先校准选择器，回退"输入框附近/底部含发送语义的 button"
+      var sendSel = (DEEPSEEK && DEEPSEEK.sendBtnSel && DEEPSEEK.sendBtnSel !== 'TODO') ? DEEPSEEK.sendBtnSel : 'button[aria-label*="发送"], button[aria-label*="send"], button:last-of-type';
+      var sent = false;
+      try {
+        var sb = document.querySelector(sendSel);
+        // 校准选择器未命中时，回退：输入框最近祖先容器内最后一个可点 button
+        if (!sb) {
+          var box = ta.closest('form') || ta.parentElement;
+          var btns = box ? box.querySelectorAll('button') : [];
+          for (var i = btns.length - 1; i >= 0; i--) { if (!btns[i].disabled) { sb = btns[i]; break; } }
+        }
+        if (sb) { sb.click(); sent = true; }
+      } catch (e) { swallow(e); }
+      if (!sent) { done({ type: 'ds-answer', reqId: m.reqId, error: 'no-send-btn' }); return; }
+
+      // 6) 轮询：等待新回复出现且"生成中"结束，最多 ~90s
+      var deadline = Date.now() + 90000;
+      var poll = function () {
+        try {
+          if (Date.now() > deadline) { done({ type: 'ds-answer', reqId: m.reqId, error: 'timeout-wait-reply' }); return; }
+          var txt = _dsLatestReply(_countBefore);
+          if (txt === '__GENERATING__') { setTimeout(poll, 800); return; }   // 仍在生成，继续等
+          if (txt) {
+            // 解析答案：尝试提取选项下标 A/B/C/D 或 1)2)3)4)
+            var ans = _dsParseAnswer(txt);
+            done({ type: 'ds-answer', reqId: m.reqId, text: txt, answer: ans });
+            return;
+          }
+          setTimeout(poll, 800);
+        } catch (e) { swallow(e); setTimeout(poll, 800); }
+      };
+      setTimeout(poll, 1200);   // 先等发送生效
+    } catch (e) { swallow(e); done && done({ type: 'ds-answer', reqId: m.reqId, error: 'respond-exception' }); }
+  }
+
+  // 统计当前对话消息条数（best-effort：聊天容器内的消息元素）
+  function _dsCountMessages() {
+    try {
+      var DEEPSEEK = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.DEEPSEEK;
+      var sel = (DEEPSEEK && DEEPSEEK.msgListSel && DEEPSEEK.msgListSel !== 'TODO') ? DEEPSEEK.msgListSel : '[role="list"], .chat-messages, .ds-chat-messages, main [class*="message"], [class*="conversation"]';
+      var box = document.querySelector(sel);
+      if (!box) return 0;
+      return box.querySelectorAll('[class*="message"], [data-message-id], [role="listitem"], > div > div').length;
+    } catch (e) { return 0; }
+  }
+
+  // 获取最新一条 AI 回复文本；仍在生成返回 '__GENERATING__'，无新回复返回 ''
+  function _dsLatestReply(countBefore) {
+    try {
+      var DEEPSEEK = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.DEEPSEEK;
+      var sel = (DEEPSEEK && DEEPSEEK.lastReplySel && DEEPSEEK.lastReplySel !== 'TODO') ? DEEPSEEK.lastReplySel : '[role="list"], .chat-messages, .ds-chat-messages, main [class*="message"], [class*="conversation"]';
+      var box = document.querySelector(sel);
+      if (!box) return '';
+      var nodes = box.querySelectorAll('[class*="message"], [data-message-id], [role="listitem"], > div > div');
+      if (nodes.length <= countBefore) return '';   // 尚无新回复
+      var last = nodes[nodes.length - 1];
+      var t = (last.textContent || '').trim();
+      // 生成中检测：占位文本或 loading 转圈
+      var genSel = (DEEPSEEK && DEEPSEEK.generatingSel && DEEPSEEK.generatingSel !== 'TODO') ? DEEPSEEK.generatingSel : '[class*="loading"], [class*="spinner"], [class*="thinking"], [class*="generating"]';
+      if (last.querySelector(genSel)) return '__GENERATING__';
+      if (/正在生成|正在思考|正在输入|DeepSeek 正在思考|生成中|Thinking/i.test(t)) return '__GENERATING__';
+      return t || '';
+    } catch (e) { return ''; }
+  }
+
+  // 把题目截图(URL)作为图片注入。优先走 file input 上传（DeepSeek 真实是附件/图片上传，
+  // textarea 不吃 paste 图片）；fileInputSel 未校准时回退到 paste 事件（best-effort）。
+  function _dsPasteImage(ta, dataUrl) {
+    try {
+      var fetchImg = function (cb) {
+        try {
+          var img = new Image();
+          img.onload = function () { try { var c = document.createElement('canvas'); c.width = img.width; c.height = img.height; var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0); c.toBlob(function (b) { cb(b); }, 'image/png'); } catch (e) { cb(null); } };
+          img.onerror = function () { cb(null); };
+          img.src = dataUrl;
+        } catch (e) { cb(null); }
+      };
+      fetchImg(function (blob) {
+        if (!blob) return;
+        try {
+          var file = new File([blob], 'question.png', { type: 'image/png' });
+          // 主路径：file input 上传（querySelector 命中上传控件后赋值 + dispatch input/change）
+          var fi = null;
+          if (DEEPSEEK && DEEPSEEK.fileInputSel && DEEPSEEK.fileInputSel !== 'TODO') {
+            try { fi = document.querySelector(DEEPSEEK.fileInputSel); } catch (e) { fi = null; }
+          }
+          if (!fi) { try { fi = document.querySelector('input[type=file]'); } catch (e) { fi = null; } }
+          if (fi) {
+            try {
+              var dt = new DataTransfer();
+              dt.items.add(file);
+              try { fi.files = dt.files; } catch (e) { /* 只读 files 时回退 dispatch */ }
+              fi.dispatchEvent(new Event('input', { bubbles: true }));
+              fi.dispatchEvent(new Event('change', { bubbles: true }));
+              return;
+            } catch (e) { swallow(e); }
+          }
+          // 回退：paste 事件（多数 textarea 不吃图片，仅作 best-effort）
+          var dt2 = new DataTransfer();
+          dt2.items.add(file);
+          var ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 });
+          ta.dispatchEvent(ev);
+        } catch (e) { swallow(e); }
+      });
+    } catch (e) { swallow(e); }
+  }
+
+  // 从回复文本解析选项下标（A/B/C/D）。优先"答案：X"强模式，避免把"选项有 A、B、C、D"误命中。
+  function _dsParseAnswer(text) {
+    try {
+      if (!text) return null;
+      // 强模式：显式答案标注（如 "答案：B" / "选择 C" / "答案为 A"）
+      var m3 = text.match(/(?:答案|正确选项|应选|选择|选)[：:\s为]*([A-D])/i);
+      if (m3) return m3[1];
+      // 弱模式：孤立大写字母（仅在无强模式时启用，且排除连续选项列举）
+      var m1 = text.match(/(?:^|[\s，。、])([A-D])(?:[\s，。、]|$)/);
+      if (m1) {
+        // 若同一句出现多个 A-D 并列（如 "A. B. C. D."），视为列举，不采信
+        var listed = (text.match(/[A-D][)．.、]|\b[A-D]\s*[A-D]\b/g) || []).length;
+        if (listed <= 1) return m1[1];
+      }
+      var m2 = text.match(/(\d)[)．.]/);
+      if (m2) return m2[1];
+      return null;
+    } catch (e) { return null; }
   }
 
   // 课程页侧：把截图交给 DeepSeek 页作答，返回 Promise<{text, answer}>（超时走 reject → quiz.js 随机兜底）
@@ -200,6 +372,10 @@
   } catch (e) { swallow(e); }
 
   try {
+    // 暴露为全局（window.dsAvailable），因为 zhihuishu-exam / quiz / zhihuishu-fab 等模块以裸标识符 dsAvailable() 引用本函数；
+    // 仅挂到命名空间会导致裸引用恒为 undefined、DeepSeek 闸门永远打不开（真机失效）。命名空间副本保留以便显式访问。
+    window.dsAvailable = dsAvailable;
+    window._dsIsLoggedIn = _dsIsLoggedIn;
     window.__CX_FORCE_PLAY.dsAvailable = dsAvailable;
     window.__CX_FORCE_PLAY._dsIsLoggedIn = _dsIsLoggedIn;
     window.__CX_FORCE_PLAY._dsRenderStatus = _dsRenderStatus;

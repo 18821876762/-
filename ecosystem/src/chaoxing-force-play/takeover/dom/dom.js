@@ -196,9 +196,11 @@
         try { if (isFinite(v.duration)) v.currentTime = v.duration; } catch (e) { swallow(e); }
         if (!v.__seekArmed) {
           v.__seekArmed = true;
-          v.addEventListener('seeking', function () {
+          // 保存引用以便 userResume 时拆除（否则恢复播放后 seeking 守卫又把 currentTime 钉回结尾）
+          v.__seekHandler = function () {
             try { if (isFinite(v.duration) && v.currentTime < v.duration) v.currentTime = v.duration; } catch (e) { swallow(e); }
-          }, true);
+          };
+          v.addEventListener('seeking', v.__seekHandler, true);
         }
         dbg('ended：已锁定 currentTime 并覆盖 play 为 no-op，阻断重播');
         return true;   // 终止 enforce
@@ -261,9 +263,13 @@
     if (!root || !root.querySelectorAll) return;
     depth = depth || 0;
     if (depth > CONST.MAX_SCAN_DEPTH) return;
-    var _containerSel = SELECTORS.VIDEO_BOX + ', ' + siteTaskContainerSel();   // 评审#6：缓存容器选择器，避免递归每层重复拼接与 detectSite 调用
+    var _taskSel = siteTaskContainerSel();
+    // 评审#6：缓存容器选择器，避免递归每层重复拼接与 detectSite 调用。
+    // 当站点无任务点容器(如 deepseek 应答端 taskContainerSel='')时仅用 VIDEO_BOX，避免拼出 "#videoBox, " 尾逗号非法选择器
+    // → 每轮 querySelectorAll 抛 "is not a valid selector" 被 swallow 计入遥测(诊断#510：deepseek 页 510 次 querySelectorAll 报错)。
+    var _containerSel = (_taskSel && _taskSel.trim()) ? (SELECTORS.VIDEO_BOX + ', ' + _taskSel.trim()) : SELECTORS.VIDEO_BOX;
     try {
-      var _vs = Array.prototype.slice.call(root.getElementsByTagName('video'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险（审查：live collection 风险）
+      var _vs = Array.from(root.getElementsByTagName('video'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险（审查：live collection 风险）
       for (var _vi = 0; _vi < _vs.length; _vi++) { try { if (onVideo) onVideo(_vs[_vi], hostSigs); } catch (e) { swallow(e); } }
     } catch (e) { swallow(e); }
     try {
@@ -277,7 +283,7 @@
         for (var _ci = 0; _ci < _cts.length; _ci++) {
           var _ct = _cts[_ci];
           if (_ct.shadowRoot) { try { walkVideos(_ct.shadowRoot, hostSigs, depth + 1, onVideo, onDoc); } catch (e) { swallow(e); } }
-          var _all = Array.prototype.slice.call(_ct.getElementsByTagName('*'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险
+          var _all = Array.from(_ct.getElementsByTagName('*'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险
           for (var _ai = 0; _ai < _all.length; _ai++) {
             if (_all[_ai].shadowRoot) { try { walkVideos(_all[_ai].shadowRoot, hostSigs, depth + 1, onVideo, onDoc); } catch (e) { swallow(e); } }
           }
@@ -307,18 +313,18 @@
     } catch (e) { swallow(e); }
   }
   // 接管遍历：对每个视频施加强制续播（含宿主 iframe 签名下钻）
-  function scanVideos(root) {
+  function scanVideos(root, hostSigs, depth) {
     if (!forcePlayEnabled()) return;   // opt-out：全局停用时不接管任何视频
     var fg = foregroundVideo();   // 每轮仅算一次前台，避免 O(n²)；非前台视频在 overrideVideo 内被门控释放
-    walkVideos(root, null, 0, function (v, hs) {
+    walkVideos(root, hostSigs, depth || 0, function (v, hs) {
       safeCall(function () { if (hs) cxState(v).hostSigs = hs; }, 'scan:hostSigs');
       overrideVideo(v, fg);
     });
   }
   function allVideos() {
     // 诊断、状态、面板「暂停/恢复」按钮(currentVideo/activeVideo)均依赖本函数；与 scanVideos 统一口径，三者一致修复矛盾
-    var out = [], seen = [];
-    function dedup(v) { for (var i = 0; i < seen.length; i++) if (seen[i] === v) return false; seen.push(v); return true; }
+    var out = [], seen = new Set();
+    function dedup(v) { if (seen.has(v)) return false; seen.add(v); return true; }
     walkVideos(document, null, 0, function (v) { if (dedup(v)) out.push(v); });
     safeCall(function () { if (window.top && window.top !== window && window.top.document && window.top.document.body) walkVideos(window.top.document, null, 0, function (v) { if (dedup(v)) out.push(v); }); }, 'allVideos:top');  // 并入顶层同源文档（评审#11：safeCall 收口）
     return out;
@@ -387,7 +393,8 @@
         else if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_moFlush);
         else setTimeout(_moFlush, 16);
       }
-    }).observe(document.documentElement, { childList: true, subtree: true });
+    });
+    _mo.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) { swallow(e); }
 
   // 切回标签页时强制续播

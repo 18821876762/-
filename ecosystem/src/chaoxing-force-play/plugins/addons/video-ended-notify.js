@@ -66,10 +66,10 @@
       try {
         if (!('Notification' in window)) { TK.toast && TK.toast(body); return; }
         if (Notification.permission === 'granted') {
-          try { new Notification(title, { body: body, tag: 'cx-ended', renotify: true }); } catch (e) { TK.toast && TK.toast(body); }
+          try { new Notification(title, { body: body, tag: 'cx-ended' }); } catch (e) { TK.toast && TK.toast(body); }
         } else if (Notification.permission !== 'denied') {
           Notification.requestPermission().then(function (p) {
-            if (p === 'granted') { try { new Notification(title, { body: body, tag: 'cx-ended', renotify: true }); } catch (e2) {} }
+            if (p === 'granted') { try { new Notification(title, { body: body, tag: 'cx-ended' }); } catch (e2) {} }
           }).catch(function () {});
         } else {
           TK.toast && TK.toast(body);

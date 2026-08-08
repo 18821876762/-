@@ -117,6 +117,105 @@
         Store.emit('panel:refresh');
       });
     }
+    // 仅离线作答开关（隐私合规：默认仅离线，题目/选项不外发）
+    var quizOffline = el.querySelector('#__cxQuizOffline');
+    if (quizOffline) {
+      try { var _ov = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_offline') : null; quizOffline.checked = (_ov === null ? true : _ov !== '0'); } catch (e) { quizOffline.checked = true; }
+      quizOffline.addEventListener('change', function () {
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_offline', quizOffline.checked ? '1' : '0'); } catch (e) { swallow(e); }
+        if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_OFFLINE_ONLY = quizOffline.checked;
+        try { Store.emit('ui:toast', '仅离线作答 → ' + (quizOffline.checked ? '开（题目不外发）' : '关（允许外发需白名单授权）')); } catch (e) {}
+        Store.emit('panel:refresh');
+      });
+    }
+    // 外部 CDN 视觉脚本隐私授权（默认关；勾选=允许连外网加载 html2canvas/Tesseract，拒绝静默外连）
+    var quizCdn = el.querySelector('#__cxQuizVisionCdn');
+    if (quizCdn) {
+      try { var _cv = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_cdn') : null; quizCdn.checked = (_cv === '1'); } catch (e) { quizCdn.checked = false; }
+      // 以持久化值覆盖运行期默认（默认 false）
+      if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_VISION_PRIVACY_OK = quizCdn.checked;
+      quizCdn.addEventListener('change', function () {
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_cdn', quizCdn.checked ? '1' : '0'); } catch (e) { swallow(e); }
+        if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_VISION_PRIVACY_OK = quizCdn.checked;
+        try { Store.emit('ui:toast', '外部视觉脚本授权 → ' + (quizCdn.checked ? '开（将连外网加载 CDN 资源）' : '关（拒绝外连）')); } catch (e) {}
+        Store.emit('panel:refresh');
+      });
+    }
+    // 用 DeepSeek 网页版作答（一键开启「视觉识别→DeepSeek 应答端」路径）：持久化 QUIZ_VISION_* 三项，刷新保持
+    var quizDs = el.querySelector('#__cxQuizDeepseek');
+    if (quizDs) {
+      try {
+        var _de = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_vision_ocr') : null;
+        var _ve = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_vision_enabled') : null;
+        var _pr = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_vision_privacy') : null;
+        quizDs.checked = (_de === 'deepseek-web' && _ve === '1' && _pr === '1');
+      } catch (e) { quizDs.checked = false; }
+      quizDs.addEventListener('change', function () {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('cx_quiz_vision_enabled', quizDs.checked ? '1' : '0');
+            localStorage.setItem('cx_quiz_vision_ocr', quizDs.checked ? 'deepseek-web' : 'endpoint');
+            localStorage.setItem('cx_quiz_vision_privacy', quizDs.checked ? '1' : '0');
+          }
+          if (typeof CONFIG !== 'undefined') {
+            CONFIG.QUIZ_VISION_ENABLED = quizDs.checked;
+            CONFIG.QUIZ_VISION_OCR = quizDs.checked ? 'deepseek-web' : 'endpoint';
+            CONFIG.QUIZ_VISION_PRIVACY_OK = quizDs.checked;
+          }
+          // 同步勾选「允许加载外部视觉脚本」（DeepSeek 路径需 html2canvas 截图）
+          var _cdn = el.querySelector('#__cxQuizVisionCdn');
+          if (_cdn) { _cdn.checked = quizDs.checked; try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_cdn', quizDs.checked ? '1' : '0'); } catch (e) { swallow(e); } }
+          try { Store.emit('ui:toast', quizDs.checked ? '已开启：用 DeepSeek 网页版作答（视觉识别→应答端）' : '已关闭：DeepSeek 作答'); } catch (e) {}
+          Store.emit('panel:refresh');
+        } catch (e) { swallow(e); }
+      });
+    }
+    // 作答后自动提交开关（默认开；关闭→作答但不提交，挂起待用户确认）
+    // 注意：不能复用 quizAuto 变量名——L45 已声明 quizAuto=#__cxQuizAuto，var 函数作用域会导致本变量覆盖前者，
+    // 进而使 L87 通用答题 change 监听回调读错的 checked。此处单独命名 quizAutoSubmit 避免变量遮蔽。
+    var quizAutoSubmit = el.querySelector('#__cxQuizAutoSubmit');
+    if (quizAutoSubmit) {
+      try { var _av = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_autosubmit') : null; quizAutoSubmit.checked = (_av === null ? true : _av !== '0'); } catch (e) { quizAutoSubmit.checked = true; }
+      quizAutoSubmit.addEventListener('change', function () {
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_autosubmit', quizAutoSubmit.checked ? '1' : '0'); } catch (e) { swallow(e); }
+        if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_AUTO_SUBMIT = quizAutoSubmit.checked;
+        try { Store.emit('ui:toast', '作答后自动提交 → ' + (quizAutoSubmit.checked ? '开' : '关（待「确认提交」）')); } catch (e) {}
+        Store.emit('panel:refresh');
+      });
+    }
+    // 确认提交待作答
+    var submitAll = el.querySelector('#__cxBtnQuizSubmitAll');
+    if (submitAll) submitAll.addEventListener('click', function () {
+      try {
+        var n = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.quizSubmitPending === 'function') ? window.__CX_FORCE_PLAY.quizSubmitPending() : 0;
+        if (!n) try { Store.emit('ui:toast', '没有待确认的作答'); } catch (e) {}
+      } catch (e) { swallow(e); }
+    });
+    // 人工复核：采纳当前随机答案入本地题库（逐题调用 quizReviewAccept）
+    var btnReviewAccept = el.querySelector('#__cxBtnQuizReviewAccept');
+    if (btnReviewAccept) btnReviewAccept.addEventListener('click', function () {
+      try {
+        var api = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) ? window.__CX_FORCE_PLAY : null;
+        if (!api || typeof api.quizReviewList !== 'function') return;
+        var list = api.quizReviewList();
+        if (!list.length) { try { Store.emit('ui:toast', '没有待人工复核的题'); } catch (e2) {} return; }
+        var ok = 0;
+        for (var i = 0; i < list.length; i++) { if (api.quizReviewAccept && api.quizReviewAccept(list[i].fp)) ok++; }
+        try { Store.emit('ui:toast', '已采纳 ' + ok + '/' + list.length + ' 题入本地题库'); } catch (e3) {}
+      } catch (e) { swallow(e); }
+    });
+    // 人工复核：导出待复核题为 JSON（供用户核对/外部维护题库）
+    var btnReviewExport = el.querySelector('#__cxBtnQuizReviewExport');
+    if (btnReviewExport) btnReviewExport.addEventListener('click', function () {
+      try {
+        var api = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) ? window.__CX_FORCE_PLAY : null;
+        var txt = (api && typeof api.quizReviewExport === 'function') ? api.quizReviewExport() : '[]';
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function () {});
+        } catch (e2) {}
+        try { Store.emit('ui:toast', '已导出 ' + (txt ? JSON.parse(txt).length : 0) + ' 条待复核（已尝试复制到剪贴板）'); } catch (e3) {}
+      } catch (e) { swallow(e); }
+    });
     // 黑匣子导出按钮
     var btnExport = el.querySelector('#__cxBtnExport');
     if (btnExport) btnExport.addEventListener('click', function () {

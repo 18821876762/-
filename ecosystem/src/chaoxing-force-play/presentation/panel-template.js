@@ -127,9 +127,10 @@
           '<label id="__cxQuizAutoRow" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;cursor:pointer;"><input id="__cxQuizAuto" type="checkbox" style="margin:0;">自动答题（通用真答题引擎：超星/人卫/Unipus/U校园/实验空间等）</label>' +
           // 实时作答进度（与续播视频开关联动：开 → 实时；关 → 灰显）
           '<div id="__cxQuizStatRow" style="font-size:12px;color:' + STYLES.T.text2 + ';margin-bottom:8px;line-height:1.6;">' +
-            '<div style="display:flex;justify-content:space-between;"><span>题目总数</span><b id="__cxQuizTotal" class="cx-mono">—</b></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span>已作答</span><b id="__cxQuizDone" class="cx-mono">—</b></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span>待作答</span><b id="__cxQuizRemain" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>题目总数</span><b id="__cxQuizTotal" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>已作答</span><b id="__cxQuizDone" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>待作答</span><b id="__cxQuizRemain" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>待确认提交</span><b id="__cxQuizPendingStat" class="cx-mono">0</b></div>' +
             '<div style="display:flex;justify-content:space-between;"><span>答案来源</span><b id="__cxQuizSrc" class="cx-mono">—</b></div>' +
             '<div style="display:flex;justify-content:space-between;"><span>平均置信度</span><b id="__cxQuizConf" class="cx-mono">—</b></div>' +
           '</div>' +
@@ -141,6 +142,27 @@
               '<option value="ai">AI（视觉识别+DeepSeek 等）</option>' +
             '</select>' +
             '<div id="__cxQuizSrcHint" style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;line-height:1.4;">random 仅随机勾选，确保进度不被卡；选 bank/ai 前请确认已配置题库或 DeepSeek 通道，否则回退随机。</div>' +
+            // 外部 CDN 视觉脚本隐私授权（默认关闭，拒绝静默外连）
+            '<label style="display:flex;align-items:center;gap:6px;margin:8px 0 4px;font-size:12px;cursor:pointer;"><input id="__cxQuizVisionCdn" type="checkbox" style="margin:0;">允许加载外部视觉识别脚本 (CDN: html2canvas / Tesseract)</label>' +
+            '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-bottom:6px;line-height:1.4;">开启后将连外网加载上述 CDN 资源以对抗题目文本混淆；默认关闭，拒绝静默外连。</div>' +
+            // 用 DeepSeek 网页版作答：一键开启「视觉识别→DeepSeek 应答端」路径（同时勾选外部脚本授权）
+            '<label style="display:flex;align-items:center;gap:6px;margin:8px 0 4px;font-size:12px;cursor:pointer;"><input id="__cxQuizDeepseek" type="checkbox" style="margin:0;">用 DeepSeek 网页版作答（视觉识别→DeepSeek 应答端）</label>' +
+            '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-bottom:6px;line-height:1.4;">开启后，文本无解的混淆题将截图发往已连接的 DeepSeek 应答端作答；需先打开 DeepSeek 网页版并保持登录。开启同时会启用「允许加载外部视觉脚本」。</div>' +
+            // 隐私合规 + 防误交卷控制
+            '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:8px;padding-top:8px;">' +
+              '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;cursor:pointer;"><input id="__cxQuizOffline" type="checkbox" style="margin:0;">仅离线作答（题目不外发）</label>' +
+              '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;cursor:pointer;"><input id="__cxQuizAutoSubmit" type="checkbox" style="margin:0;">作答后自动提交</label>' +
+              '<button id="__cxBtnQuizSubmitAll" style="display:none;width:100%;padding:7px;background:' + STYLES.T.primary + ';color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">确认提交待作答 (<b id="__cxQuizPending">0</b>)</button>' +
+              // 人工复核队列（评估建议#6：置信度<0.6 已随机兜底，供用户核对后入本地题库闭环）
+              '<div id="__cxQuizReviewWrap" style="display:none;border-top:1px solid ' + STYLES.T.border + ';margin-top:8px;padding-top:8px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:' + STYLES.T.warning + ';margin-bottom:4px;"><span>⚠ 待人工复核</span><b id="__cxQuizReviewCount" class="cx-mono">0</b></div>' +
+                '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-bottom:6px;line-height:1.4;">低置信题已随机勾选保进度；核对后将正确答案入本地题库，下次命中高可信直接作答。</div>' +
+                '<div style="display:flex;gap:6px;">' +
+                  '<button id="__cxBtnQuizReviewAccept" style="flex:1;padding:6px;background:' + STYLES.T.ok + ';color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">采纳当前答案入题库</button>' +
+                  '<button id="__cxBtnQuizReviewExport" style="flex:1;padding:6px;background:' + STYLES.T.border + ';color:' + STYLES.T.text + ';border:none;border-radius:6px;cursor:pointer;font-size:12px;">导出待复核</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +   // 关闭 __cxQuizBlock
           // 子块二：上课随堂题弹窗作答（智慧树上课/icourse163/xuetangx/icve）
           '<div id="__cxPopupBlock" style="display:none;">' +
@@ -156,6 +178,7 @@
             '<button id="__cxBtnZhExam" style="margin-top:6px;width:100%;padding:7px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text + ';border:1px solid ' + STYLES.T.border + ';border-radius:6px;cursor:pointer;font-size:12px;">打开作业 / 考试助手</button>' +
           '</div>' +
         '</div>' +
+          '</div>' +   // 关闭 __cxZoneContinue(开89：此前缺失导致 automation/insight/system 被嵌套进 control)
       '</div>' +
       // 区块：自动化（仅保留工具库项开关；续播精细控制已收拢至「续播」卡，见布局建议 Rec A）
       '<div id="__cxTab_automation" class="cx-tab">' +

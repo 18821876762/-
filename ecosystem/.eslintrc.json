@@ -1,0 +1,11 @@
+{
+  "root": true,
+  "env": { "browser": true, "es2021": true, "node": true },
+  "parserOptions": { "ecmaVersion": 2021, "sourceType": "script" },
+  "rules": {
+    "no-var": "error",
+    "prefer-const": "warn",
+    "no-unused-vars": ["warn", { "args": "none" }]
+  },
+  "ignorePatterns": ["node_modules/", "*.user.js", "_sim/", "tests/"]
+}

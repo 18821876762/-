@@ -63,7 +63,7 @@ async function main() {
     ns.CONFIG.QUIZ_VISION_ENABLED = true;
     // DOM 文本是"混淆"的（与题库不一致），但视觉恢复出真实文本
     ns.setQuizRecoverOverride(function () { return Promise.resolve({ text: '光合作用的过程', answer: null }); });
-    try { window.__CX_QUIZ_BANK = { '光合作用的过程': 2 }; } catch (e) {}
+    try { if (!ns.quizBank) ns.quizBank = {}; ns.quizBank['光合作用的过程'] = 2; } catch (e) {}
     const { sel, submitted } = makeQuestion(window, '混淆题干看不出', 4);
     ns.renweiTickQuiz();
     await tick();

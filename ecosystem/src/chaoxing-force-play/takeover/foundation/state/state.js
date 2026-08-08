@@ -28,15 +28,30 @@
     /** 发布事件：变参透传 emit(ev, a, b) → fn(a, b)，向后兼容单 payload 调用。@param {string} ev @param {...*} payload */
     function emit(ev, payload) {   // P5c：透传变参（emit(ev, a, b) → fn(a, b)），向后兼容单 payload 调用
       var arr = subs['__ev:' + ev];
-      if (arr) { var args = Array.prototype.slice.call(arguments, 1); arr.forEach(function (fn) { try { fn.apply(null, args); } catch (e) { swallow(e, 'store.emit'); } }); }
+      if (arr) { var args = Array.from(arguments).slice(1); arr.forEach(function (fn) { try { fn.apply(null, args); } catch (e) { swallow(e, 'store.emit'); } }); }
       // 跨帧透传（修复信息流丢提示）：子帧(如视频 iframe)的轻提示经 postMessage 转发到顶层帧，
       // 使顶层「洞察」页提示流与悬浮 toast 能聚合所有帧的提示；顶层帧 window===top 不回传，避免回环。
       if (ev === 'ui:toast' && typeof window !== 'undefined' && window !== window.top) {
-        try { window.top.postMessage({ __cxFeedToast: Array.prototype.slice.call(arguments, 1) }, '*'); } catch (e) { swallow(e, 'store.emit.fwd'); }
+        try { window.top.postMessage({ __cxFeedToast: Array.from(arguments).slice(1) }, '*'); } catch (e) { swallow(e, 'store.emit.fwd'); }
       }
     }
     /** 订阅事件（语法糖：on('__ev:'+ev, fn)）。@param {string} ev @param {Function} fn */
     function onEv(ev, fn) { on('__ev:' + ev, fn); }
+      /** 退订状态键变化（H3：事件总线无退订 → 补充 off）。@param {string} k @param {Function} fn */
+    function off(k, fn) {
+      var arr = subs[k];
+      if (!arr) return;
+      if (!fn) { delete subs[k]; return; }   // 无 fn 时清空该键全部订阅（SPA 重建面板用）
+      for (var i = arr.length - 1; i >= 0; i--) if (arr[i] === fn) arr.splice(i, 1);
+      if (arr.length === 0) delete subs[k];
+    }
+    /** 退订事件（语法糖：off('__ev:'+ev, fn)）。@param {string} ev @param {Function} fn */
+    function offEv(ev, fn) { off('__ev:' + ev, fn); }
+    /** 清空全部订阅（H3：卸载/热禁用时避免残留死订阅叠加泄漏）。@param {string} [keepKey] 可选保留键（如跨帧透传监听） */
+    function clearSubs(keepKey) {
+      if (keepKey) { var _keep = subs[keepKey]; subs = {}; if (_keep) subs[keepKey] = _keep; }
+      else { subs = {}; }
+    }
     // 顶层帧：接收子帧转发的轻提示并汇入本帧事件总线（仅顶层执行，避免回环）。
     if (typeof window !== 'undefined' && window === window.top) {
       try {
@@ -48,5 +63,7 @@
         });
       } catch (e) { swallow(e, 'store.feed.bind'); }
     }
-    return { state: state, get: get, set: set, on: on, emit: emit, onEv: onEv };
+    return { state: state, get: get, set: set, on: on, off: off, emit: emit, onEv: onEv, offEv: offEv, clearSubs: clearSubs };
   })();
+  // 暴露到 window 使独立 addon/toolkit 脚本也能 emit('ui:toast') 等（原 window.Store 为 undefined，3-4 处死代码分支）
+  if (typeof window !== 'undefined') window.Store = Store;

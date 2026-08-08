@@ -107,6 +107,10 @@
   var _loopTicks = 0, _loopLastTick = 0;   // 诊断#七：主循环健康遥测（已运行轮次 + 上次 tick 时间），供诊断一处查看续播调度是否仍在跑
   try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
 
+  // 真答题引擎：接入 MutationObserver，题目动态出现即触发作答（减少 2s 轮询空窗）
+  try { if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.quizObserveDispatch = function () { try { _loopTick(); } catch (e) { swallow(e); } }; } catch (e) {}
+  try { if (typeof quizObserve === 'function') setTimeout(function () { try { quizObserve(document.body || document.documentElement); } catch (e) { swallow(e); } }, 1200); } catch (e) {}
+
   // #1 温和/礼貌模式：全模块加载、站点识别(SITE)已就绪后，按 INTRUSION_MODE 收敛原型中性化装/卸。
   // 加载期(config.js 早于 site-router.js)usePrototypeNeutralize 保守返回 true 已先装原型；
   // 此处对 'auto' 做精确站点解析、对持久化 'gentle' 执行卸载降级，使刷新后的设置即时生效。
@@ -118,3 +122,5 @@
   Store.state.ENDED_SRCS = ENDED_SRCS;
   Store.state._watchStats = _watchStats;
   Store.state._loopTimer = _loopTimer;
+  // 暴露脚本版本到命名空间，便于控制台一键核对是否运行了最新构建（空白 tab 排查用）
+  try { window.__CX_FORCE_PLAY.version = SCRIPT_VERSION; } catch (e) {}

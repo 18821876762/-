@@ -18,22 +18,42 @@
   var _quizRecoverOverride = null;
 
   // 懒加载外部脚本（仅启用视觉识别且命中题目时注入），返回对应全局对象 Promise。
-  function _quizLoadScript(src) {
+  // 现代化改进（对比旧 onload/onerror 直插）：① 带超时防止 CDN 挂死导致 Promise 永不 settle；
+  //   ② onload/onerror/timeout 后移除事件引用并删除 script 节点，避免内存泄漏与 DOM 残留。
+  function _quizLoadScript(src, timeout) {
     return new Promise(function (resolve, reject) {
       try {
         if (typeof document === 'undefined' || !document.createElement) { reject(new Error('no document')); return; }
         // 已加载则直接取全局，避免重复注入
         if (/html2canvas/.test(src) && window.html2canvas) { resolve(window.html2canvas); return; }
         if (/tesseract/.test(src) && window.Tesseract) { resolve(window.Tesseract); return; }
+        // 隐私优先：外部 CDN 脚本须显式授权（QUIZ_VISION_PRIVACY_OK），拒绝静默外连
+        var _remote = /^https?:\/\//i.test(src);
+        var _privacyOk = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_VISION_PRIVACY_OK);
+        if (_remote && !_privacyOk) {
+          if (typeof Store !== 'undefined') { try { Store.emit('ui:toast', '安全拦截：未授权加载外部脚本 ' + src + '（面板开启「允许加载外部视觉脚本」后可启用）'); } catch (e0) {} }
+          reject(new Error('隐私开关未开启：拒绝加载外部脚本 ' + src + '（请在面板开启「允许加载外部视觉脚本」）'));
+          return;
+        }
         var s = document.createElement('script');
         s.src = src; s.async = true;
+        var _done = false;
+        var _cleanup = function () {
+          try { s.onload = null; s.onerror = null; } catch (e) {}   // 去引用，防闭包内存泄漏
+          if (s.parentNode) { try { s.parentNode.removeChild(s); } catch (e) {} }   // 从 DOM 删除节点
+        };
+        var _to = setTimeout(function () {
+          if (_done) return; _done = true; _cleanup();
+          reject(new Error('load timeout: ' + src));
+        }, timeout || 15000);
         s.onload = function () {
+          if (_done) return; _done = true; clearTimeout(_to); _cleanup();
           try {
             if (/html2canvas/.test(src)) { QUIZ_VISION._h2c = window.html2canvas; resolve(window.html2canvas); }
             else { QUIZ_VISION._ocr = window.Tesseract; resolve(window.Tesseract); }
           } catch (e) { reject(e); }
         };
-        s.onerror = function () { reject(new Error('load fail: ' + src)); };
+        s.onerror = function () { if (_done) return; _done = true; clearTimeout(_to); _cleanup(); reject(new Error('load fail: ' + src)); };
         (document.head || document.documentElement || document).appendChild(s);
       } catch (e) { reject(e); }
     });

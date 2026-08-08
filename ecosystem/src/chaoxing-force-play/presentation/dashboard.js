@@ -29,23 +29,27 @@
     refreshPanelLabels();   // 拖动滑块即时刷新数值文字（修复：拖动时显示不变）
     updateBadge();          // 状态徽章：标题栏 LED 指示灯
     renderDashboard();      // 运维仪表盘实时刷新
-    var st = _cxPanel.querySelector('#__cxPanelState');
-    var v = activeVideo();
-    if (!v) {
-      // 没有正在播放的：尝试展示已用户暂停的目标
-      v = currentVideo();
-      if (st) { if (!v) st.textContent = '当前无视频'; else st.textContent = '视频已暂停(用户) · 按按钮恢复'; }
-    } else if (st) {
-      var src = (v.currentSrc || v.src || '').split('/').pop() || '(未知)';
-      var status = v.__cxAN_hold ? '插播题锁定(auto-next)' : (v.__cxUserPaused ? '已暂停(用户)' : (v.paused ? '暂停' : '播放中'));
-      var watchMin = ((cxState(v).watchMs || 0) / 60000).toFixed(1);
-      var autoRemain = CONFIG.AUTO_STOP_MIN > 0 ? Math.max(0, CONFIG.AUTO_STOP_MIN - (cxState(v).watchMs || 0) / 60000).toFixed(1) : '关闭';
-      var resumeRemain = (v.__cxUserPaused && cxState(v).resumeAt) ? Math.max(0, (cxState(v).resumeAt - Date.now()) / 60000).toFixed(1) : '—';
-      var prog = fmtTime(v.currentTime) + (isFinite(v.duration) && v.duration > 0 ? ' / ' + fmtTime(v.duration) : '');
-      st.textContent = '视频: ' + src + '\n状态: ' + status + ' · 进度 ' + prog + '\n已看 ' + watchMin + 'min · 自动停剩 ' + autoRemain + 'min · 恢复剩 ' + resumeRemain + 'min';
-    }
-    var btn = _cxPanel.querySelector('#__cxBtnPause');
-    if (btn) btn.textContent = (v && v.__cxUserPaused) ? '▶ 恢复续播' : '⏸ 暂停续播';
+    try {
+      try {
+        var st = _cxPanel.querySelector('#__cxPanelState');
+        var v = activeVideo();
+        if (!v) {
+          // 没有正在播放的：尝试展示已用户暂停的目标
+          v = currentVideo();
+          if (st) { if (!v) st.textContent = '当前无视频'; else st.textContent = '视频已暂停(用户) · 按按钮恢复'; }
+        } else if (st) {
+          var src = (v.currentSrc || v.src || '').split('/').pop() || '(未知)';
+          var status = v.__cxAN_hold ? '插播题锁定(auto-next)' : (v.__cxUserPaused ? '已暂停(用户)' : (v.paused ? '暂停' : '播放中'));
+          var watchMin = ((cxState(v).watchMs || 0) / 60000).toFixed(1);
+          var autoRemain = CONFIG.AUTO_STOP_MIN > 0 ? Math.max(0, CONFIG.AUTO_STOP_MIN - (cxState(v).watchMs || 0) / 60000).toFixed(1) : '关闭';
+          var resumeRemain = (v.__cxUserPaused && cxState(v).resumeAt) ? Math.max(0, (cxState(v).resumeAt - Date.now()) / 60000).toFixed(1) : '—';
+          var prog = fmtTime(v.currentTime) + (isFinite(v.duration) && v.duration > 0 ? ' / ' + fmtTime(v.duration) : '');
+          st.textContent = '视频: ' + src + '\n状态: ' + status + ' · 进度 ' + prog + '\n已看 ' + watchMin + 'min · 自动停剩 ' + autoRemain + 'min · 恢复剩 ' + resumeRemain + 'min';
+        }
+        var btn = _cxPanel.querySelector('#__cxBtnPause');
+        if (btn) btn.textContent = (v && v.__cxUserPaused) ? '▶ 恢复续播' : '⏸ 暂停续播';
+      } catch (e) { swallow(e); }   // 视频/状态行填充抛错不得中断后续 renderVideoList/_refreshQuizZone，否则三页全空
+    } catch (e) { swallow(e); }   // 视频/状态行填充抛错不得中断后续 renderVideoList/_refreshQuizZone，否则三页全空
     // 全局诊断信息（含 heap / 桥 / 定向 / 轮询，供反馈；替代原单独 heap 行）
     try {
       var info = _cxPanel.querySelector('#__cxPanelInfo');
@@ -92,8 +96,13 @@
       if (!st || !st.scanned && st.scanned !== 0) {   // 本页无引擎统计（非题目页或未扫描）
         total.textContent = done.textContent = remain.textContent = '—';
         var _s = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_source') : null;
-        src.textContent = (_s === 'bank' || _s === 'ai') ? _s : 'random';
+        var _off0 = true; try { if (typeof localStorage !== 'undefined') { var _o0 = localStorage.getItem('cx_quiz_offline'); _off0 = (_o0 === null ? true : _o0 !== '0'); } } catch (e2) {}
+        src.textContent = ((_s === 'bank' || _s === 'ai') ? _s : 'random') + (_off0 ? ' ·离线' : '');
         if (conf) conf.textContent = '—';
+        var _ps0 = p.querySelector('#__cxQuizPendingStat'); if (_ps0) _ps0.textContent = '0';
+        var _sa0 = p.querySelector('#__cxBtnQuizSubmitAll'); if (_sa0) _sa0.style.display = 'none';
+        // 无引擎统计时隐藏人工复核区
+        var _rw0 = p.querySelector('#__cxQuizReviewWrap'); if (_rw0) _rw0.style.display = 'none';
         if (row) row.style.opacity = on ? '1' : '.45';
         return;
       }
@@ -102,8 +111,28 @@
       remain.textContent = (typeof st.remaining === 'number') ? st.remaining : '—';
       // 实际命中来源（融合后可见：bank/ai/random 等），回退到配置值
       var _ss = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_source') : null;
-      src.textContent = (st.answerSource) ? st.answerSource : ((_ss === 'bank' || _ss === 'ai') ? _ss : 'random');
+      var _srcText = (st.answerSource) ? st.answerSource : ((_ss === 'bank' || _ss === 'ai') ? _ss : 'random');
+      var _off = true; try { if (typeof localStorage !== 'undefined') { var _o = localStorage.getItem('cx_quiz_offline'); _off = (_o === null ? true : _o !== '0'); } } catch (e2) {}
+      if (_off) _srcText += ' ·离线';
+      // 分级标记（评估建议#3/#8：置信度分级可见）—— auto=直接提交 / confirm=待你确认 / review=人工复核
+      var _lv = (st && st.levels) ? String(st.levels) : '';
+      if (_lv.indexOf('review') >= 0) _srcText += ' ·⚠人工复核';
+      else if (_lv.indexOf('confirm') >= 0) _srcText += ' ·待确认';
+      src.textContent = _srcText;
       if (conf) conf.textContent = (typeof st.confidence === 'number') ? (Math.round(st.confidence * 100) + '%') : '—';
+      // 待确认提交数（二次确认模式）
+      var _pend = (st && typeof st.pendingSubmit === 'number') ? st.pendingSubmit : 0;
+      var _pendEl = p.querySelector('#__cxQuizPending'); if (_pendEl) _pendEl.textContent = _pend;
+      var _pendStat = p.querySelector('#__cxQuizPendingStat'); if (_pendStat) _pendStat.textContent = _pend;
+      var _submitAll = p.querySelector('#__cxBtnQuizSubmitAll');
+      if (_submitAll) {
+        var _as = true; try { if (typeof localStorage !== 'undefined') { var _av = localStorage.getItem('cx_quiz_autosubmit'); _as = (_av === null ? true : _av !== '0'); } } catch (e3) {}
+        _submitAll.style.display = (!_as || _pend > 0) ? 'block' : 'none';
+      }
+      // 人工复核队列计数（评估建议#6）：有低置信待复核则显示区与计数
+      var _rc = (st && typeof st.reviewCount === 'number') ? st.reviewCount : 0;
+      var _rw = p.querySelector('#__cxQuizReviewWrap'); if (_rw) _rw.style.display = (_rc > 0) ? 'block' : 'none';
+      var _rcEl = p.querySelector('#__cxQuizReviewCount'); if (_rcEl) _rcEl.textContent = _rc;
       if (row) row.style.opacity = on ? '1' : '.45';
     } catch (e) { swallow(e); }
   }

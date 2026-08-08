@@ -83,7 +83,7 @@ assert('collects id/name/title',
   JSON.stringify(sig({ id: 'i1', name: 'n1', title: 't1', getAttribute: function () { return null; }, attributes: [] })) ===
   JSON.stringify(['i1', 'n1', 't1']), 'collect id/name/title');
 assert('collects data-* and bare "data" attr',
-  JSON.stringify(sig({ attributes: [{ name: 'data', value: 'D' }, { name: 'data-x', value: 'vx' }, { name: 'class', value: 'c' }] })) === JSON.stringify(['D', 'vx']), 'data attrs');
+  JSON.stringify(sig({ getAttribute: function (n) { return n === 'data' ? 'D' : null; }, attributes: [{ name: 'data', value: 'D' }, { name: 'data-x', value: 'vx' }, { name: 'class', value: 'c' }] })) === JSON.stringify(['D', 'vx']), 'data attrs');
 assert('empty element -> []',
   JSON.stringify(sig({ getAttribute: function () { return null; }, attributes: [] })) === JSON.stringify([]), 'empty');
 
@@ -99,7 +99,10 @@ console.log('urlParam:');
 const up = url.urlParam;
 assert('single key', up('https://x.com/a?kid=123&t=2', 'kid') === '123', up('https://x.com/a?kid=123&t=2', 'kid'));
 assert('hash route param', up('https://x.com/a#kid=999', 'kid') === '999', up('https://x.com/a#kid=999', 'kid'));
-assert('multi keys -> object', JSON.stringify(up('?a=1&b=2', ['a', 'b'])) === JSON.stringify({ a: '1', b: '2' }), up('?a=1&b=2', ['a', 'b']));
+// 多键数组语义 = 候选键按优先级取首个命中的单值（真实用法：['chapterId','knowledgeId']）
+assert('multi keys -> first hit value', up('?a=1&b=2', ['a', 'b']) === '1', up('?a=1&b=2', ['a', 'b']));
+assert('multi keys -> falls back to 2nd', up('?b=2', ['a', 'b']) === '2', up('?b=2', ['a', 'b']));
+assert('multi keys none present -> null', up('?c=3', ['a', 'b']) === null, up('?c=3', ['a', 'b']));
 assert('missing key -> null', up('https://x.com/', 'kid') === null, up('https://x.com/', 'kid'));
 assert('url-encoded value decoded', up('?n=%E4%B8%AD', 'n') === '中', up('?n=%E4%B8%AD', 'n'));
 
@@ -128,7 +131,7 @@ assert('RESUME_AFTER_MIN clamped to 0', C.RESUME_AFTER_MIN === 0, 'got ' + C.RES
 assert('RESCAN_INTERVAL clamped to 5000', C.RESCAN_INTERVAL === 5000, 'got ' + C.RESCAN_INTERVAL);
 assert('END_RELEASE_SEC clamped to 120', C.END_RELEASE_SEC === 120, 'got ' + C.END_RELEASE_SEC);
 assert('USER_RATE clamped to 4 (hi)', C.USER_RATE === 4, 'got ' + C.USER_RATE);
-assert('PANEL_W clamped to 220 (lo bound)', C.PANEL_W === 220, 'got ' + C.PANEL_W);
+assert('PANEL_W clamped to 288 (lo bound)', C.PANEL_W === 288, 'got ' + C.PANEL_W);
 assert('INTRUSION_MODE invalid -> auto', C.INTRUSION_MODE === 'auto', 'got ' + C.INTRUSION_MODE);
 assert('POLITE_MODE coerced to bool', C.POLITE_MODE === false, 'got ' + JSON.stringify(C.POLITE_MODE));
 assert('DEBUG coerced to bool', store.DEBUG === true, 'got ' + JSON.stringify(store.DEBUG));

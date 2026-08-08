@@ -27,7 +27,7 @@
 // ==/UserScript==
 
 
-// Built: 2026-08-07T13:26:51+08:00  commit: 06ee783  minify: off
+// Built: 2026-08-08T11:12:57+08:00  commit: 7e577a0  minify: off
 
 
 (function () {
@@ -68,7 +68,7 @@
    */
   function dbg() {
     if (!DEBUG) return;
-    try { console.log.apply(console, ['[CX-FORCE]'].concat([].slice.call(arguments))); } catch (e) { swallow(e); }
+    try { console.log.apply(console, ['[CX-FORCE]'].concat(Array.from(arguments))); } catch (e) { swallow(e); }
   }
   /**
    * 安全吞掉异常并记录到环形缓冲，避免单点错误中断主流程（评审#1 可观测化：记录 e.stack）。
@@ -138,12 +138,15 @@
         if (timer) { clearTimeout(timer); timer = null; }
         last = now;
         safeCall(function () { fn.apply(ctx, args); }, 'throttle');
-      } else if (!timer) {
+      } else {
+        // 始终捕获最新参数：若等待期间多次调用，只执行最后一次（而非首次调用的陈旧参数）
         ctxA = ctx; argsA = args;
-        timer = setTimeout(function () {
-          last = Date.now(); timer = null;
-          safeCall(function () { fn.apply(ctxA, argsA); }, 'throttle');
-        }, remaining);
+        if (!timer) {
+          timer = setTimeout(function () {
+            last = Date.now(); timer = null;
+            safeCall(function () { fn.apply(ctxA, argsA); }, 'throttle');
+          }, remaining);
+        }
       }
     };
   }
@@ -406,15 +409,30 @@
     /** 发布事件：变参透传 emit(ev, a, b) → fn(a, b)，向后兼容单 payload 调用。@param {string} ev @param {...*} payload */
     function emit(ev, payload) {   // P5c：透传变参（emit(ev, a, b) → fn(a, b)），向后兼容单 payload 调用
       var arr = subs['__ev:' + ev];
-      if (arr) { var args = Array.prototype.slice.call(arguments, 1); arr.forEach(function (fn) { try { fn.apply(null, args); } catch (e) { swallow(e, 'store.emit'); } }); }
+      if (arr) { var args = Array.from(arguments).slice(1); arr.forEach(function (fn) { try { fn.apply(null, args); } catch (e) { swallow(e, 'store.emit'); } }); }
       // 跨帧透传（修复信息流丢提示）：子帧(如视频 iframe)的轻提示经 postMessage 转发到顶层帧，
       // 使顶层「洞察」页提示流与悬浮 toast 能聚合所有帧的提示；顶层帧 window===top 不回传，避免回环。
       if (ev === 'ui:toast' && typeof window !== 'undefined' && window !== window.top) {
-        try { window.top.postMessage({ __cxFeedToast: Array.prototype.slice.call(arguments, 1) }, '*'); } catch (e) { swallow(e, 'store.emit.fwd'); }
+        try { window.top.postMessage({ __cxFeedToast: Array.from(arguments).slice(1) }, '*'); } catch (e) { swallow(e, 'store.emit.fwd'); }
       }
     }
     /** 订阅事件（语法糖：on('__ev:'+ev, fn)）。@param {string} ev @param {Function} fn */
     function onEv(ev, fn) { on('__ev:' + ev, fn); }
+      /** 退订状态键变化（H3：事件总线无退订 → 补充 off）。@param {string} k @param {Function} fn */
+    function off(k, fn) {
+      var arr = subs[k];
+      if (!arr) return;
+      if (!fn) { delete subs[k]; return; }   // 无 fn 时清空该键全部订阅（SPA 重建面板用）
+      for (var i = arr.length - 1; i >= 0; i--) if (arr[i] === fn) arr.splice(i, 1);
+      if (arr.length === 0) delete subs[k];
+    }
+    /** 退订事件（语法糖：off('__ev:'+ev, fn)）。@param {string} ev @param {Function} fn */
+    function offEv(ev, fn) { off('__ev:' + ev, fn); }
+    /** 清空全部订阅（H3：卸载/热禁用时避免残留死订阅叠加泄漏）。@param {string} [keepKey] 可选保留键（如跨帧透传监听） */
+    function clearSubs(keepKey) {
+      if (keepKey) { var _keep = subs[keepKey]; subs = {}; if (_keep) subs[keepKey] = _keep; }
+      else { subs = {}; }
+    }
     // 顶层帧：接收子帧转发的轻提示并汇入本帧事件总线（仅顶层执行，避免回环）。
     if (typeof window !== 'undefined' && window === window.top) {
       try {
@@ -426,8 +444,10 @@
         });
       } catch (e) { swallow(e, 'store.feed.bind'); }
     }
-    return { state: state, get: get, set: set, on: on, emit: emit, onEv: onEv };
+    return { state: state, get: get, set: set, on: on, off: off, emit: emit, onEv: onEv, offEv: offEv, clearSubs: clearSubs };
   })();
+  // 暴露到 window 使独立 addon/toolkit 脚本也能 emit('ui:toast') 等（原 window.Store 为 undefined，3-4 处死代码分支）
+  if (typeof window !== 'undefined') window.Store = Store;
 
   // ===== MODULE: 运维指标与黑匣子（可观测性状态层）=====
   // 域：诊断 / 可观测性状态 —— 与续播业务逻辑无关，仅供面板仪表盘与黑匣子读取展示。
@@ -694,6 +714,11 @@
     _ns.getPauseNeutralized = getPauseNeutralized;
     _ns.getRateNeutralized = getRateNeutralized;
     _ns.restorePrototypeNeutralization = restorePrototypeNeutralization;   // 暴露统一还原原语：运行期切换与全卸(cleanupListeners)共用
+    // 暴露装/卸原语（评估清单#7：供卸载对称测试与审计工具驱动，单一事实源，避免两套还原漂移）
+    _ns.installPrototypePauseNeutralize = installPrototypePauseNeutralize;
+    _ns.restorePrototypePause = restorePrototypePause;
+    _ns.installPlaybackRateNeutralize = installPlaybackRateNeutralize;
+    _ns.restorePrototypeRate = restorePrototypeRate;
     _ns.CONFIG = CONFIG;                  // 暴露配置引用（工具库项 tamper-guard 读取 POLITE_MODE 以切换探测方式）
     _ns.detectSite = detectSite;          // 暴露站点识别（#1 回归需断言 edu.cn 视为 chaoxing；presentation/审计亦可复用）
     _ns._pauseNeutralized = _pauseNeutralized;
@@ -829,11 +854,20 @@
       'cursor:pointer!important;' +   // 折叠态明显可点，避免用户误以为面板"死了"
       'transition:width .28s ease,height .28s ease,padding .28s ease,border-radius .28s ease,max-height .28s ease,box-shadow .2s ease,background .2s ease;' +
     '}' +
-    '#__cxPanel.ninja .cx-title,' +
-    '#__cxPanel.ninja #__cxPanelClose,' +
-    '#__cxPanel.ninja .cx-cmd-wrap,' +
-    '#__cxPanel.ninja .cx-nav,' +
-    '#__cxPanel.ninja .cx-tab{display:none!important;}' +
+    // 折叠态(未悬停且未展开)才隐藏这些元素；展开态由下方 hover/.ninja-open 规则恢复显示。
+    // 注意：.cx-tab 不能在此用 display:none!important 一把梭，否则展开态(面板仍带 .ninja)也会被它藏住、
+    // 且会盖过 switchTab() 内联样式。这里用 :not(:hover):not(.ninja-open) 限定仅在折叠态隐藏。
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-title,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) #__cxPanelClose,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-cmd-wrap,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-nav,' +
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-tab{display:none!important;}' +
+    // 根因修复：折叠规则用了 !important，会压过 switchTab() 的内联 display:block（无 !important）。
+    // 旧版靠 ninja-open/hover 时的 display:block!important 把「所有 tab」强制显示（堆叠但可见）掩盖了折叠；
+    // 新版为修堆叠去掉了那层 !important，改由 switchTab 内联控制，但折叠态的 display:none!important 仍会盖过内联，
+    // 一旦 ninja-open/hover 缺失（首次打开面板、panel:refresh 后时序差）当前 tab 即被压成空白。
+    // 给「当前活跃 tab」加 .cx-tab--cur 并例外放行 display:block!important，彻底不依赖 ninja-open 时序。
+    '#__cxPanel.ninja:not(:hover):not(.ninja-open) .cx-tab.cx-tab--cur{display:block!important;}' +
     '#__cxPanel.ninja .cx-titlebar{display:flex!important;align-items:center;justify-content:center;width:100%!important;height:100%!important;margin:0!important;}' +
     '#__cxPanel.ninja .cx-titlebar > div{display:flex!important;align-items:center;justify-content:center;gap:0!important;}' +
     '#__cxPanel.ninja .cx-titlebar > div > span:not(#__cxPanelBadge){display:none!important;}' +
@@ -891,9 +925,10 @@
     '#__cxPanel.ninja:hover .cx-cmd-wrap,' +
     '#__cxPanel.ninja.ninja-open .cx-cmd-wrap,' +
     '#__cxPanel.ninja:hover .cx-nav,' +
-    '#__cxPanel.ninja.ninja-open .cx-nav,' +
-    '#__cxPanel.ninja:hover .cx-tab,' +
-    '#__cxPanel.ninja.ninja-open .cx-tab{display:block!important;}' +
+    '#__cxPanel.ninja.ninja-open .cx-nav{display:block!important;}' +
+    // 注意：展开态不要把 .cx-tab 设成 display:block!important，否则会盖过 switchTab() 的内联 display:none，
+    // 导致四个标签页同时堆叠显示、且点导航切不动(看起来"只有主控/面板坏了")。标签页显隐交由 switchTab 内联样式控制；
+    // 折叠态的隐藏已由上方 `:not(:hover):not(.ninja-open)` 限定规则统一处理。
     '#__cxPanel.ninja:hover .cx-nav-btn,' +
     '#__cxPanel.ninja.ninja-open .cx-nav-btn{display:inline-block!important;}' +
     '#__cxPanel.ninja:hover .cx-titlebar,' +
@@ -914,6 +949,65 @@
   // ===== 存储与 API 通讯 =====
   // 面板配置持久化（localStorage: cx_panel_cfg）。爬虫桥的 fetch 类 API 通讯仍在其业务模块(bridge)，
   // 此处集中「本地存储」基础能力；后续看播统计等本地存储也可统一收口到此。
+
+  // 依赖无关 KVS：异步优先的键值存储，作为 localStorage→IndexedDB 迁移的底座。
+  //   backend = 'local'（默认）：同步 localStorage，行为零变化；
+  //   backend = 'indexeddb'：异步 IndexedDB（更大配额、worker 友好），不可用时自动回退 localStorage。
+  // 通过 CONFIG.KVS_BACKEND 切换；暴露 kvs.get/set/del/ready/backend。
+  var KVS = (function () {
+    function backendName() {
+      try { return (typeof CONFIG !== 'undefined' && CONFIG.KVS_BACKEND) || 'local'; } catch (e) { return 'local'; }
+    }
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+    var idb = null;
+    function hasIDB() {
+      try { return backendName() === 'indexeddb' && typeof indexedDB !== 'undefined' && !!indexedDB; } catch (e) { return false; }
+    }
+    function initIDB() {
+      return new Promise(function (resolve) {
+        if (!hasIDB()) { resolve(false); return; }
+        try {
+          var req = indexedDB.open('cx_kvs', 1);
+          req.onupgradeneeded = function () { try { req.result.createObjectStore('kv'); } catch (e) {} };
+          req.onsuccess = function () { idb = req.result; resolve(true); };
+          req.onerror = function () { resolve(false); };
+          req.onblocked = function () { resolve(false); };
+        } catch (e) { resolve(false); }
+      });
+    }
+    var _ready = (backendName() === 'indexeddb') ? initIDB() : Promise.resolve(false);
+    function get(k) {
+      if (backendName() !== 'indexeddb') return Promise.resolve(lsGet(k));
+      return _ready.then(function (ok) {
+        if (!ok) return lsGet(k);
+        return new Promise(function (resolve) {
+          try {
+            var tx = idb.transaction('kv', 'readonly');
+            var rq = tx.objectStore('kv').get(k);
+            rq.onsuccess = function () { resolve(rq.result == null ? null : String(rq.result)); };
+            rq.onerror = function () { resolve(lsGet(k)); };
+          } catch (e) { resolve(lsGet(k)); }
+        });
+      });
+    }
+    function set(k, v) {
+      var val = String(v);
+      if (backendName() !== 'indexeddb') { lsSet(k, val); return Promise.resolve(); }
+      return _ready.then(function (ok) {
+        if (!ok) { lsSet(k, val); return; }
+        try { var tx = idb.transaction('kv', 'readwrite'); tx.objectStore('kv').put(val, k); }
+        catch (e) { lsSet(k, val); }
+      });
+    }
+    function del(k) {
+      if (backendName() !== 'indexeddb') { lsDel(k); return Promise.resolve(); }
+      return _ready.then(function (ok) { if (!ok) { lsDel(k); return; } try { var tx = idb.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); } catch (e) { lsDel(k); } });
+    }
+    return { get: get, set: set, del: del, ready: _ready, backend: backendName };
+  })();
+
   function clampCfg() {                            // 载入后把越界值夹回面板控件允许范围
     CONFIG.AUTO_STOP_MIN = Math.max(0, Math.min(120, +CONFIG.AUTO_STOP_MIN || 0));
     CONFIG.RESUME_AFTER_MIN = Math.max(0, Math.min(60, +CONFIG.RESUME_AFTER_MIN || 0));
@@ -966,6 +1060,9 @@
     } catch (e) { swallow(e); }
   }
 
+  // 暴露 KVS 异步存储底座（IndexedDB 就绪/回退由 backend() 决定）
+  try { if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.kvs = KVS; } catch (e) {}
+
   // ===== 站点适配 / 页面路由 =====
   // 站点检测与路由分发：支持超星学习通(chaoxing) 与 智慧树网(zhihuishu)；平台私有全局/选择器集中到 SITES 映射。
   // 路由结果可用于驱动白名单抽取 / 接管策略的差异（不同站点的 attachments 字段、播放器容器不同）。
@@ -985,7 +1082,12 @@
       if (/icourses\.cn$/i.test(h)) return 'icourse163';      // 爱课程备用域
       if (/xuetangx\.com$/i.test(h)) return 'xuetangx';       // 学堂在线
       if (/icve\.com\.cn$/i.test(h)) return 'icve';           // 智慧职教
-      if (/pmphmooc\.com$/i.test(h) || /renwei/i.test(h)) return 'renwei'; // 人卫慕课（真实主域待确认，先占位 pmphmooc.com；如学校镜像域含 renwei 亦匹配）
+      // L3 修复：原 /renwei/i 无锚点会误匹配任何含 "renwei" 子串的域名（如 myrenwei.com / renwei-shop.cn），
+      // 触发人卫慕课专属作答分支产生非预期 DOM 注入。改为带域名边界的精确匹配：
+      //   · pmphmooc.com（人卫慕课已知主域占位）
+      //   · *.renwei.com / *.renwei.cn（人卫自有域及其子域）
+      //   · *-renwei.* / renwei-*.*（医学院校镜像域，如 mooc-renwei.edu.cn）
+      if (/pmphmooc\.com$/i.test(h) || /(^|\.)renwei\.(com|cn)$/i.test(h) || /renwei[-.]/i.test(h)) return 'renwei'; // 人卫慕课
       if (/unipus\.cn$/i.test(h)) return 'unipus';            // 中国高校外语慕课 Unipus
       if (/ucampus\.cn$/i.test(h)) return 'ucampus';          // U校园
       if (/ilab-x\.com$/i.test(h)) return 'ilabx';            // 实验空间
@@ -1937,9 +2039,9 @@
     function createContainer() {
       var noop = function () {};
       var $log = {
-        info: CFG.DEBUG ? function () { try { console.info.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} } : noop,
-        warn: function () { try { console.warn.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} },
-        err: function () { try { console.error.apply(console, ['[ZHEXAM]'].concat([].slice.call(arguments))); } catch (e) {} }
+        info: CFG.DEBUG ? function () { try { console.info.apply(console, ['[ZHEXAM]'].concat(Array.from(arguments))); } catch (e) {} } : noop,
+        warn: function () { try { console.warn.apply(console, ['[ZHEXAM]'].concat(Array.from(arguments))); } catch (e) {} },
+        err: function () { try { console.error.apply(console, ['[ZHEXAM]'].concat(Array.from(arguments))); } catch (e) {} }
       };
       var $storage = {
         // 统一收口到 toolkit.lsFlag/lsSetFlag（安全 LS 封装：异常/配额兜底，'1'/'0' 语义不变，免迁移）
@@ -2016,7 +2118,7 @@
         var btns = c.$dom.all(CFG.nextSels.join(','), document.documentElement);
         for (var i = 0; i < btns.length; i++) {
           var t = (btns[i].textContent || '').replace(/\s/g, '');
-          if (/下一页|下一题|下一项|next/i.test(t)) { btns[i].click(); return true; }
+          if (/下一页|下一题|下一项|next/i.test(t)) { btns[i].click(); return true; }   // 翻页成功；作答指纹清空交由闭包内 autoSubmitTick 处理（避免在模块级函数内访问闭包变量 handled，严格模式下会抛 ReferenceError 被静默吞掉）
         }
       } catch (e) {}
       return false;
@@ -2081,14 +2183,53 @@
       var state = IDLE;
       var asub = ASUB_OFF;
       var handled = {};   // 已勾选题目指纹去重
+      var submitting = false;            // 交卷防重入锁
+      var _lastSubmitTs = 0;            // 最近一次成功交卷时间戳（与 submitting 锁双重防极端竞态）
+      var _SUBMIT_MIN_GAP = 1500;       // 交卷最小间隔（ms）：防止 click 同步冒泡/双击造成二次提交
+      var _listeners = [];               // onStateChange 订阅者
+      var _errBox = [];                  // 最近错误黑匣子（DEBUG 下可观测，最多保留 10 条）
+      var _lastActive = null, _lastSub = null;  // 状态变更去重（同值不重复 emit）
+      var _lastSyncTs = 0, _SYNC_MIN_GAP = 120;  // sync 节流（ms）：history 事件在 SPA 中可密集触发
+      var _examPage = _isExamPage();     // 页面态缓存：由路由事件刷新，免每次同步读 location
+
+      // 错误黑匣子：记录最近 N 条异常（含来源），便于排错；DEBUG 模式下额外向控制台冒泡
+      function _recordErr(e, where) {
+        try {
+          var msg = (e && e.message) ? e.message : ('' + e);
+          _errBox.push({ ts: Date.now(), where: where || '', msg: msg });
+          if (_errBox.length > 10) _errBox.shift();
+          if (CFG.DEBUG) { try { console.error('[ZHEXAM]' + (where ? '(' + where + ')' : '') + ': ' + msg); } catch (e2) {} }
+        } catch (e3) {}
+      }
 
       function isActive() { return state === ACTIVE && _dsOk(); }          // 作答态（含 DeepSeek 闸门）
-      function asubOn() { return c.$storage.isSub() && _isExamPage() && _dsOk(); }  // 自动交卷态（含 DeepSeek 闸门）
 
-      function transition(s) { if (state !== s) { var p = state; state = s; c.$log.info('zh-exam answer state: ' + p + ' → ' + s); } }
-      function asubTransition(s) { if (asub !== s) { var p = asub; asub = s; c.$log.info('zh-exam autosub state: ' + p + ' → ' + s); } }
+      // 自动交卷态判定（含 DeepSeek 闸门）。DS/页面态来自事件更新（_examPage 缓存 + _dsOk 闸门），不在此同步重算。
+      // 关键修复：用实时 _isExamPage() 而非缓存 _examPage。智慧树翻页/切题为局部 DOM 刷新(不走 history)，
+    // onRoute 不会触发，_examPage 可能永远停在初始化时的 false，导致自动交卷子态卡死在 OFF。
+    // 与 sync() 的作答态判定口径统一为实时 location，保证任意翻页方式都能进入 ANSWERING→READY。
+    function asubOn() { return c.$storage.isSub() && _isExamPage() && _dsOk(); }
+
+      function transition(s) { if (state !== s) { var p = state; state = s; c.$log.info('zh-exam answer state: ' + p + ' → ' + s); _emitIfChanged(); } }
+      function asubTransition(s) { if (asub !== s) { var p = asub; asub = s; c.$log.info('zh-exam autosub state: ' + p + ' → ' + s); _emitIfChanged(); } }
+
+      // 状态变更可观测：仅在真正变化时 emit，避免刷屏
+      function _emitIfChanged() {
+        var a = (state === ACTIVE), s = asub;
+        if (a === _lastActive && s === _lastSub) return;
+        _lastActive = a; _lastSub = s;
+        var snap = getState();
+        try { if (typeof Store !== 'undefined' && Store.emit) Store.emit('zh-exam:state', snap); } catch (e) { _recordErr(e, 'emit'); }
+        for (var i = 0; i < _listeners.length; i++) { try { _listeners[i](snap); } catch (e) { _recordErr(e, 'onStateChange'); } }
+      }
+      function onStateChange(fn) { if (typeof fn === 'function') _listeners.push(fn); }
+      function offStateChange(fn) { for (var i = _listeners.length - 1; i >= 0; i--) { if (_listeners[i] === fn) { _listeners.splice(i, 1); break; } } }
 
       function sync() {
+        // 节流：history.pushState/replaceState 在 SPA 中可能短时间内密集触发，合并更新
+        var now = Date.now();
+        if (now - _lastSyncTs < _SYNC_MIN_GAP) { if (!_syncTimer) _syncTimer = setTimeout(function () { _syncTimer = null; sync(); }, _SYNC_MIN_GAP); return; }
+        _lastSyncTs = now;
         // 作答态
         if (c.$storage.isOn() && _isExamPage() && _dsOk()) { if (state !== ACTIVE) { handled = {}; transition(ACTIVE); } }
         else { if (state === ACTIVE) { handled = {}; transition(IDLE); } }
@@ -2096,6 +2237,7 @@
         if (asubOn()) { if (asub === ASUB_OFF) asubTransition(ASUB_ANSWERING); }
         else asubTransition(ASUB_OFF);
       }
+      var _syncTimer = null;
 
       // —— 作答：勾选当前页所有题（依赖 isActive 闸门）——
       function tickAnswerPage() {
@@ -2125,8 +2267,8 @@
         if (asub === ASUB_DONE) return;
         var last = !_peekNext(c);
         if (!last) {
-          // 非末页：当前页答完则翻页
-          if (_allAnsweredHere(c)) _goNextPage(c);
+          // 非末页：当前页答完则翻页；翻页成功后清空作答指纹，避免跨页同题干片段误判"已答"而漏答
+          if (_allAnsweredHere(c)) { if (_goNextPage(c)) handled = {}; }
           asubTransition(ASUB_ANSWERING);
         } else {
           // 末页：当前页所有题答完 → READY（等用户确认交卷）
@@ -2134,11 +2276,29 @@
           else asubTransition(ASUB_ANSWERING);
         }
       }
+      // 交卷：返回 Promise，带 submitting 防重入锁，避免快速重复点击/并发提交导致重复交卷
       function submitNow() {
-        if (asub !== ASUB_READY) return false;     // 仅 READY（所有页答完）才允许交卷
-        var b = _findSubmitBtn(c);
-        if (b) { try { b.click(); asubTransition(ASUB_DONE); return true; } catch (e) {} }
-        return false;
+        if (asub !== ASUB_READY) return Promise.resolve(false);   // 仅 READY（所有页答完）才允许交卷
+        if (submitting) return Promise.resolve(false);            // 防重入：正在提交则忽略重复请求
+        var _now = Date.now();
+        if (_now - _lastSubmitTs < _SUBMIT_MIN_GAP) return Promise.resolve(false); // 极端竞态（click 冒泡/双击）二次保护
+        submitting = true;
+        return new Promise(function (resolve) {
+          var b = _findSubmitBtn(c);
+          if (!b) { submitting = false; resolve(false); return; }
+          try {
+            b.click();
+            asubTransition(ASUB_DONE);
+            _lastSubmitTs = Date.now();
+            c.$log.info('zh-exam submit clicked (DONE)');
+            resolve(true);
+          } catch (e) {
+            submitting = false;   // 失败释放锁，允许重试（幂等：非 READY 即拒，不会重复交卷）
+            _recordErr(e, 'submitNow');
+            c.$log.err('zh-exam submit failed: ' + (e && e.message));
+            resolve(false);
+          }
+        });
       }
 
       function getState() {
@@ -2146,6 +2306,7 @@
           ds: _dsOk(),
           answering: state === ACTIVE,
           asub: asub,
+          submitting: submitting,
           lastPage: !_peekNext(c),
           allAnswered: _allAnsweredHere(c, handled),
           confirmReady: asub === ASUB_READY
@@ -2154,7 +2315,10 @@
 
       return {
         isActive: isActive, sync: sync, tickAnswerPage: tickAnswerPage,
-        autoSubmitTick: autoSubmitTick, submitNow: submitNow, getState: getState
+        autoSubmitTick: autoSubmitTick, submitNow: submitNow, getState: getState,
+        onStateChange: onStateChange, offStateChange: offStateChange,
+        lastErrors: function () { return _errBox.slice(); },
+        refreshExamPage: function () { _examPage = _isExamPage(); }
       };
     }
 
@@ -2171,15 +2335,21 @@
       window.__CX_FORCE_PLAY.zhihuishuExamAutoSubmitTick = function () { sm.autoSubmitTick(); };
       window.__CX_FORCE_PLAY.zhihuishuExamSubmitNow = function () { return sm.submitNow(); };
       window.__CX_FORCE_PLAY.zhihuishuExamState = function () { return sm.getState(); };
+      window.__CX_FORCE_PLAY.zhihuishuExamOnStateChange = function (fn) { sm.onStateChange(fn); };
+      window.__CX_FORCE_PLAY.zhihuishuExamOffStateChange = function (fn) { sm.offStateChange(fn); };
+      window.__CX_FORCE_PLAY.zhihuishuExamLastErrors = function () { return sm.lastErrors(); };
 
       function reSync() { sm.sync(); }
       reSync();
       c.$storage.listen(reSync);
       try {
         window.addEventListener('hashchange', reSync);
+        // 路由变化刷新页面态缓存（_examPage），并 reSync；sync 内部已节流，避免密集触发重复过渡
+        function onRoute() { sm.refreshExamPage(); reSync(); }
+        window.addEventListener('popstate', onRoute);
         var _op = history.pushState, _or = history.replaceState;
-        history.pushState = function () { var r = _op.apply(this, arguments); reSync(); return r; };
-        history.replaceState = function () { var r = _or.apply(this, arguments); reSync(); return r; };
+        history.pushState = function () { var r = _op.apply(this, arguments); onRoute(); return r; };
+        history.replaceState = function () { var r = _or.apply(this, arguments); onRoute(); return r; };
       } catch (e) {}
 
       c.$log.info('v4.15 zhihuishu-exam booted');
@@ -2188,7 +2358,7 @@
     setTimeout(bootstrap, 300);
   })();
 
-// ===== 工具库项：超星(学习通)自动下一课（v4.15 重写） =====
+// ===== 工具库项：超星(学习通)自动下一课（v4.16 选择器时效性更新 2026-08-07） =====
 // 站点归属：超星/学习通（detectSite()==='chaoxing'），与智慧树 zhihuishu-auto-next.js 并列、互不干扰。
 //
 // 需求（用户原话）：学习通是「视频 → 题目 → 视频」的闭环——视频播完跳到题目(或下一节)，处理完再回/进下一个视频。
@@ -2222,10 +2392,28 @@
     QUIZ_PROBE_TIMEOUT: 8000,     // 题目入口探测超时（到则直接跳下一节）
     BRIDGE_PORTS: [7531, 7532, 7530, 17531],
     BRIDGE_PROBE_TIMEOUT: 1500,
-    // 下一节 DOM 选择器（best-effort 并集，待真实站点校准）
-    NEXT_SELECTORS: ['.nextChapter', '#prevNextChapterNext', '.next_prev_b .nextChapter', '.nextChapterBtn', 'a[title*="下一节"]', 'a[title*="下一章"]'],
-    // 题目入口 DOM 选择器（best-effort 并集，待真实站点校准）
-    QUIZ_ENTRY_SELECTORS: ['.ans-job-icon', '.jobUnfinished', '.chapterLaunage', 'a[href*="work"]', 'a[href*="exam"]'],
+    // 下一节 DOM 选择器（并集：新版 study 页 + 历史版本 + 通用属性兜底）
+    // 说明：超星页面结构多年多次改版，此处按「新版优先、旧版兜底」的顺序覆盖已知稳定入口，
+    //       最终仍有关键词文本兜底(findNextDOM 第 2/3 段)抗未知改版。
+    NEXT_SELECTORS: [
+      '#prevNextFocusNext',            // 新版 study 页「下一节」聚焦按钮（较稳定）
+      '.prev_next .next',              // 新版上/下节容器内的 next
+      '.next_prev_b .nextChapter',    // 旧版容器
+      '#prevNextChapterNext',
+      '.nextChapterBtn', '.nextChapter',
+      'a[title*="下一节"]', 'a[title*="下一章"]', 'a[title*="下一"]',
+      '[class*="next"][class*="chapter" i]',   // 属性模糊兜底（class 含 next+chapter）
+    ],
+    // 题目入口 DOM 选择器（并集：作业/考试图标 + 未完成标记 + 通用属性兜底）
+    QUIZ_ENTRY_SELECTORS: [
+      '.ans-job-icon',                 // 章节任务点图标
+      '.jobUnfinished', '.jobUnfinishCount', '.ans-job-finished ~ .jobUnfinished',
+      '.chapterLaunage',
+      'a[href*="work"]', 'a[href*="exam"]', 'a[href*="workset"]',
+      '[class*="job"][class*="unfinish" i]',   // 属性模糊兜底（class 含 job+unfinish）
+    ],
+    // 章节任务「已完成」态标记（用于 Bridge 判断跳过已完成节点）
+    FINISHED_SELECTORS: ['.ans-job-finished', '.icon_Completed', '[class*="finished" i]'],
     // 验证码/解锁页关键词
     BLOCK_KEYWORDS: ['验证码', '滑动验证', '请完成安全验证', '解锁'],
   };
@@ -2246,7 +2434,7 @@
   };
   var $dom = {
     one: function (sel) { try { return document.querySelector(sel); } catch (e) { return null; } },
-    all: function (sel) { try { return [].slice.call(document.querySelectorAll(sel)); } catch (e) { return []; } },
+    all: function (sel) { try { return Array.from(document.querySelectorAll(sel)); } catch (e) { return []; } },
     isVisible: function (el) { try { if (!el) return false; var cs = (typeof getComputedStyle === 'function') ? getComputedStyle(el) : null; var s = cs || el.style; if (s && (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0')) return false; var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; } catch (e) { return false; } },
   };
   var $nav = {
@@ -2257,17 +2445,40 @@
   };
   var $bridge = (function () {
     var base = null;
+    // 现代实现：fetch + AbortController 替代 XMLHttpRequest（超时取消、Promise 语义、可中止）
     function corsFetch(url, timeout) {
       return new Promise(function (resolve, reject) {
         var done = false;
-        var t = setTimeout(function () { if (!done) { done = true; reject(new Error('timeout')); } }, timeout || 8000);
-        try {
+        var ms = timeout || 8000;
+        if (typeof AbortController === 'undefined' || typeof fetch === 'undefined') {
+          // 极老环境兜底：退回 XHR（保持兼容，不阻塞主流程）
           var x = new XMLHttpRequest();
-          x.open('GET', url, true);
-          x.onload = function () { if (!done) { done = true; clearTimeout(t); try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(e); } } };
-          x.onerror = function () { if (!done) { done = true; clearTimeout(t); reject(new Error('xhr error')); } };
-          x.send();
-        } catch (e) { if (!done) { done = true; clearTimeout(t); reject(e); } }
+          var t0 = setTimeout(function () { if (!done) { done = true; reject(new Error('timeout')); } }, ms);
+          try {
+            x.open('GET', url, true);
+            x.onload = function () { if (!done) { done = true; clearTimeout(t0); try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(e); } } };
+            x.onerror = function () { if (!done) { done = true; clearTimeout(t0); reject(new Error('xhr error')); } };
+            x.send();
+          } catch (e) { if (!done) { done = true; clearTimeout(t0); reject(e); } }
+          return;
+        }
+        var ctrl = new AbortController();
+        var t = setTimeout(function () { if (!done) { done = true; ctrl.abort(); reject(new Error('timeout')); } }, ms);
+        fetch(url, { method: 'GET', signal: ctrl.signal, cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('bad status ' + r.status);
+            return r.text();
+          })
+          .then(function (txt) {
+            if (done) return;
+            done = true; clearTimeout(t);
+            try { resolve(JSON.parse(txt)); } catch (e) { reject(e); }
+          })
+          .catch(function (err) {
+            if (done) return;
+            done = true; clearTimeout(t);
+            reject(err && err.name === 'AbortError' ? new Error('timeout') : err);
+          });
       });
     }
     return {
@@ -2306,22 +2517,43 @@
   }
 
   // ---- 下一节查找（DOM 优先，Bridge 补充）----
+  // 抗改版三段式：显式选择器 → 关键词文本(可点击链接) → 关键词文本(任意可点击元素，click 触发)
+  var NEXT_TEXT_RE = /下一章|下一节|下一课|下一页|下一个|后一章|继续学习|继续播放/;
+  function usableHref(el) {
+    var href = el.getAttribute && (el.getAttribute('href') || el.href);
+    if (href && href !== '#' && !/^javascript:/i.test(href)) return href;
+    return null;
+  }
   function findNextDOM() {
-    // 1) 显式选择器
+    // 1) 显式选择器（有 href → 直接导航）
     for (var i = 0; i < CFG.NEXT_SELECTORS.length; i++) {
       var el = $dom.one(CFG.NEXT_SELECTORS[i]);
       if (el && $dom.isVisible(el)) {
-        var href = el.getAttribute('href') || el.href;
-        if (href && href !== '#' && !/javascript:/.test(href)) return { url: href, label: (el.textContent || '下一节').trim() || '下一节(DOM)' };
+        var href = usableHref(el);
+        if (href) return { url: href, label: (el.textContent || '下一节').trim() || '下一节(DOM)' };
+        // 无 href 的按钮/span：作为可点击节点返回（doNavigate 会 click）
+        return { url: null, el: el, label: (el.textContent || '下一节').trim() || '下一节(按钮)' };
       }
     }
-    // 2) 关键词兜底
+    // 2) 关键词兜底：可点击链接（<a>）
     var as = $dom.all('a');
     for (var j = 0; j < as.length; j++) {
       var t = (as[j].textContent || as[j].title || '').trim();
-      if (/下一章|下一节|下一课|后一章|继续学习/.test(t)) {
-        var h = as[j].getAttribute('href') || as[j].href;
-        if (h && h !== '#' && !/javascript:/.test(h)) return { url: h, label: t };
+      if (NEXT_TEXT_RE.test(t)) {
+        var h = usableHref(as[j]);
+        if (h) return { url: h, label: t };
+      }
+    }
+    // 3) 关键词兜底：任意可点击元素（button/span/li/[onclick]）—— 抗「非 a 标签做下一节」的改版
+    var clickable = $dom.all('button, [role="button"], [onclick], span, li, div');
+    for (var k = 0; k < clickable.length; k++) {
+      var c = clickable[k];
+      var ct = (c.textContent || c.title || '').trim();
+      // 仅匹配「短文本」节点，避免整段容器误命中（下一节按钮文本通常很短）
+      if (ct.length <= 8 && NEXT_TEXT_RE.test(ct) && $dom.isVisible(c)) {
+        var ch = usableHref(c);
+        if (ch) return { url: ch, label: ct };
+        return { url: null, el: c, label: ct };
       }
     }
     return null;
@@ -2350,7 +2582,16 @@
   }
 
   function doNavigate(next) {
-    if (!next || !next.url) { setState(LOCKED); toast('未找到下一节入口（已停止自动跳课，请手动点下一节）'); return; }
+    if (!next) { setState(LOCKED); toast('未找到下一节入口（已停止自动跳课，请手动点下一节）'); return; }
+    // 无 url 但有可点击节点：直接 click（新版多用按钮/span 触发 SPA 切换）
+    if (!next.url && next.el) {
+      lockNav(); setState(IDLE);
+      $log.info('click next element: ' + (next.label || ''));
+      toast('自动跳下一节：' + (next.label || ''));
+      try { next.el.click(); } catch (e) { setState(LOCKED); toast('下一节按钮点击失败'); }
+      return;
+    }
+    if (!next.url) { setState(LOCKED); toast('未找到下一节入口（已停止自动跳课，请手动点下一节）'); return; }
     var url = next.url;
     if (/^https?:\/\//.test(url) || url.charAt(0) === '/') {
       lockNav();
@@ -2422,6 +2663,9 @@
         swallow(e);
         $log.warn('resolveNext error → LOCKED'); setState(LOCKED); toast('查找下一节出错（停止自动跳课）');
       });
+    }).catch(function (e) {
+      swallow(e);
+      $log.warn('probeQuizEntry error → LOCKED'); setState(LOCKED); toast('探测题目入口出错（停止自动跳课）');
     });
   }
 
@@ -2525,16 +2769,17 @@
   setTimeout(bootstrap, 300);
 })();
 
-  // ===== 工具库项：快捷键增强（原 decision/chaoxing-keyboard-shortcuts，v1.0 迁入核心脚本工具库） =====
+  // ===== 工具库项：快捷键增强（v1.1 修复开关失效 2026-08-07；原 decision/chaoxing-keyboard-shortcuts） =====
   // 站点归属：超星学习通。复用核心脚本 __cxUserPaused 暂停契约与 v.muted / v.__np（force-play 进度）。
   (function () {
     'use strict';
 
-    // —— 配置 ——
-    var MUTE_TOGGLE = (localStorage.cxKb_muted_toggle || 'KeyM');
-    var PLAY_TOGGLE = (localStorage.cxKb_play_toggle || 'Space');
-    var SHOW_HINT = (localStorage.cxKb_hint !== '0');
-    var MUTE_START = (localStorage.cxKb_muted_start || '0') === '1';
+    // —— 配置（安全读取：localStorage 不可用时用默认值，避免启动崩溃导致面板不可见）——
+    function _ls(k, d) { try { var v = window.localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }
+    var MUTE_TOGGLE = (_ls('cxKb_muted_toggle', 'KeyM'));
+    var PLAY_TOGGLE = (_ls('cxKb_play_toggle', 'Space'));
+    var SHOW_HINT = (_ls('cxKb_hint', '1') !== '0');
+    var MUTE_START = (_ls('cxKb_muted_start', '0') === '1');
 
     // 取「面积最大且在视图内」的视频
     function activeVideo() {
@@ -2551,8 +2796,12 @@
       return best;
     }
 
+    // 开关闸门：面板「快捷键增强」关闭时（cxKb_on='0'）不响应任何快捷键
+    function kbEnabled() { return (_ls('cxKb_on', '1') !== '0'); }
+
     function onKey(e) {
       if (e.isTrusted === false) return; // 仅真实用户按键
+      if (!kbEnabled()) return;          // 开关关闭：整体禁用（修复旧版开关形同虚设的问题）
       // 文本框内不拦截（不阻断打字），但保留 M 静音
       var tk = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.toolkit;
       var inText = tk && tk.isTextEntry ? tk.isTextEntry(e.target) : false;
@@ -2561,8 +2810,8 @@
       if (e.code === PLAY_TOGGLE) {
         if (inText) return;
         if (!v) return;
-        // 用户按空格：让位给核心脚本内置播放/暂停（仅当用户没有手动暂停时才接管）
-        var pass = (e.code === 'Space') && !(v && v.__cxUserPaused);   // 用视频元素暂停契约 v.__cxUserPaused（window.__cxUserPaused 从未定义，原分支恒 true）
+        // 用户按键：让位给核心脚本内置播放/暂停（仅当用户没有手动暂停时才接管）
+        var pass = !(v && v.__cxUserPaused);
         if (pass) {
           e.preventDefault();
           if (v.paused) v.play(); else v.pause();
@@ -2608,8 +2857,8 @@
 
     try { document.addEventListener('keydown', onKey, true); } catch (e) {}
 
-    if (MUTE_START) {
-      // 进入页面默认静音（仅课程页视频）
+    if (MUTE_START && kbEnabled()) {
+      // 进入页面默认静音（仅课程页视频，且开关开启时）
       var iv = setInterval(function () {
         var v = activeVideo();
         if (v) { v.muted = true; clearInterval(iv); }
@@ -2623,8 +2872,8 @@
       type: 'toggle',
       label: '快捷键增强 (Space/M)',
       note: 'M 静音/取消静音；Space 接管播放/暂停(手动暂停后让位)',
-      get: function () { return (localStorage.cxKb_on || '1') === '1'; },
-      set: function (v) { localStorage.cxKb_on = v ? '1' : '0'; },
+      get: function () { return (_ls('cxKb_on', '1') !== '0'); },
+      set: function (v) { try { window.localStorage.setItem('cxKb_on', v ? '1' : '0'); } catch (e) {} },
     });
 
     if (typeof window.__cxRegisterAddon === 'function') window.__cxRegisterAddon();
@@ -2733,10 +2982,18 @@
       wasBypassed = alarm;
     }
 
+    var _tgTimer = null;    // 保存定时器句柄，避免双重调度
+
     function init() {
       try {
-        document.addEventListener('DOMContentLoaded', function () { setInterval(guardTick, 2000); guardTick(); });
-        if (document.readyState !== 'loading') { setInterval(guardTick, 2000); guardTick(); }
+        function _startGuard() {
+          // 防止双重启动（DOMContentLoaded + readyState!==loading 两路并行导致定时器翻倍）
+          if (_tgTimer) { clearInterval(_tgTimer); _tgTimer = null; }
+          _tgTimer = setInterval(guardTick, 2000);
+          guardTick();
+        }
+        if (document.readyState !== 'loading') { _startGuard(); }
+        else { document.addEventListener('DOMContentLoaded', _startGuard); }
       } catch (e) {}
       // 首次进入请求通知权限（可选）
       try {
@@ -2834,10 +3091,10 @@
       try {
         if (!('Notification' in window)) { TK.toast && TK.toast(body); return; }
         if (Notification.permission === 'granted') {
-          try { new Notification(title, { body: body, tag: 'cx-ended', renotify: true }); } catch (e) { TK.toast && TK.toast(body); }
+          try { new Notification(title, { body: body, tag: 'cx-ended' }); } catch (e) { TK.toast && TK.toast(body); }
         } else if (Notification.permission !== 'denied') {
           Notification.requestPermission().then(function (p) {
-            if (p === 'granted') { try { new Notification(title, { body: body, tag: 'cx-ended', renotify: true }); } catch (e2) {} }
+            if (p === 'granted') { try { new Notification(title, { body: body, tag: 'cx-ended' }); } catch (e2) {} }
           }).catch(function () {});
         } else {
           TK.toast && TK.toast(body);
@@ -3057,7 +3314,7 @@
 //
 // 来源权重（反映"我们对这一来源的信任度"）：本地题库最可信，远端 AI/DeepSeek 次之，
 // OCR 再次，随机兜底最低。多来源命中同一选项时加权累加，分歧时按加权占比推导置信度。
-var QUIZ_SRC_WEIGHT = { bank: 1.0, deepseek: 0.9, ai: 0.7, ocr: 0.5, random: 0.3 };
+const QUIZ_SRC_WEIGHT = { bank: 1.0, deepseek: 0.9, ai: 0.7, ocr: 0.5, random: 0.3 };
 
 /**
  * 融合多来源答案。
@@ -3066,29 +3323,29 @@ var QUIZ_SRC_WEIGHT = { bank: 1.0, deepseek: 0.9, ai: 0.7, ocr: 0.5, random: 0.3
  */
 function mergeAnswers(answers) {
   if (!answers || !answers.length) return null;
-  var agg = {};
-  var srcSeen = {};
-  for (var i = 0; i < answers.length; i++) {
-    var a = answers[i];
+  const agg = {};
+  const srcSeen = {};
+  for (let i = 0; i < answers.length; i++) {
+    const a = answers[i];
     if (!a || a.idx == null) continue;
-    var idx = Number(a.idx);
+    const idx = Number(a.idx);
     if (isNaN(idx)) continue;
-    var w = (QUIZ_SRC_WEIGHT[a.source] != null) ? QUIZ_SRC_WEIGHT[a.source] : 0.6;
+    const w = (QUIZ_SRC_WEIGHT[a.source] != null) ? QUIZ_SRC_WEIGHT[a.source] : 0.6;
     // a.score 是来源自身对其选择的可信度（0~1）；缺省则回落到来源权重
-    var s = (typeof a.score === 'number' && a.score >= 0 && a.score <= 1) ? a.score : w;
+    const s = (typeof a.score === 'number' && a.score >= 0 && a.score <= 1) ? a.score : w;
     agg[idx] = (agg[idx] || 0) + s * w;
     if (a.source) srcSeen[a.source] = true;
   }
-  var keys = Object.keys(agg);
+  const keys = Object.keys(agg);
   if (!keys.length) return null;
-  var best = keys[0], bestV = agg[keys[0]];
-  for (var k = 1; k < keys.length; k++) { if (agg[keys[k]] > bestV) { bestV = agg[keys[k]]; best = keys[k]; } }
-  var total = 0;
-  for (var m = 0; m < keys.length; m++) total += agg[keys[m]];
-  var confidence;
+  let best = keys[0], bestV = agg[keys[0]];
+  for (let k = 1; k < keys.length; k++) { if (agg[keys[k]] > bestV) { bestV = agg[keys[k]]; best = keys[k]; } }
+  let total = 0;
+  for (let m = 0; m < keys.length; m++) total += agg[keys[m]];
+  let confidence;
   if (keys.length === 1) {
     // 单来源：置信度 = 该来源权重（体现"我们对这一来源的信任度"，而非恒为 1.0）
-    var onlySrc = Object.keys(srcSeen)[0];
+    const onlySrc = Object.keys(srcSeen)[0];
     confidence = (QUIZ_SRC_WEIGHT[onlySrc] != null) ? QUIZ_SRC_WEIGHT[onlySrc] : 0.6;
   } else {
     // 多来源：最优选项占加权总票的比例（一致→趋近 1，分歧→下降）
@@ -3148,7 +3405,10 @@ try {
     submitSels: ['.submit-btn', '.answer-btn', 'button[class*="submit"]', '.confirm-btn', '.next-btn']
   };
 
-  var _quizHandled = {};   // 已作答题目指纹去重（防重复提交）
+  var _quizHandled = {};       // 已作答题目指纹去重（防重复提交）
+  var _quizAIPending = {};     // AI 异步题解进行中：fp→发起时间戳（超时则随机兜底）
+  var _quizPendingSubmit = {}; // 二次确认：已作答未提交：fp→{qEl,sels}（待用户「确认提交」）
+  var _quizReviewItems = {};   // 人工复核队列：fp→{fp,stem,opts,guessedIdx,ts}（置信度<0.6 随机兜底后待用户确认/入题库）
   function _quizFingerprint(qEl) {
     try { var s = (qEl.textContent || '').replace(/\s+/g, '').slice(0, 120); return 'quiz:' + s.length + ':' + s; }
     catch (e) { return 'quiz:err'; }
@@ -3170,6 +3430,91 @@ try {
     return out;
   }
 
+  // —— 隐私合规：离线优先 + 端点白名单（默认不外发题目/选项）——
+  function _quizOfflineOnly() {
+    // 默认仅离线作答（cx_quiz_offline 未置 '0' 即不外发）。需用户显式允许才向外发送题目数据。
+    try { if (typeof localStorage === 'undefined') return true; var v = localStorage.getItem('cx_quiz_offline'); return v === null ? true : (v !== '0'); } catch (e) { return true; }
+  }
+  function _quizEndpointAllowed(ep) {
+    if (!ep) return false;
+    try {
+      if (_quizOfflineOnly()) return false;   // 离线优先：默认不外发（隐私合规硬缺口闭合）
+      var _base = (typeof location !== 'undefined' && location.href) ? location.href : 'https://localhost/';
+      var _u = new URL(ep, _base);
+      if (_u.protocol !== 'http:' && _u.protocol !== 'https:') return false;   // 仅 http/https，防 file:/javascript: 泄漏
+      var wl = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ENDPOINT_WHITELIST) || [];
+      if (!wl.length) return false;            // 未配置白名单 → 禁外发（需明确授权）
+      for (var i = 0; i < wl.length; i++) {
+        var h = wl[i]; if (!h) continue;
+        if (_u.host === h || _u.host.endsWith('.' + h)) return true;
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+
+  // —— 提交二次确认（隐私/防误交卷）：默认自动提交；关闭后「作答但不提交」，挂起待用户「确认提交」——
+  function _quizAutoSubmit() {
+    // 默认自动提交（cx_quiz_autosubmit 未置 '0' 即自动）。考试/高风险场景建议关，由人工确认。
+    try { if (typeof localStorage === 'undefined') return true; var v = localStorage.getItem('cx_quiz_autosubmit'); return v === null ? true : (v !== '0'); } catch (e) { return true; }
+  }
+  function _quizMaybeSubmit(qEl, submitSels, fp) {
+    if (_quizAutoSubmit()) {
+      var _ok = _quizSubmit(qEl, submitSels);
+      if (fp != null) { try { delete _quizPendingSubmit[fp]; } catch (e) {} }
+      return _ok;
+    }
+    // 二次确认模式：已作答未提交，挂起等待「确认提交」
+    if (fp != null) _quizPendingSubmit[fp] = { qEl: qEl, sels: submitSels };
+    return false;
+  }
+  function quizSubmitPending() {
+    // 用户「确认提交」：批量提交所有已作答待确认的题（按记录复找提交按钮）
+    var n = 0;
+    try {
+      if (typeof _quizPendingSubmit !== 'object' || !_quizPendingSubmit) return 0;
+      for (var fp in _quizPendingSubmit) {
+        try {
+          var rec = _quizPendingSubmit[fp];
+          if (!rec || !rec.qEl) { try { delete _quizPendingSubmit[fp]; } catch (e2) {} continue; }
+          if (_quizSubmit(rec.qEl, rec.sels)) { n++; try { delete _quizPendingSubmit[fp]; } catch (e3) {} }
+        } catch (e) { swallow(e); }
+      }
+      try {
+        if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) {
+          window.__CX_FORCE_PLAY.quizStats = window.__CX_FORCE_PLAY.quizStats || {};
+          window.__CX_FORCE_PLAY.quizStats.pendingSubmit = Object.keys(_quizPendingSubmit).length;
+        }
+      } catch (e) {}
+      if (n > 0) try { Store.emit('ui:toast', '已确认提交 ' + n + ' 题'); } catch (e) {}
+    } catch (e) { swallow(e); }
+    return n;
+  }
+
+  // —— MutationObserver：题目动态出现即触发作答，替代仅靠 2s 全文档轮询的空窗 ——
+  var _quizObserver = null, _quizMOBusy = false;
+  function _quizMOTick() {
+    try {
+      var disp = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.quizObserveDispatch === 'function') ? window.__CX_FORCE_PLAY.quizObserveDispatch : quizTick;
+      disp();
+    } catch (e) { swallow(e); }
+  }
+  function _quizMOHandle() {
+    if (_quizMOBusy) return;
+    _quizMOBusy = true;
+    setTimeout(function () { _quizMOBusy = false; _quizMOTick(); }, 300);   // 300ms 防抖，合并批量 DOM 变更
+  }
+  function quizObserve(root) {
+    if (typeof MutationObserver === 'undefined') return false;
+    try {
+      if (_quizObserver) { try { _quizObserver.disconnect(); } catch (e) {} }
+      var r = root || (typeof document !== 'undefined' ? (document.body || document.documentElement) : null);
+      if (!r) return false;
+      _quizObserver = new MutationObserver(function () { _quizMOHandle(); });
+      _quizObserver.observe(r, { childList: true, subtree: true });
+      return true;
+    } catch (e) { swallow(e); return false; }
+  }
+
   // ---- 答案源解析 ----
   function _quizBankLookup(stem) {
     try {
@@ -3188,25 +3533,21 @@ try {
     return null;
   }
   function _quizAskAI(stem, options) {
-    // 预留 AI 答案源接口：CONFIG.QUIZ_AI_ENDPOINT 由用户配置，脚本不内置密钥。
+    // AI 答案源接口：CONFIG.QUIZ_AI_ENDPOINT 由用户配置，脚本不内置密钥。
+    // 同步环境无法 await：采用 fire-and-forget + 异步结果写回 quizBank，下轮命中回填；
+    // 返回 'pending' 表示已发起异步请求（调用方暂不下发、不下坑，等下轮命中），其余返回 null。
     try {
       var ep = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_ENDPOINT) || '';
       if (!ep) return null;
-      // 协议校验：仅允许 http/https，避免题目/选项经 file:/javascript: 等非预期协议外泄
-      try {
-        var _u = new URL(ep, location.href);
-        if (_u.protocol !== 'http:' && _u.protocol !== 'https:') return null;
-      } catch (e) { return null; }
-      // 同步环境无法 await；采用 fire-and-forget + 后续轮次回填（命中缓存即生效）。
-      // 这里仅返回 null，交由调用方按 random 兜底；AI 异步结果写入 window.__CX_FORCE_PLAY.quizBank 供下轮命中。
+      if (!_quizEndpointAllowed(ep)) return null;   // 离线优先 / 非白名单 → 不外发题目（隐私合规）
       try {
         var payload = JSON.stringify({ stem: stem, options: options.map(function (o) { return (o.textContent || '').replace(/\s+/g, ' ').trim(); }) });
         fetchWithTimeout(ep, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload
-        }, 15000).then(function (r) {
-          if (!r.ok) return null;
+        }, (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_TIMEOUT) || 15000).then(function (r) {
+          if (!r || !r.ok) return null;
           return r.json();
         }).then(function (ans) {
           if (ans && (ans.index != null || ans.answer != null)) {
@@ -3215,6 +3556,7 @@ try {
           }
           return null;
         }).catch(function (e) { swallow(e); return null; });
+        return 'pending';   // 已发起异步题解，下一轮从 quizBank 命中回填
       } catch (e) { swallow(e); }
     } catch (e) { swallow(e); }
     return null;
@@ -3238,9 +3580,10 @@ try {
         if (!isNaN(bi)) answers.push({ idx: bi, score: 1.0, source: 'bank' });
       }
     }
-    // AI 接口：同步环境恒返回 null（异步写库，下轮命中）；非空时作为 ai 权重候选参与融合
+    // AI 接口：同步环境发起异步请求（返回 'pending'）→ 下一轮命中 quizBank 回填；同步命中时作为 ai 权重候选参与融合
     if (src === 'ai') {
       var a = _quizAskAI(stem, options);
+      if (a === 'pending') return { pending: true };   // 异步题解进行中：调用方暂不下发、不下坑
       if (a != null && !isNaN(Number(a))) answers.push({ idx: Number(a), score: 0.7, source: 'ai' });
     }
     if (!answers.length) return null;   // 无候选 → 调用方 random 兜底
@@ -3283,8 +3626,10 @@ try {
       quizRecover(qEl).then(function (res) {
         if (!res || (res.text == null && res.answer == null)) throw new Error('empty recover');
         var useIdx = null;
-        if (res.answer != null) {                       // 多模态端点直接给答案索引
-          useIdx = (typeof res.answer === 'number') ? res.answer : parseInt(res.answer, 10);
+        if (res.answer != null) {                       // 多模态端点直接给答案索引（DeepSeek 返回字母 A-D，需转换为数字索引）
+          useIdx = (typeof res.answer === 'number') ? res.answer :
+            ({ A: 0, B: 1, C: 2, D: 3, a: 0, b: 1, c: 2, d: 3 })[res.answer] != null
+              ? ({ A: 0, B: 1, C: 2, D: 3, a: 0, b: 1, c: 2, d: 3 })[res.answer] : parseInt(res.answer, 10);
         } else {
           // 还原文本 → 查本地题库（题干已还原为真实文本，可命中 bank）；仍无则对原(可能混淆)题干再查一次
           var src = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random';
@@ -3345,7 +3690,7 @@ try {
       var qs = _pqQueryAll(root, sels.questionSels);
       var scanned = qs.length;
       var src = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_ANSWER_SOURCE) || 'random';  // 提到循环外，避免全部跳过时 source 为 undefined
-      var _confAcc = 0, _confN = 0, _srcMap = {};   // 统计：平均置信度 + 实际命中来源集合（融合后可见，非仅配置值）
+      var _confAcc = 0, _confN = 0, _srcMap = {}, _lvlMap = {};   // 统计：平均置信度 + 实际命中来源集合 + 分级分布(auto/confirm/review)
       for (var i = 0; i < qs.length; i++) {
         var qEl = qs[i];
         var fp = _quizFingerprint(qEl);
@@ -3355,13 +3700,61 @@ try {
         if (!opts.length) continue;
         var idxObj = _quizResolveAnswer(stem, opts);  // 文本路径(random/bank/ai)同步求答案（融合后含 confidence/source）
         if (idxObj && idxObj.idx != null && idxObj.idx >= 0 && idxObj.idx < opts.length) {
+          // —— 置信度分级决策（评估建议#3：置信度驱动行为，而非无差别点选+提交）——
+          //   auto(≥0.9)：点选 + 按二次确认开关提交/挂起
+          //   confirm(0.6~0.9)：点选但强制挂起待用户确认（即便自动提交开着也不直接交，避免中置信误交）
+          //   review(<0.6)：低可信，转随机兜底保不卡，但标记"人工复核"（不计入高可信来源）
+          var _c = (typeof idxObj.confidence === 'number') ? idxObj.confidence : 1;
+          var _lvl = (typeof decisionFor === 'function') ? decisionFor(_c) : (_c >= 0.9 ? 'auto' : (_c >= 0.6 ? 'confirm' : 'review'));
+          if (_lvl === 'review') {
+            // 低置信：不盲选"正确"，随机兜底保不卡进度，但标记为人工复核
+            var _guessed = Math.floor(Math.random() * opts.length);
+            _quizClick(opts, _guessed);
+            _quizMaybeSubmit(qEl, sels.submitSels, fp);
+            _quizHandled[fp] = true; answered++;
+            _srcMap['review'] = true; _lvlMap['review'] = true;
+            // 登记到人工复核队列：供面板「一键采纳/导出」闭环（评估建议#6 增量进本地题库）
+            _quizReviewItems[fp] = { fp: fp, stem: stem, opts: opts, guessedIdx: _guessed, ts: Date.now() };
+            try { Store.emit('ui:toast', '低置信度(' + Math.round(_c * 100) + '%)·已随机兜底·标记人工复核（源=' + (idxObj.source || '?') + '）'); } catch (e) { swallow(e); }
+            continue;
+          }
           _quizClick(opts, idxObj.idx);
-          _quizSubmit(qEl, sels.submitSels);
+          if (_lvl === 'confirm') {
+            // 中置信：点选但不提交，强制挂起待用户「确认提交」（_quizMaybeSubmit 的挂起语义天然满足；此处额外绕过自动提交开关）
+            _quizPendingSubmit[fp] = { qEl: qEl, sels: sels.submitSels };
+            _quizHandled[fp] = true; answered++;
+            _confAcc += _c; _confN++;
+            if (idxObj.source) { _srcMap[idxObj.source] = true; }
+            _lvlMap['confirm'] = true;
+            try { Store.emit('ui:toast', '中置信度(' + Math.round(_c * 100) + '%)·已点选·待你确认提交（源=' + idxObj.source + '）'); } catch (e) { swallow(e); }
+            continue;
+          }
+          // auto：点选 + 按二次确认开关提交/挂起
+          _quizMaybeSubmit(qEl, sels.submitSels, fp);
           _quizHandled[fp] = true;
+          if (_quizAIPending[fp]) { try { delete _quizAIPending[fp]; } catch (e) {} }
           answered++;
-          _confAcc += (idxObj.confidence || 0); _confN++;
+          _confAcc += _c; _confN++;
           if (idxObj.source) _srcMap[idxObj.source] = true;
-          try { Store.emit('ui:toast', '已作答 1 题（源=' + idxObj.source + ' 置信度=' + Math.round((idxObj.confidence || 0) * 100) + '%）'); } catch (e) { swallow(e); }
+          _lvlMap['auto'] = true;
+          try { Store.emit('ui:toast', '已作答 1 题（源=' + idxObj.source + ' 置信度=' + Math.round(_c * 100) + '%）'); } catch (e) { swallow(e); }
+          continue;
+        }
+        // AI 异步题解进行中：暂不下发、不下坑，记录待回填；超过 QUIZ_AI_WAIT 未命中则随机兜底（不空题）
+        if (idxObj && idxObj.pending) {
+          if (!_quizAIPending[fp]) _quizAIPending[fp] = Date.now();
+          else {
+            var _wait = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_AI_WAIT) || 20000;
+            if (Date.now() - _quizAIPending[fp] > _wait) {
+              delete _quizAIPending[fp];
+              _quizClick(opts, Math.floor(Math.random() * opts.length));
+              _quizMaybeSubmit(qEl, sels.submitSels, fp);   // 超时随机兜底 + 自动提交/挂起
+              _quizHandled[fp] = true;
+              answered++;
+              _srcMap['random'] = true;
+              try { Store.emit('ui:toast', 'AI 题解超时，已随机兜底 1 题'); } catch (e) { swallow(e); }
+            }
+          }
           continue;
         }
         // 文本路径无果 + 视觉识别启用 → 截图还原后作答（异步；先占坑防重复触发截图）
@@ -3374,7 +3767,7 @@ try {
         }
         // 兜底随机：保证不卡进度 / 不空题
         _quizClick(opts, Math.floor(Math.random() * opts.length));
-        _quizSubmit(qEl, sels.submitSels);
+        _quizMaybeSubmit(qEl, sels.submitSels, fp);   // 自动提交或挂起待二次确认
         _quizHandled[fp] = true;
         answered++;
         _srcMap['random'] = true;   // 随机兜底计入来源集合（置信度不累计，视为低可信）
@@ -3394,6 +3787,10 @@ try {
             doneAll: remaining === 0, source: src,
             answerSource: Object.keys(_srcMap).join('+') || 'random',   // 实际命中来源（融合后可见：bank/ai/random 等）
             confidence: _confN ? (_confAcc / _confN) : 0,                // 已作答项平均置信度（0~1）
+            levels: Object.keys(_lvlMap).join('+') || 'auto',           // 本次分级分布（auto=直接提交/confirm=待确认/review=人工复核）
+            pendingSubmit: Object.keys(_quizPendingSubmit).length,       // 已作答待二次确认提交数
+            reviewCount: Object.keys(_quizReviewItems).length,           // 待人工复核题数（置信度<0.6 随机兜底，需用户确认/入题库）
+            offline: _quizOfflineOnly(),                                 // 是否仅离线作答（题目不外发）
             ts: Date.now()
           };
         } catch (e) {}
@@ -3407,18 +3804,65 @@ try {
   // 配置默认值注入（CONFIG 可能尚未含这些字段，安全补默认值）
   try {
     if (typeof CONFIG !== 'undefined') {
+      // 从 localStorage 读取用户持久化配置（由面板「用 DeepSeek 作答」开关写入），覆盖默认值，刷新后保持
+      var _lsGet = function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
+      var _lsBool = function (k, d) { var v = _lsGet(k, null); if (v === null) return d; return v === '1' || v === 'true'; };
       if (CONFIG.QUIZ_ANSWER_SOURCE == null) CONFIG.QUIZ_ANSWER_SOURCE = 'random';
       if (CONFIG.QUIZ_AI_ENDPOINT == null) CONFIG.QUIZ_AI_ENDPOINT = '';
       // rev3 抗题目文本混淆（视觉识别）配置默认值
-      if (CONFIG.QUIZ_VISION_ENABLED == null) CONFIG.QUIZ_VISION_ENABLED = false;            // 启用截图→识别对抗混淆；默认关（零运行时依赖）
-      if (CONFIG.QUIZ_VISION_OCR == null) CONFIG.QUIZ_VISION_OCR = 'endpoint';               // 'endpoint'=多模态AI直接答；'tesseract'=本地OCR还原文本查题库
-      if (CONFIG.QUIZ_VISION_ENDPOINT == null) CONFIG.QUIZ_VISION_ENDPOINT = '';             // 多模态识别端点（接收 {image,options}，返回 {text,answer}）
-      if (CONFIG.QUIZ_OCR_LANG == null) CONFIG.QUIZ_OCR_LANG = 'chi_sim';                    // Tesseract 语言包
+      if (CONFIG.QUIZ_VISION_ENABLED == null) CONFIG.QUIZ_VISION_ENABLED = _lsBool('cx_quiz_vision_enabled', false);   // 启用截图→识别对抗混淆；默认关（零运行时依赖）
+      if (CONFIG.QUIZ_VISION_OCR == null) CONFIG.QUIZ_VISION_OCR = _lsGet('cx_quiz_vision_ocr', 'endpoint');         // 'endpoint'=多模态AI直接答；'tesseract'=本地OCR还原文本查题库；'deepseek-web'=DeepSeek 网页版应答端
+      if (CONFIG.QUIZ_VISION_ENDPOINT == null) CONFIG.QUIZ_VISION_ENDPOINT = _lsGet('cx_quiz_vision_endpoint', '');   // 多模态识别端点（接收 {image,options}，返回 {text,answer}）
+      if (CONFIG.QUIZ_OCR_LANG == null) CONFIG.QUIZ_OCR_LANG = _lsGet('cx_quiz_ocr_lang', 'chi_sim');                // Tesseract 语言包
       if (CONFIG.QUIZ_VISION_TIMEOUT == null) CONFIG.QUIZ_VISION_TIMEOUT = 60000;            // deepseek-web 单次问答超时(ms)
+      if (CONFIG.QUIZ_VISION_PRIVACY_OK == null) CONFIG.QUIZ_VISION_PRIVACY_OK = _lsBool('cx_quiz_vision_privacy', false);  // 外部 CDN 脚本(html2canvas)加载须显式授权，默认关（隐私优先）
+      // 隐私合规 / 提交控制默认值
+      if (CONFIG.QUIZ_OFFLINE_ONLY == null) CONFIG.QUIZ_OFFLINE_ONLY = true;                  // 默认仅离线作答，题目/选项不外发
+      if (CONFIG.QUIZ_ENDPOINT_WHITELIST == null) CONFIG.QUIZ_ENDPOINT_WHITELIST = [];        // 允许外发的 AI 端点域名白名单（空=禁外发）
+      if (CONFIG.QUIZ_AI_WAIT == null) CONFIG.QUIZ_AI_WAIT = 20000;                           // AI 异步题解最长等待(ms)，超时则随机兜底
+      if (CONFIG.QUIZ_AUTO_SUBMIT == null) CONFIG.QUIZ_AUTO_SUBMIT = true;                    // 作答后自动提交；关闭→挂起待用户「确认提交」
     }
   } catch (e) {}
 
   try { window.__CX_FORCE_PLAY.quizTick = quizTick; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizObserve = quizObserve; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizSubmitPending = quizSubmitPending; } catch (e) {}
+
+  // —— 人工复核闭环 API（评估建议#6：增量学习——用户纠正结果入本地题库）——
+  // 写入题库：内存对象 + localStorage['cx_quiz_bank'] 同步持久化（与 _quizAskAI 回填路径一致）
+  function _quizBankWrite(stem, idx) {
+    try {
+      window.__CX_FORCE_PLAY = window.__CX_FORCE_PLAY || {};
+      window.__CX_FORCE_PLAY.quizBank = window.__CX_FORCE_PLAY.quizBank || {};
+      window.__CX_FORCE_PLAY.quizBank[stem] = idx;
+      if (typeof localStorage !== 'undefined') {
+        try { localStorage.setItem('cx_quiz_bank', JSON.stringify(window.__CX_FORCE_PLAY.quizBank)); } catch (e2) {}
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  // 列出待人工复核项：[{fp,stem,opts,guessedIdx,ts}]
+  function quizReviewList() { try { return Object.keys(_quizReviewItems).map(function (k) { return _quizReviewItems[k]; }); } catch (e) { return []; } }
+  // 采纳指定答案入题库（correctIdx 缺省=采用当前随机猜测值），并移出复核队列；成功返回 true
+  function quizReviewAccept(fp, correctIdx) {
+    try {
+      var it = _quizReviewItems[fp]; if (!it) return false;
+      var idx = (correctIdx == null) ? it.guessedIdx : correctIdx;
+      var ok = _quizBankWrite(it.stem, idx);
+      if (ok) { delete _quizReviewItems[fp]; try { Store.emit('ui:toast', '已采纳入本地题库（fp=' + fp.slice(0, 16) + '）'); } catch (e2) {} }
+      return ok;
+    } catch (e) { return false; }
+  }
+  // 导出待复核题为 JSON 文本（供用户核对/外部维护题库），返回字符串
+  function quizReviewExport() {
+    try {
+      var arr = quizReviewList().map(function (it) { return { stem: it.stem, options: it.opts, guessedIdx: it.guessedIdx }; });
+      return JSON.stringify(arr, null, 2);
+    } catch (e) { return '[]'; }
+  }
+  try { window.__CX_FORCE_PLAY.quizReviewList = quizReviewList; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizReviewAccept = quizReviewAccept; } catch (e) {}
+  try { window.__CX_FORCE_PLAY.quizReviewExport = quizReviewExport; } catch (e) {}
 
   // ===== DOMAIN: biz/quiz-vision (站点无关·抗题目文本混淆·图片化识别层) =====
   // ===== MODULE: 真答题「视觉识别」对抗层 —— 对抗平台对题干做的同形字/字体映射/Canvas 题目混淆 =====
@@ -3440,22 +3884,42 @@ try {
   var _quizRecoverOverride = null;
 
   // 懒加载外部脚本（仅启用视觉识别且命中题目时注入），返回对应全局对象 Promise。
-  function _quizLoadScript(src) {
+  // 现代化改进（对比旧 onload/onerror 直插）：① 带超时防止 CDN 挂死导致 Promise 永不 settle；
+  //   ② onload/onerror/timeout 后移除事件引用并删除 script 节点，避免内存泄漏与 DOM 残留。
+  function _quizLoadScript(src, timeout) {
     return new Promise(function (resolve, reject) {
       try {
         if (typeof document === 'undefined' || !document.createElement) { reject(new Error('no document')); return; }
         // 已加载则直接取全局，避免重复注入
         if (/html2canvas/.test(src) && window.html2canvas) { resolve(window.html2canvas); return; }
         if (/tesseract/.test(src) && window.Tesseract) { resolve(window.Tesseract); return; }
+        // 隐私优先：外部 CDN 脚本须显式授权（QUIZ_VISION_PRIVACY_OK），拒绝静默外连
+        var _remote = /^https?:\/\//i.test(src);
+        var _privacyOk = (typeof CONFIG !== 'undefined' && CONFIG.QUIZ_VISION_PRIVACY_OK);
+        if (_remote && !_privacyOk) {
+          if (typeof Store !== 'undefined') { try { Store.emit('ui:toast', '安全拦截：未授权加载外部脚本 ' + src + '（面板开启「允许加载外部视觉脚本」后可启用）'); } catch (e0) {} }
+          reject(new Error('隐私开关未开启：拒绝加载外部脚本 ' + src + '（请在面板开启「允许加载外部视觉脚本」）'));
+          return;
+        }
         var s = document.createElement('script');
         s.src = src; s.async = true;
+        var _done = false;
+        var _cleanup = function () {
+          try { s.onload = null; s.onerror = null; } catch (e) {}   // 去引用，防闭包内存泄漏
+          if (s.parentNode) { try { s.parentNode.removeChild(s); } catch (e) {} }   // 从 DOM 删除节点
+        };
+        var _to = setTimeout(function () {
+          if (_done) return; _done = true; _cleanup();
+          reject(new Error('load timeout: ' + src));
+        }, timeout || 15000);
         s.onload = function () {
+          if (_done) return; _done = true; clearTimeout(_to); _cleanup();
           try {
             if (/html2canvas/.test(src)) { QUIZ_VISION._h2c = window.html2canvas; resolve(window.html2canvas); }
             else { QUIZ_VISION._ocr = window.Tesseract; resolve(window.Tesseract); }
           } catch (e) { reject(e); }
         };
-        s.onerror = function () { reject(new Error('load fail: ' + src)); };
+        s.onerror = function () { if (_done) return; _done = true; clearTimeout(_to); _cleanup(); reject(new Error('load fail: ' + src)); };
         (document.head || document.documentElement || document).appendChild(s);
       } catch (e) { reject(e); }
     });
@@ -3552,8 +4016,8 @@ try {
     host: 'chat.deepseek.com',
     loginBtnSel: 'TODO',        // 未登录："登录"按钮（存在=未登录）
     avatarSel: 'TODO',          // 已登录：用户头像/账户菜单（存在=已登录）
-    // 以下为 responder DOM 驱动（待真实站点校准，先 TODO）
-    inputSel: 'TODO', fileInputSel: 'TODO', sendBtnSel: 'TODO',
+    // 以下为 responder DOM 驱动（用户已用 DevTools 校准输入框选择器，其余 best-effort 待校准）
+    inputSel: 'textarea[placeholder^="给 DeepSeek 发送消息"]', fileInputSel: 'TODO', sendBtnSel: 'TODO',
     msgListSel: 'TODO', lastReplySel: 'TODO', generatingSel: 'TODO'
   };
   var DS_CHANNEL = 'cx-deepseek-vision';
@@ -3667,7 +4131,12 @@ try {
     } catch (e) { swallow(e); }
   }
 
-  // ---- DeepSeek 页侧 responder：收到答题请求 → 检查登录 → (TODO) 驱动 DOM 作答 → 回传 ----
+  // ---- DeepSeek 页侧 responder：收到答题请求 → 检查登录 → 驱动 DOM 作答 → 回传 ----
+  // 校准后的 DOM 驱动（选择器在真实 DeepSeek 页用 DevTools 校准；用户已提供输入框选择器）：
+  //   输入框：textarea[placeholder^="给 DeepSeek 发送消息"]（或其容器 textarea，统一用 [contenteditable] 与 textarea 兜底）
+  //   发送按钮：底部发送按钮（button，aria-label 含"发送"/"send"，或存在 svg 的最后一个主按钮）—— best-effort 待校准
+  //   回复气泡：对话区消息容器（[role="list"]/聊天容器）末尾最后一条 AI 回复，且非用户输入
+  //   生成中：回复气泡内出现"正在生成…/DeepSeek 正在思考"等占位或 loading 转圈 → 轮询等待消失
   function _dsInitResponder() {
     try {
       _onChannel(function (e) {
@@ -3685,14 +4154,181 @@ try {
           var _li = _dsIsLoggedIn();
           if (_li === false) { reply.error = 'not-logged-in'; _postChannel(reply); return; }   // 明确未登录
           if (_li === undefined) { reply.error = 'login-unknown'; _postChannel(reply); return; }  // 登录态未知（DOM 未识别），如实上报而非误判未登录
-          // TODO(待真实站点校准选择器后实现)：注入图片+提示词→发送→轮询回复→解析下标
-          // 当前仅占位：返回 null → 课程页随机兜底；并提示尚未实现驱动逻辑
-          reply.text = null; reply.answer = null; reply.notImplemented = true;
-          if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.DS_LAST_ANSWER = '(尚未实现自动作答，待站点校准)';
-          _postChannel(reply);
+          // DOM 驱动作答：注入题目图(若提供) + 提示词 → 发送 → 轮询回复完成 → 解析答案下标回传
+          _dsRespond(m, function (ans) {
+            if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.DS_LAST_ANSWER = ans ? (ans.text || ans.answer || '已作答') : '未获取到回复';
+            _postChannel(ans || { type: 'ds-answer', reqId: m.reqId, error: 'no-answer' });
+          });
         } catch (e2) { swallow(e2); }
       });
     } catch (e) { swallow(e); }
+  }
+
+  // 向 DeepSeek 输入框注入内容并发送，轮询获取回复文本。
+  // dataUrl 为题目截图(可选)，promptText 为提示词/选项文本。
+  function _dsRespond(m, done) {
+    try {
+      var promptText = (m && m.prompt) || (m && m.options && m.options.join('\n')) || '请根据题目作答';
+      // 1) 定位输入框：优先校准选择器，回退通用 textarea/contenteditable
+      var DEEPSEEK = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.DEEPSEEK;
+      var inputSel = (DEEPSEEK && DEEPSEEK.inputSel && DEEPSEEK.inputSel !== 'TODO') ? DEEPSEEK.inputSel : 'textarea[placeholder^="给 DeepSeek 发送消息"], textarea, [contenteditable="true"]';
+      var ta = null;
+      try { ta = document.querySelector(inputSel); } catch (e) {}
+      if (!ta) { done({ type: 'ds-answer', reqId: m.reqId, error: 'no-input' }); return; }
+
+      // 2) 记录发送前消息条数（用于识别新回复）
+      var _countBefore = _dsCountMessages();
+
+      // 3) 注入文字：对 textarea 用原生 value + input 事件（React 受控），对 contenteditable 用 execCommand/textContent
+      var ok = false;
+      try {
+        if (ta.tagName === 'TEXTAREA') {
+          var proto = Object.getPrototypeOf(ta);
+          var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+          setter.call(ta, promptText);
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ok = true;
+        } else {
+          ta.focus();
+          ta.textContent = promptText;
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ok = true;
+        }
+      } catch (e) { swallow(e); }
+      if (!ok) { done({ type: 'ds-answer', reqId: m.reqId, error: 'inject-failed' }); return; }
+
+      // 4) 注入图片（若提供 dataUrl）：DeepSeek 支持粘贴图片到输入框 → 触发 paste 事件构造 File
+      if (m && m.image) {
+        try {
+          _dsPasteImage(ta, m.image);
+        } catch (e) { swallow(e); }   // 图片注入失败不阻断文字作答
+      }
+
+      // 5) 点击发送按钮：优先校准选择器，回退"输入框附近/底部含发送语义的 button"
+      var sendSel = (DEEPSEEK && DEEPSEEK.sendBtnSel && DEEPSEEK.sendBtnSel !== 'TODO') ? DEEPSEEK.sendBtnSel : 'button[aria-label*="发送"], button[aria-label*="send"], button:last-of-type';
+      var sent = false;
+      try {
+        var sb = document.querySelector(sendSel);
+        // 校准选择器未命中时，回退：输入框最近祖先容器内最后一个可点 button
+        if (!sb) {
+          var box = ta.closest('form') || ta.parentElement;
+          var btns = box ? box.querySelectorAll('button') : [];
+          for (var i = btns.length - 1; i >= 0; i--) { if (!btns[i].disabled) { sb = btns[i]; break; } }
+        }
+        if (sb) { sb.click(); sent = true; }
+      } catch (e) { swallow(e); }
+      if (!sent) { done({ type: 'ds-answer', reqId: m.reqId, error: 'no-send-btn' }); return; }
+
+      // 6) 轮询：等待新回复出现且"生成中"结束，最多 ~90s
+      var deadline = Date.now() + 90000;
+      var poll = function () {
+        try {
+          if (Date.now() > deadline) { done({ type: 'ds-answer', reqId: m.reqId, error: 'timeout-wait-reply' }); return; }
+          var txt = _dsLatestReply(_countBefore);
+          if (txt === '__GENERATING__') { setTimeout(poll, 800); return; }   // 仍在生成，继续等
+          if (txt) {
+            // 解析答案：尝试提取选项下标 A/B/C/D 或 1)2)3)4)
+            var ans = _dsParseAnswer(txt);
+            done({ type: 'ds-answer', reqId: m.reqId, text: txt, answer: ans });
+            return;
+          }
+          setTimeout(poll, 800);
+        } catch (e) { swallow(e); setTimeout(poll, 800); }
+      };
+      setTimeout(poll, 1200);   // 先等发送生效
+    } catch (e) { swallow(e); done && done({ type: 'ds-answer', reqId: m.reqId, error: 'respond-exception' }); }
+  }
+
+  // 统计当前对话消息条数（best-effort：聊天容器内的消息元素）
+  function _dsCountMessages() {
+    try {
+      var DEEPSEEK = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.DEEPSEEK;
+      var sel = (DEEPSEEK && DEEPSEEK.msgListSel && DEEPSEEK.msgListSel !== 'TODO') ? DEEPSEEK.msgListSel : '[role="list"], .chat-messages, .ds-chat-messages, main [class*="message"], [class*="conversation"]';
+      var box = document.querySelector(sel);
+      if (!box) return 0;
+      return box.querySelectorAll('[class*="message"], [data-message-id], [role="listitem"], > div > div').length;
+    } catch (e) { return 0; }
+  }
+
+  // 获取最新一条 AI 回复文本；仍在生成返回 '__GENERATING__'，无新回复返回 ''
+  function _dsLatestReply(countBefore) {
+    try {
+      var DEEPSEEK = window.__CX_FORCE_PLAY && window.__CX_FORCE_PLAY.DEEPSEEK;
+      var sel = (DEEPSEEK && DEEPSEEK.lastReplySel && DEEPSEEK.lastReplySel !== 'TODO') ? DEEPSEEK.lastReplySel : '[role="list"], .chat-messages, .ds-chat-messages, main [class*="message"], [class*="conversation"]';
+      var box = document.querySelector(sel);
+      if (!box) return '';
+      var nodes = box.querySelectorAll('[class*="message"], [data-message-id], [role="listitem"], > div > div');
+      if (nodes.length <= countBefore) return '';   // 尚无新回复
+      var last = nodes[nodes.length - 1];
+      var t = (last.textContent || '').trim();
+      // 生成中检测：占位文本或 loading 转圈
+      var genSel = (DEEPSEEK && DEEPSEEK.generatingSel && DEEPSEEK.generatingSel !== 'TODO') ? DEEPSEEK.generatingSel : '[class*="loading"], [class*="spinner"], [class*="thinking"], [class*="generating"]';
+      if (last.querySelector(genSel)) return '__GENERATING__';
+      if (/正在生成|正在思考|正在输入|DeepSeek 正在思考|生成中|Thinking/i.test(t)) return '__GENERATING__';
+      return t || '';
+    } catch (e) { return ''; }
+  }
+
+  // 把题目截图(URL)作为图片注入。优先走 file input 上传（DeepSeek 真实是附件/图片上传，
+  // textarea 不吃 paste 图片）；fileInputSel 未校准时回退到 paste 事件（best-effort）。
+  function _dsPasteImage(ta, dataUrl) {
+    try {
+      var fetchImg = function (cb) {
+        try {
+          var img = new Image();
+          img.onload = function () { try { var c = document.createElement('canvas'); c.width = img.width; c.height = img.height; var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0); c.toBlob(function (b) { cb(b); }, 'image/png'); } catch (e) { cb(null); } };
+          img.onerror = function () { cb(null); };
+          img.src = dataUrl;
+        } catch (e) { cb(null); }
+      };
+      fetchImg(function (blob) {
+        if (!blob) return;
+        try {
+          var file = new File([blob], 'question.png', { type: 'image/png' });
+          // 主路径：file input 上传（querySelector 命中上传控件后赋值 + dispatch input/change）
+          var fi = null;
+          if (DEEPSEEK && DEEPSEEK.fileInputSel && DEEPSEEK.fileInputSel !== 'TODO') {
+            try { fi = document.querySelector(DEEPSEEK.fileInputSel); } catch (e) { fi = null; }
+          }
+          if (!fi) { try { fi = document.querySelector('input[type=file]'); } catch (e) { fi = null; } }
+          if (fi) {
+            try {
+              var dt = new DataTransfer();
+              dt.items.add(file);
+              try { fi.files = dt.files; } catch (e) { /* 只读 files 时回退 dispatch */ }
+              fi.dispatchEvent(new Event('input', { bubbles: true }));
+              fi.dispatchEvent(new Event('change', { bubbles: true }));
+              return;
+            } catch (e) { swallow(e); }
+          }
+          // 回退：paste 事件（多数 textarea 不吃图片，仅作 best-effort）
+          var dt2 = new DataTransfer();
+          dt2.items.add(file);
+          var ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt2 });
+          ta.dispatchEvent(ev);
+        } catch (e) { swallow(e); }
+      });
+    } catch (e) { swallow(e); }
+  }
+
+  // 从回复文本解析选项下标（A/B/C/D）。优先"答案：X"强模式，避免把"选项有 A、B、C、D"误命中。
+  function _dsParseAnswer(text) {
+    try {
+      if (!text) return null;
+      // 强模式：显式答案标注（如 "答案：B" / "选择 C" / "答案为 A"）
+      var m3 = text.match(/(?:答案|正确选项|应选|选择|选)[：:\s为]*([A-D])/i);
+      if (m3) return m3[1];
+      // 弱模式：孤立大写字母（仅在无强模式时启用，且排除连续选项列举）
+      var m1 = text.match(/(?:^|[\s，。、])([A-D])(?:[\s，。、]|$)/);
+      if (m1) {
+        // 若同一句出现多个 A-D 并列（如 "A. B. C. D."），视为列举，不采信
+        var listed = (text.match(/[A-D][)．.、]|\b[A-D]\s*[A-D]\b/g) || []).length;
+        if (listed <= 1) return m1[1];
+      }
+      var m2 = text.match(/(\d)[)．.]/);
+      if (m2) return m2[1];
+      return null;
+    } catch (e) { return null; }
   }
 
   // 课程页侧：把截图交给 DeepSeek 页作答，返回 Promise<{text, answer}>（超时走 reject → quiz.js 随机兜底）
@@ -3741,6 +4377,10 @@ try {
   } catch (e) { swallow(e); }
 
   try {
+    // 暴露为全局（window.dsAvailable），因为 zhihuishu-exam / quiz / zhihuishu-fab 等模块以裸标识符 dsAvailable() 引用本函数；
+    // 仅挂到命名空间会导致裸引用恒为 undefined、DeepSeek 闸门永远打不开（真机失效）。命名空间副本保留以便显式访问。
+    window.dsAvailable = dsAvailable;
+    window._dsIsLoggedIn = _dsIsLoggedIn;
     window.__CX_FORCE_PLAY.dsAvailable = dsAvailable;
     window.__CX_FORCE_PLAY._dsIsLoggedIn = _dsIsLoggedIn;
     window.__CX_FORCE_PLAY._dsRenderStatus = _dsRenderStatus;
@@ -4033,9 +4673,11 @@ try {
         try { if (isFinite(v.duration)) v.currentTime = v.duration; } catch (e) { swallow(e); }
         if (!v.__seekArmed) {
           v.__seekArmed = true;
-          v.addEventListener('seeking', function () {
+          // 保存引用以便 userResume 时拆除（否则恢复播放后 seeking 守卫又把 currentTime 钉回结尾）
+          v.__seekHandler = function () {
             try { if (isFinite(v.duration) && v.currentTime < v.duration) v.currentTime = v.duration; } catch (e) { swallow(e); }
-          }, true);
+          };
+          v.addEventListener('seeking', v.__seekHandler, true);
         }
         dbg('ended：已锁定 currentTime 并覆盖 play 为 no-op，阻断重播');
         return true;   // 终止 enforce
@@ -4098,9 +4740,13 @@ try {
     if (!root || !root.querySelectorAll) return;
     depth = depth || 0;
     if (depth > CONST.MAX_SCAN_DEPTH) return;
-    var _containerSel = SELECTORS.VIDEO_BOX + ', ' + siteTaskContainerSel();   // 评审#6：缓存容器选择器，避免递归每层重复拼接与 detectSite 调用
+    var _taskSel = siteTaskContainerSel();
+    // 评审#6：缓存容器选择器，避免递归每层重复拼接与 detectSite 调用。
+    // 当站点无任务点容器(如 deepseek 应答端 taskContainerSel='')时仅用 VIDEO_BOX，避免拼出 "#videoBox, " 尾逗号非法选择器
+    // → 每轮 querySelectorAll 抛 "is not a valid selector" 被 swallow 计入遥测(诊断#510：deepseek 页 510 次 querySelectorAll 报错)。
+    var _containerSel = (_taskSel && _taskSel.trim()) ? (SELECTORS.VIDEO_BOX + ', ' + _taskSel.trim()) : SELECTORS.VIDEO_BOX;
     try {
-      var _vs = Array.prototype.slice.call(root.getElementsByTagName('video'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险（审查：live collection 风险）
+      var _vs = Array.from(root.getElementsByTagName('video'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险（审查：live collection 风险）
       for (var _vi = 0; _vi < _vs.length; _vi++) { try { if (onVideo) onVideo(_vs[_vi], hostSigs); } catch (e) { swallow(e); } }
     } catch (e) { swallow(e); }
     try {
@@ -4114,7 +4760,7 @@ try {
         for (var _ci = 0; _ci < _cts.length; _ci++) {
           var _ct = _cts[_ci];
           if (_ct.shadowRoot) { try { walkVideos(_ct.shadowRoot, hostSigs, depth + 1, onVideo, onDoc); } catch (e) { swallow(e); } }
-          var _all = Array.prototype.slice.call(_ct.getElementsByTagName('*'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险
+          var _all = Array.from(_ct.getElementsByTagName('*'));   // 快照为静态数组，规避 live HTMLCollection 遍历期突变风险
           for (var _ai = 0; _ai < _all.length; _ai++) {
             if (_all[_ai].shadowRoot) { try { walkVideos(_all[_ai].shadowRoot, hostSigs, depth + 1, onVideo, onDoc); } catch (e) { swallow(e); } }
           }
@@ -4144,18 +4790,18 @@ try {
     } catch (e) { swallow(e); }
   }
   // 接管遍历：对每个视频施加强制续播（含宿主 iframe 签名下钻）
-  function scanVideos(root) {
+  function scanVideos(root, hostSigs, depth) {
     if (!forcePlayEnabled()) return;   // opt-out：全局停用时不接管任何视频
     var fg = foregroundVideo();   // 每轮仅算一次前台，避免 O(n²)；非前台视频在 overrideVideo 内被门控释放
-    walkVideos(root, null, 0, function (v, hs) {
+    walkVideos(root, hostSigs, depth || 0, function (v, hs) {
       safeCall(function () { if (hs) cxState(v).hostSigs = hs; }, 'scan:hostSigs');
       overrideVideo(v, fg);
     });
   }
   function allVideos() {
     // 诊断、状态、面板「暂停/恢复」按钮(currentVideo/activeVideo)均依赖本函数；与 scanVideos 统一口径，三者一致修复矛盾
-    var out = [], seen = [];
-    function dedup(v) { for (var i = 0; i < seen.length; i++) if (seen[i] === v) return false; seen.push(v); return true; }
+    var out = [], seen = new Set();
+    function dedup(v) { if (seen.has(v)) return false; seen.add(v); return true; }
     walkVideos(document, null, 0, function (v) { if (dedup(v)) out.push(v); });
     safeCall(function () { if (window.top && window.top !== window && window.top.document && window.top.document.body) walkVideos(window.top.document, null, 0, function (v) { if (dedup(v)) out.push(v); }); }, 'allVideos:top');  // 并入顶层同源文档（评审#11：safeCall 收口）
     return out;
@@ -4224,7 +4870,8 @@ try {
         else if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_moFlush);
         else setTimeout(_moFlush, 16);
       }
-    }).observe(document.documentElement, { childList: true, subtree: true });
+    });
+    _mo.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) { swallow(e); }
 
   // 切回标签页时强制续播
@@ -4293,6 +4940,11 @@ try {
       try { if (v.duration && isFinite(v.duration) && v.currentTime > 0) v.currentTime = 0; } catch (e) { swallow(e); }   // 从头重看
       try { delete ENDED_SRCS[videoSrcOf(v)]; } catch (e) { swallow(e); }                                          // 解除本视频地址黑名单
       try { var _hsg = cxState(v).hostSigs; if (_hsg) { for (var _hg = 0; _hg < _hsg.length; _hg++) { try { delete ENDED_SRCS[_hsg[_hg]]; } catch (e2) { swallow(e2); } } } } catch (e) { swallow(e); }
+    }
+    // 拆除 seeking 守卫（ovEnforce 对 ended 视频加的 listener，否则 seek 会把 currentTime 钉回 duration）
+    if (v.__seekArmed && v.__seekHandler) {
+      try { v.removeEventListener('seeking', v.__seekHandler, true); } catch (e) { swallow(e); }
+      try { delete v.__seekHandler; delete v.__seekArmed; } catch (e) { swallow(e); }
     }
     try { delete v.play; } catch (e3) { swallow(e3); }          // 拆除播放闸门，还原原型 play
     try { safePlay(v); } catch (e) { swallow(e); }
@@ -4514,10 +5166,14 @@ try {
     } catch (e) { swallow(e); }
     // ⑪ 终态：删除本脚本命名空间对象本身（含 uninstall 钩子）。_cleaned 守卫已保证幂等；
     //    删除后页面全局即完全回到注入前状态（仅遗留配置类 localStorage，可由 /cleardata 命令主动清除）。
+    // ⑪-b 清空事件总线订阅（H3 修复）：uninstall / 页面软卸载 / 热禁用重注入时，若不清 subs，
+    //    重注入会叠加订阅导致同一事件被多次处理（如面板重复刷新、toast 重复推送），属典型内存与行为泄漏。
+    //    跨帧透传监听（子帧→顶层 ui:toast）保留，避免顶层帧接收子帧提示能力丢失。
+    try { if (typeof Store !== 'undefined' && Store.clearSubs) Store.clearSubs('__ev:ui:toast'); } catch (e) { swallow(e); }
     try { delete window.__CX_FORCE_PLAY; } catch (e) { swallow(e); }
   }
-  try { window.addEventListener('pagehide', cleanupListeners); } catch (e) { swallow(e); }
-  try { window.addEventListener('beforeunload', cleanupListeners); } catch (e) { swallow(e); }
+  try { window.addEventListener('pagehide', cleanupListeners, { once: true }); } catch (e) { swallow(e); }
+  try { window.addEventListener('beforeunload', cleanupListeners, { once: true }); } catch (e) { swallow(e); }
   try { if (window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY._uninstallHooked = true; } catch (e) { swallow(e); }   // 安全审计(建议#10)：标记卸载钩子已装
   try { window.__CX_FORCE_PLAY.uninstall = cleanupListeners; } catch (e) { swallow(e); }   // 暴露手动卸载还原钩子（应对热禁用）
 
@@ -4652,7 +5308,8 @@ try {
   // v5 IA 重组：旧 tab 值迁移映射（pause→control, sub→automation, adv→insight, other→system），一次性改写后按新值持久化
   var _cxTabMigrate = { pause: 'control', sub: 'automation', adv: 'insight', other: 'system' };
   try {
-    var _savedTab = (localStorage.getItem('cx_panel_tab') || 'control');
+    var _savedTab = 'control';
+    try { var _t = localStorage.getItem('cx_panel_tab'); if (_t) _savedTab = _t; } catch (e) { swallow(e); }
     if (_cxTabMigrate[_savedTab]) { _savedTab = _cxTabMigrate[_savedTab]; try { localStorage.setItem('cx_panel_tab', _savedTab); } catch (e2) { swallow(e2); } }
     _cxActiveTab = _savedTab;
   } catch (e) { swallow(e); }
@@ -4718,7 +5375,24 @@ try {
   }
   try { Store.onEv('panel:refresh', renderInvasionReport); } catch (e) { swallow(e); }
   try { Store.onEv('videos:scanned', throttle(renderInvasionReport, 1500)); } catch (e) { swallow(e); }
-  function togglePanel() { if (_cxPanel && _cxPanel.style.display !== 'none') hidePanel(); else showPanel(); }
+  // 开关键 = PAUSE_HOTKEY（默认 p）。
+  // 非 ninja：显示↔隐藏（原行为）。
+  // ninja 模式：胶囊常驻，P 在「展开(显示全部内容) ↔ 折叠(仅胶囊)」间切换，
+  // 避免旧逻辑只 toggle 折叠胶囊的 display，导致按键永远看不到面板正文(只有「主控」胶囊)。
+  function togglePanel() {
+    if (!_cxPanel) { try { showPanel(); } catch (e) { swallow(e); } return; }
+    if (_cxPanel.style.display === 'none') {            // 隐藏 → 显示（ninja 下直接展开）
+      try { showPanel(); } catch (e) { swallow(e); }
+      if (CONFIG.NINJA_MODE) _cxPanel.classList.add('ninja-open');
+      return;
+    }
+    if (CONFIG.NINJA_MODE) {                            // ninja：展开↔折叠
+      if (_cxPanel.classList.contains('ninja-open')) _cxPanel.classList.remove('ninja-open');
+      else _cxPanel.classList.add('ninja-open');
+      return;
+    }
+    hidePanel();                                        // 非 ninja：显示↔隐藏
+  }
   // 一键退出/进入 Ninja 模式：卡在窄条、够不到「系统」勾选框时的逃生通道（键盘 N / 面板内「退出 n 模式」按钮共用）
   function toggleNinjaMode() {
     try {
@@ -4896,9 +5570,10 @@ try {
           '<label id="__cxQuizAutoRow" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;cursor:pointer;"><input id="__cxQuizAuto" type="checkbox" style="margin:0;">自动答题（通用真答题引擎：超星/人卫/Unipus/U校园/实验空间等）</label>' +
           // 实时作答进度（与续播视频开关联动：开 → 实时；关 → 灰显）
           '<div id="__cxQuizStatRow" style="font-size:12px;color:' + STYLES.T.text2 + ';margin-bottom:8px;line-height:1.6;">' +
-            '<div style="display:flex;justify-content:space-between;"><span>题目总数</span><b id="__cxQuizTotal" class="cx-mono">—</b></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span>已作答</span><b id="__cxQuizDone" class="cx-mono">—</b></div>' +
-            '<div style="display:flex;justify-content:space-between;"><span>待作答</span><b id="__cxQuizRemain" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>题目总数</span><b id="__cxQuizTotal" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>已作答</span><b id="__cxQuizDone" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>待作答</span><b id="__cxQuizRemain" class="cx-mono">—</b></div>' +
+              '<div style="display:flex;justify-content:space-between;"><span>待确认提交</span><b id="__cxQuizPendingStat" class="cx-mono">0</b></div>' +
             '<div style="display:flex;justify-content:space-between;"><span>答案来源</span><b id="__cxQuizSrc" class="cx-mono">—</b></div>' +
             '<div style="display:flex;justify-content:space-between;"><span>平均置信度</span><b id="__cxQuizConf" class="cx-mono">—</b></div>' +
           '</div>' +
@@ -4910,6 +5585,27 @@ try {
               '<option value="ai">AI（视觉识别+DeepSeek 等）</option>' +
             '</select>' +
             '<div id="__cxQuizSrcHint" style="font-size:10px;color:' + STYLES.T.text3 + ';margin-top:4px;line-height:1.4;">random 仅随机勾选，确保进度不被卡；选 bank/ai 前请确认已配置题库或 DeepSeek 通道，否则回退随机。</div>' +
+            // 外部 CDN 视觉脚本隐私授权（默认关闭，拒绝静默外连）
+            '<label style="display:flex;align-items:center;gap:6px;margin:8px 0 4px;font-size:12px;cursor:pointer;"><input id="__cxQuizVisionCdn" type="checkbox" style="margin:0;">允许加载外部视觉识别脚本 (CDN: html2canvas / Tesseract)</label>' +
+            '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-bottom:6px;line-height:1.4;">开启后将连外网加载上述 CDN 资源以对抗题目文本混淆；默认关闭，拒绝静默外连。</div>' +
+            // 用 DeepSeek 网页版作答：一键开启「视觉识别→DeepSeek 应答端」路径（同时勾选外部脚本授权）
+            '<label style="display:flex;align-items:center;gap:6px;margin:8px 0 4px;font-size:12px;cursor:pointer;"><input id="__cxQuizDeepseek" type="checkbox" style="margin:0;">用 DeepSeek 网页版作答（视觉识别→DeepSeek 应答端）</label>' +
+            '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-bottom:6px;line-height:1.4;">开启后，文本无解的混淆题将截图发往已连接的 DeepSeek 应答端作答；需先打开 DeepSeek 网页版并保持登录。开启同时会启用「允许加载外部视觉脚本」。</div>' +
+            // 隐私合规 + 防误交卷控制
+            '<div style="border-top:1px solid ' + STYLES.T.border + ';margin-top:8px;padding-top:8px;">' +
+              '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;cursor:pointer;"><input id="__cxQuizOffline" type="checkbox" style="margin:0;">仅离线作答（题目不外发）</label>' +
+              '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;cursor:pointer;"><input id="__cxQuizAutoSubmit" type="checkbox" style="margin:0;">作答后自动提交</label>' +
+              '<button id="__cxBtnQuizSubmitAll" style="display:none;width:100%;padding:7px;background:' + STYLES.T.primary + ';color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">确认提交待作答 (<b id="__cxQuizPending">0</b>)</button>' +
+              // 人工复核队列（评估建议#6：置信度<0.6 已随机兜底，供用户核对后入本地题库闭环）
+              '<div id="__cxQuizReviewWrap" style="display:none;border-top:1px solid ' + STYLES.T.border + ';margin-top:8px;padding-top:8px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:' + STYLES.T.warning + ';margin-bottom:4px;"><span>⚠ 待人工复核</span><b id="__cxQuizReviewCount" class="cx-mono">0</b></div>' +
+                '<div style="font-size:10px;color:' + STYLES.T.text3 + ';margin-bottom:6px;line-height:1.4;">低置信题已随机勾选保进度；核对后将正确答案入本地题库，下次命中高可信直接作答。</div>' +
+                '<div style="display:flex;gap:6px;">' +
+                  '<button id="__cxBtnQuizReviewAccept" style="flex:1;padding:6px;background:' + STYLES.T.ok + ';color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">采纳当前答案入题库</button>' +
+                  '<button id="__cxBtnQuizReviewExport" style="flex:1;padding:6px;background:' + STYLES.T.border + ';color:' + STYLES.T.text + ';border:none;border-radius:6px;cursor:pointer;font-size:12px;">导出待复核</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +   // 关闭 __cxQuizBlock
           // 子块二：上课随堂题弹窗作答（智慧树上课/icourse163/xuetangx/icve）
           '<div id="__cxPopupBlock" style="display:none;">' +
@@ -4925,6 +5621,7 @@ try {
             '<button id="__cxBtnZhExam" style="margin-top:6px;width:100%;padding:7px;background:' + STYLES.T.surface + ';color:' + STYLES.T.text + ';border:1px solid ' + STYLES.T.border + ';border-radius:6px;cursor:pointer;font-size:12px;">打开作业 / 考试助手</button>' +
           '</div>' +
         '</div>' +
+          '</div>' +   // 关闭 __cxZoneContinue(开89：此前缺失导致 automation/insight/system 被嵌套进 control)
       '</div>' +
       // 区块：自动化（仅保留工具库项开关；续播精细控制已收拢至「续播」卡，见布局建议 Rec A）
       '<div id="__cxTab_automation" class="cx-tab">' +
@@ -5275,6 +5972,7 @@ try {
       CONFIG.RESCAN_INTERVAL = +resc.value;
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }   // 实时重启轮询，使间隔立即生效
       try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+      try { Store.state._loopTimer = _loopTimer; } catch (e) {}                       // 同步镜像到 Store.state，避免诊断区看到旧定时器 id
       savePanelCfg(); Store.emit('panel:refresh');
     });
     var endrel = el.querySelector('#__cxEndRel');
@@ -5332,7 +6030,9 @@ try {
         if (el.classList.contains('cx-dragging')) return;
         if (el._cxDragMoved) { el._cxDragMoved = false; return; }  // 拖拽结束后的误触，跳过
         if (e && e.button !== undefined && e.button !== 0) return;
+        var _wasOpen = el.classList.contains('ninja-open');
         el.classList.toggle('ninja-open');
+        if (!_wasOpen) { try { Store.emit('panel:refresh'); } catch (e2) { swallow(e2); } }   // 折叠→展开：刷新动态内容，避免胶囊展开后三页空白
       });
     }
     try {
@@ -5342,6 +6042,13 @@ try {
         }
       });
     } catch (e3) { swallow(e3); }
+    // ninja 纯 hover 展开（CSS :hover，不触发 titlebar mouseup）时，鼠标进入面板刷新一次动态内容，
+    // 否则用户悬停胶囊看到的是上次填充的快照或模板静态占位，洞察/系统页显得"空/不更新"。
+    // mouseenter 不冒泡，只在真正进入面板根元素时触发一次，无需节流。
+    el.addEventListener('mouseenter', function () {
+      if (!el.classList.contains('ninja')) return;   // 非 ninja 不处理（常驻面板由主循环节流刷新）
+      try { Store.emit('panel:refresh'); } catch (e) { swallow(e); }
+    });
     var dbg = el.querySelector('#__cxDebug');
     if (dbg) dbg.addEventListener('change', function () { try { DEBUG = !!dbg.checked; Store.emit('ui:toast', DEBUG ? '调试日志已开' : '调试日志已关'); } catch (e) { swallow(e); } savePanelCfg(); });
     var sv = el.querySelector('#__cxSingleVideo');
@@ -5381,8 +6088,18 @@ try {
     function switchTab(name) {
       if (!_cxPanel) return;
       try {
+        // 守卫：无效 tab 名（如残留 localStorage cx_panel_tab、/tab 传入非法值）会把所有 .cx-tab 设成 display:none → 整面板空白。
+        // 先扫描确认有匹配项，无匹配则回退 control，避免"切 tab 后全空白"。
         var tabs = _cxPanel.querySelectorAll('.cx-tab');
-        for (var i = 0; i < tabs.length; i++) tabs[i].style.display = (tabs[i].id === '__cxTab_' + name) ? 'block' : 'none';
+        var matched = false;
+        for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === '__cxTab_' + name) { matched = true; break; } }
+        if (!matched) { if (name !== 'control') { switchTab('control'); } return; }
+        for (var k = 0; k < tabs.length; k++) {
+          var _cur = (tabs[k].id === '__cxTab_' + name);
+          tabs[k].style.display = _cur ? 'block' : 'none';
+          // 标记当前活跃 tab，供 ninja 折叠态 CSS 例外放行（!important 压过内联 display 的修复）
+          if (_cur) tabs[k].classList.add('cx-tab--cur'); else tabs[k].classList.remove('cx-tab--cur');
+        }
         var btns = _cxPanel.querySelectorAll('.cx-nav-btn');
         for (var j = 0; j < btns.length; j++) {
           var _sel = (btns[j].getAttribute('data-tab') === name);
@@ -5395,12 +6112,21 @@ try {
         _cxActiveTab = name;
       } catch (e) { swallow(e); }
     }
-    try { Store.onEv('ui:switchTab', function (name) { try { switchTab(name); } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }   // 供命令框 /tab 调用
+    try { Store.onEv('ui:switchTab', function (name) { try { switchTab(name); try { if (el.classList.contains('ninja') && !el.classList.contains('ninja-open')) el.classList.add('ninja-open'); } catch (e3) { swallow(e3); } try { Store.emit('panel:refresh'); } catch (e2) { swallow(e2); } } catch (e) { swallow(e); } }); } catch (e) { swallow(e); }   // 供命令框 /tab 调用
     var navBtns = el.querySelectorAll('.cx-nav-btn');
     for (var ni = 0; ni < navBtns.length; ni++) {
-      (function (b) { b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); }); })(navBtns[ni]);
+      // 切 tab 时同步刷新动态内容：洞察/系统/自动化页靠 panel:refresh 填充，否则切过去是"面板打开那一刻"的快照，甚至从未填充→空白
+      (function (b) { b.addEventListener('click', function () {
+        switchTab(b.getAttribute('data-tab'));
+        // ninja 模式：切到非默认 tab 后，鼠标移开面板会被 CSS `:not(:hover):not(.ninja-open)` 把 .cx-tab 重新 display:none!important 隐藏，
+        // 导致"点开又空回去"。这里粘性展开 ninja-open，让用户能留在展开态看内容（移出面板由 document mouseup 关闭）。
+        try { if (el.classList.contains('ninja') && !el.classList.contains('ninja-open')) el.classList.add('ninja-open'); } catch (e2) { swallow(e2); }
+        try { Store.emit('panel:refresh'); } catch (e) { swallow(e); }
+      }); })(navBtns[ni]);
     }
-    el.querySelector('#__cxBtnCopy').addEventListener('click', copyDiagnostics);
+    // 防御：复制诊断按钮缺失不应中断 ensurePanel（否则 _cxPanel/switchTab/panel:refresh 全不执行 → 整面板空白）
+    var btnCopy = el.querySelector('#__cxBtnCopy');
+    if (btnCopy) btnCopy.addEventListener('click', copyDiagnostics);
     // 安全审计（建议#10）：刷新「洞察」页侵入点清单
     var btnAudit = el.querySelector('#__cxBtnAudit');
     if (btnAudit) btnAudit.addEventListener('click', function () { try { Store.emit('panel:refresh'); Store.emit('ui:toast', '已刷新侵入点清单'); } catch (e) { swallow(e); } });
@@ -5410,6 +6136,7 @@ try {
     switchTab(_cxActiveTab || 'control');   // 主从式导航：应用上次选中的区块（默认 主控）
     if (typeof detectSite === 'function' && detectSite() === 'deepseek') bindDSConsole(el);   // DS 页特化：绑定应答端控制台逻辑
     positionPanel();   // 适配 progress-panel：若其已挂载，则下沉避让避免同角重叠
+    try { Store.emit('panel:refresh'); } catch (e) { swallow(e); }   // 面板建成即填充动态内容（洞察/系统页的 #__cxPanelState/__cxPanelInfo/__cxInvasionReport 等），否则面板可见但只显示模板静态占位，要等 showPanel 或主循环 videos:scanned 才刷新
     return el;
   }
 
@@ -5417,6 +6144,7 @@ try {
   // ===== DOMAIN: presentation/panel-ds-console (DeepSeek 应答端控制台事件绑定 + 状态刷新) =====
   // 仅在 detectSite()==='deepseek' 时由 ensurePanel 调用。课程页是主控面板，DeepSeek 页是应答端控制台。
   // 从 presentation/panel-core.js 抽出（行数红线合规），与 ensurePanel 同处一个 IIFE 闭包，函数声明 hoist，运行时调用安全。
+  var _dxDsCleanupDone = false;   // 防止多次注册 pagehide 监听
 
   function bindDSConsole(el) {
     if (!el) return;
@@ -5440,10 +6168,17 @@ try {
         });
       }
       // 注：#__cxNinja / #__cxDebug / #__cxBtnCopy 已由通用绑定区(ensurePanel 主体)统一绑定，此处不再重复，避免双监听
-      // 联动状态实时刷新（每 2s）
+      // 联动状态实时刷新（每 2s）；页面卸载时清理解除此轮询
       _dsUpdateConsole(el);
       if (!window.__cxDsTicker) {
         window.__cxDsTicker = setInterval(function () { try { _dsUpdateConsole(el); } catch (e) { swallow(e); } }, 2000);
+      }
+      // 清理：离开应答端页面时停止 ticker，避免孤立回调及面板引用阻止 GC
+      if (!_dxDsCleanupDone) {
+        _dxDsCleanupDone = true;
+        var _dsCleanup = function () { try { if (window.__cxDsTicker) { clearInterval(window.__cxDsTicker); window.__cxDsTicker = null; } } catch (e) {} };
+        try { window.addEventListener('pagehide', _dsCleanup); } catch (e) {}
+        try { window.addEventListener('unload', _dsCleanup); } catch (e) {}
       }
     } catch (e) { swallow(e); }
   }
@@ -5600,6 +6335,105 @@ try {
         Store.emit('panel:refresh');
       });
     }
+    // 仅离线作答开关（隐私合规：默认仅离线，题目/选项不外发）
+    var quizOffline = el.querySelector('#__cxQuizOffline');
+    if (quizOffline) {
+      try { var _ov = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_offline') : null; quizOffline.checked = (_ov === null ? true : _ov !== '0'); } catch (e) { quizOffline.checked = true; }
+      quizOffline.addEventListener('change', function () {
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_offline', quizOffline.checked ? '1' : '0'); } catch (e) { swallow(e); }
+        if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_OFFLINE_ONLY = quizOffline.checked;
+        try { Store.emit('ui:toast', '仅离线作答 → ' + (quizOffline.checked ? '开（题目不外发）' : '关（允许外发需白名单授权）')); } catch (e) {}
+        Store.emit('panel:refresh');
+      });
+    }
+    // 外部 CDN 视觉脚本隐私授权（默认关；勾选=允许连外网加载 html2canvas/Tesseract，拒绝静默外连）
+    var quizCdn = el.querySelector('#__cxQuizVisionCdn');
+    if (quizCdn) {
+      try { var _cv = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_cdn') : null; quizCdn.checked = (_cv === '1'); } catch (e) { quizCdn.checked = false; }
+      // 以持久化值覆盖运行期默认（默认 false）
+      if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_VISION_PRIVACY_OK = quizCdn.checked;
+      quizCdn.addEventListener('change', function () {
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_cdn', quizCdn.checked ? '1' : '0'); } catch (e) { swallow(e); }
+        if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_VISION_PRIVACY_OK = quizCdn.checked;
+        try { Store.emit('ui:toast', '外部视觉脚本授权 → ' + (quizCdn.checked ? '开（将连外网加载 CDN 资源）' : '关（拒绝外连）')); } catch (e) {}
+        Store.emit('panel:refresh');
+      });
+    }
+    // 用 DeepSeek 网页版作答（一键开启「视觉识别→DeepSeek 应答端」路径）：持久化 QUIZ_VISION_* 三项，刷新保持
+    var quizDs = el.querySelector('#__cxQuizDeepseek');
+    if (quizDs) {
+      try {
+        var _de = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_vision_ocr') : null;
+        var _ve = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_vision_enabled') : null;
+        var _pr = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_vision_privacy') : null;
+        quizDs.checked = (_de === 'deepseek-web' && _ve === '1' && _pr === '1');
+      } catch (e) { quizDs.checked = false; }
+      quizDs.addEventListener('change', function () {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('cx_quiz_vision_enabled', quizDs.checked ? '1' : '0');
+            localStorage.setItem('cx_quiz_vision_ocr', quizDs.checked ? 'deepseek-web' : 'endpoint');
+            localStorage.setItem('cx_quiz_vision_privacy', quizDs.checked ? '1' : '0');
+          }
+          if (typeof CONFIG !== 'undefined') {
+            CONFIG.QUIZ_VISION_ENABLED = quizDs.checked;
+            CONFIG.QUIZ_VISION_OCR = quizDs.checked ? 'deepseek-web' : 'endpoint';
+            CONFIG.QUIZ_VISION_PRIVACY_OK = quizDs.checked;
+          }
+          // 同步勾选「允许加载外部视觉脚本」（DeepSeek 路径需 html2canvas 截图）
+          var _cdn = el.querySelector('#__cxQuizVisionCdn');
+          if (_cdn) { _cdn.checked = quizDs.checked; try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_cdn', quizDs.checked ? '1' : '0'); } catch (e) { swallow(e); } }
+          try { Store.emit('ui:toast', quizDs.checked ? '已开启：用 DeepSeek 网页版作答（视觉识别→应答端）' : '已关闭：DeepSeek 作答'); } catch (e) {}
+          Store.emit('panel:refresh');
+        } catch (e) { swallow(e); }
+      });
+    }
+    // 作答后自动提交开关（默认开；关闭→作答但不提交，挂起待用户确认）
+    // 注意：不能复用 quizAuto 变量名——L45 已声明 quizAuto=#__cxQuizAuto，var 函数作用域会导致本变量覆盖前者，
+    // 进而使 L87 通用答题 change 监听回调读错的 checked。此处单独命名 quizAutoSubmit 避免变量遮蔽。
+    var quizAutoSubmit = el.querySelector('#__cxQuizAutoSubmit');
+    if (quizAutoSubmit) {
+      try { var _av = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_autosubmit') : null; quizAutoSubmit.checked = (_av === null ? true : _av !== '0'); } catch (e) { quizAutoSubmit.checked = true; }
+      quizAutoSubmit.addEventListener('change', function () {
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('cx_quiz_autosubmit', quizAutoSubmit.checked ? '1' : '0'); } catch (e) { swallow(e); }
+        if (typeof CONFIG !== 'undefined') CONFIG.QUIZ_AUTO_SUBMIT = quizAutoSubmit.checked;
+        try { Store.emit('ui:toast', '作答后自动提交 → ' + (quizAutoSubmit.checked ? '开' : '关（待「确认提交」）')); } catch (e) {}
+        Store.emit('panel:refresh');
+      });
+    }
+    // 确认提交待作答
+    var submitAll = el.querySelector('#__cxBtnQuizSubmitAll');
+    if (submitAll) submitAll.addEventListener('click', function () {
+      try {
+        var n = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY && typeof window.__CX_FORCE_PLAY.quizSubmitPending === 'function') ? window.__CX_FORCE_PLAY.quizSubmitPending() : 0;
+        if (!n) try { Store.emit('ui:toast', '没有待确认的作答'); } catch (e) {}
+      } catch (e) { swallow(e); }
+    });
+    // 人工复核：采纳当前随机答案入本地题库（逐题调用 quizReviewAccept）
+    var btnReviewAccept = el.querySelector('#__cxBtnQuizReviewAccept');
+    if (btnReviewAccept) btnReviewAccept.addEventListener('click', function () {
+      try {
+        var api = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) ? window.__CX_FORCE_PLAY : null;
+        if (!api || typeof api.quizReviewList !== 'function') return;
+        var list = api.quizReviewList();
+        if (!list.length) { try { Store.emit('ui:toast', '没有待人工复核的题'); } catch (e2) {} return; }
+        var ok = 0;
+        for (var i = 0; i < list.length; i++) { if (api.quizReviewAccept && api.quizReviewAccept(list[i].fp)) ok++; }
+        try { Store.emit('ui:toast', '已采纳 ' + ok + '/' + list.length + ' 题入本地题库'); } catch (e3) {}
+      } catch (e) { swallow(e); }
+    });
+    // 人工复核：导出待复核题为 JSON（供用户核对/外部维护题库）
+    var btnReviewExport = el.querySelector('#__cxBtnQuizReviewExport');
+    if (btnReviewExport) btnReviewExport.addEventListener('click', function () {
+      try {
+        var api = (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) ? window.__CX_FORCE_PLAY : null;
+        var txt = (api && typeof api.quizReviewExport === 'function') ? api.quizReviewExport() : '[]';
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function () {});
+        } catch (e2) {}
+        try { Store.emit('ui:toast', '已导出 ' + (txt ? JSON.parse(txt).length : 0) + ' 条待复核（已尝试复制到剪贴板）'); } catch (e3) {}
+      } catch (e) { swallow(e); }
+    });
     // 黑匣子导出按钮
     var btnExport = el.querySelector('#__cxBtnExport');
     if (btnExport) btnExport.addEventListener('click', function () {
@@ -5701,7 +6535,7 @@ try {
       el.style.left = ax + 'px'; el.style.top = ay + 'px'; el.style.right = 'auto';  // 锚定为绝对定位，transform 在其上叠加
       sx = e.clientX; sy = e.clientY; dx = 0; dy = 0;
       e.preventDefault();
-      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mousemove', onMove, { passive: true });   // onMove 不调 preventDefault，passive 提升滚动/合成性能
       document.addEventListener('mouseup', onUp);
     });
   }
@@ -5759,7 +6593,15 @@ try {
         var _dsLogin = _ds.loggedIn === true ? '已登录' : (_ds.loggedIn === false ? '未登录' : '未知');
         L.push('DeepSeek[课程页]: 收到跨页广播=' + _got + (_got ? (' connected=' + _ds.connected + ' loggedIn=' + _dsLogin) : ' → 同源BroadcastChannel跨域不可达，课程页收不到DeepSeek已登录'));
       }
-      L.push('  应答端开关=' + (_f.DS_RESPONDER_ENABLED === false ? '关' : '开') + ' · dsAvailable=' + (typeof _f.dsAvailable === 'function' ? _f.dsAvailable() : 'n/a') + ' · 本机host=' + ((typeof location !== 'undefined' && location.host) || '?'));
+      var _dsAvailTxt;
+      if (_site === 'deepseek') {
+        // 应答端本页：dsAvailable() 永远 false（本页只广播不接收自身通道），应显示本页登录就绪态而非误导的 dsAvailable
+        var _li2 = (typeof _f._dsIsLoggedIn === 'function') ? _f._dsIsLoggedIn() : undefined;
+        _dsAvailTxt = '本页就绪=' + (_li2 === true ? '是(已登录可作应答端)' : (_li2 === false ? '否(未登录)' : '未知(选择器待校准)'));
+      } else {
+        _dsAvailTxt = 'dsAvailable=' + (typeof _f.dsAvailable === 'function' ? _f.dsAvailable() : 'n/a');
+      }
+      L.push('  应答端开关=' + (_f.DS_RESPONDER_ENABLED === false ? '关' : '开') + ' · ' + _dsAvailTxt + ' · 本机host=' + ((typeof location !== 'undefined' && location.host) || '?'));
       L.push('  最近请求=' + (_f.DS_LAST_ASK ? (Math.round((Date.now() - _f.DS_LAST_ASK) / 1000) + 's前') : '无') + (_f.DS_LAST_ANSWER ? (' · ' + _f.DS_LAST_ANSWER) : ''));
     }
     // 主循环健康（诊断#七）：确认续播调度仍在跑，避免"看起来没接管"却不知循环已停
@@ -5830,7 +6672,9 @@ try {
     return L.join('\n');
   }
   function copyDiagnostics() {
-    var txt = buildDiagnostics();
+    var txt;
+    try { txt = buildDiagnostics(); }   // buildDiagnostics 访问 allVideos/_cxAuditProtoPause 等无 typeof 守卫，抛错时降级为错误文本，避免"复制无响应"
+    catch (e) { txt = '诊断生成失败: ' + (e && e.message ? e.message : String(e)); try { swallow(e); } catch (e2) {} }
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(txt).then(function () { Store.emit('ui:toast', '已复制诊断信息'); }, function () { fallbackCopy(txt); });
@@ -5942,23 +6786,27 @@ try {
     refreshPanelLabels();   // 拖动滑块即时刷新数值文字（修复：拖动时显示不变）
     updateBadge();          // 状态徽章：标题栏 LED 指示灯
     renderDashboard();      // 运维仪表盘实时刷新
-    var st = _cxPanel.querySelector('#__cxPanelState');
-    var v = activeVideo();
-    if (!v) {
-      // 没有正在播放的：尝试展示已用户暂停的目标
-      v = currentVideo();
-      if (st) { if (!v) st.textContent = '当前无视频'; else st.textContent = '视频已暂停(用户) · 按按钮恢复'; }
-    } else if (st) {
-      var src = (v.currentSrc || v.src || '').split('/').pop() || '(未知)';
-      var status = v.__cxAN_hold ? '插播题锁定(auto-next)' : (v.__cxUserPaused ? '已暂停(用户)' : (v.paused ? '暂停' : '播放中'));
-      var watchMin = ((cxState(v).watchMs || 0) / 60000).toFixed(1);
-      var autoRemain = CONFIG.AUTO_STOP_MIN > 0 ? Math.max(0, CONFIG.AUTO_STOP_MIN - (cxState(v).watchMs || 0) / 60000).toFixed(1) : '关闭';
-      var resumeRemain = (v.__cxUserPaused && cxState(v).resumeAt) ? Math.max(0, (cxState(v).resumeAt - Date.now()) / 60000).toFixed(1) : '—';
-      var prog = fmtTime(v.currentTime) + (isFinite(v.duration) && v.duration > 0 ? ' / ' + fmtTime(v.duration) : '');
-      st.textContent = '视频: ' + src + '\n状态: ' + status + ' · 进度 ' + prog + '\n已看 ' + watchMin + 'min · 自动停剩 ' + autoRemain + 'min · 恢复剩 ' + resumeRemain + 'min';
-    }
-    var btn = _cxPanel.querySelector('#__cxBtnPause');
-    if (btn) btn.textContent = (v && v.__cxUserPaused) ? '▶ 恢复续播' : '⏸ 暂停续播';
+    try {
+      try {
+        var st = _cxPanel.querySelector('#__cxPanelState');
+        var v = activeVideo();
+        if (!v) {
+          // 没有正在播放的：尝试展示已用户暂停的目标
+          v = currentVideo();
+          if (st) { if (!v) st.textContent = '当前无视频'; else st.textContent = '视频已暂停(用户) · 按按钮恢复'; }
+        } else if (st) {
+          var src = (v.currentSrc || v.src || '').split('/').pop() || '(未知)';
+          var status = v.__cxAN_hold ? '插播题锁定(auto-next)' : (v.__cxUserPaused ? '已暂停(用户)' : (v.paused ? '暂停' : '播放中'));
+          var watchMin = ((cxState(v).watchMs || 0) / 60000).toFixed(1);
+          var autoRemain = CONFIG.AUTO_STOP_MIN > 0 ? Math.max(0, CONFIG.AUTO_STOP_MIN - (cxState(v).watchMs || 0) / 60000).toFixed(1) : '关闭';
+          var resumeRemain = (v.__cxUserPaused && cxState(v).resumeAt) ? Math.max(0, (cxState(v).resumeAt - Date.now()) / 60000).toFixed(1) : '—';
+          var prog = fmtTime(v.currentTime) + (isFinite(v.duration) && v.duration > 0 ? ' / ' + fmtTime(v.duration) : '');
+          st.textContent = '视频: ' + src + '\n状态: ' + status + ' · 进度 ' + prog + '\n已看 ' + watchMin + 'min · 自动停剩 ' + autoRemain + 'min · 恢复剩 ' + resumeRemain + 'min';
+        }
+        var btn = _cxPanel.querySelector('#__cxBtnPause');
+        if (btn) btn.textContent = (v && v.__cxUserPaused) ? '▶ 恢复续播' : '⏸ 暂停续播';
+      } catch (e) { swallow(e); }   // 视频/状态行填充抛错不得中断后续 renderVideoList/_refreshQuizZone，否则三页全空
+    } catch (e) { swallow(e); }   // 视频/状态行填充抛错不得中断后续 renderVideoList/_refreshQuizZone，否则三页全空
     // 全局诊断信息（含 heap / 桥 / 定向 / 轮询，供反馈；替代原单独 heap 行）
     try {
       var info = _cxPanel.querySelector('#__cxPanelInfo');
@@ -6005,8 +6853,13 @@ try {
       if (!st || !st.scanned && st.scanned !== 0) {   // 本页无引擎统计（非题目页或未扫描）
         total.textContent = done.textContent = remain.textContent = '—';
         var _s = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_source') : null;
-        src.textContent = (_s === 'bank' || _s === 'ai') ? _s : 'random';
+        var _off0 = true; try { if (typeof localStorage !== 'undefined') { var _o0 = localStorage.getItem('cx_quiz_offline'); _off0 = (_o0 === null ? true : _o0 !== '0'); } } catch (e2) {}
+        src.textContent = ((_s === 'bank' || _s === 'ai') ? _s : 'random') + (_off0 ? ' ·离线' : '');
         if (conf) conf.textContent = '—';
+        var _ps0 = p.querySelector('#__cxQuizPendingStat'); if (_ps0) _ps0.textContent = '0';
+        var _sa0 = p.querySelector('#__cxBtnQuizSubmitAll'); if (_sa0) _sa0.style.display = 'none';
+        // 无引擎统计时隐藏人工复核区
+        var _rw0 = p.querySelector('#__cxQuizReviewWrap'); if (_rw0) _rw0.style.display = 'none';
         if (row) row.style.opacity = on ? '1' : '.45';
         return;
       }
@@ -6015,8 +6868,28 @@ try {
       remain.textContent = (typeof st.remaining === 'number') ? st.remaining : '—';
       // 实际命中来源（融合后可见：bank/ai/random 等），回退到配置值
       var _ss = (typeof localStorage !== 'undefined') ? localStorage.getItem('cx_quiz_source') : null;
-      src.textContent = (st.answerSource) ? st.answerSource : ((_ss === 'bank' || _ss === 'ai') ? _ss : 'random');
+      var _srcText = (st.answerSource) ? st.answerSource : ((_ss === 'bank' || _ss === 'ai') ? _ss : 'random');
+      var _off = true; try { if (typeof localStorage !== 'undefined') { var _o = localStorage.getItem('cx_quiz_offline'); _off = (_o === null ? true : _o !== '0'); } } catch (e2) {}
+      if (_off) _srcText += ' ·离线';
+      // 分级标记（评估建议#3/#8：置信度分级可见）—— auto=直接提交 / confirm=待你确认 / review=人工复核
+      var _lv = (st && st.levels) ? String(st.levels) : '';
+      if (_lv.indexOf('review') >= 0) _srcText += ' ·⚠人工复核';
+      else if (_lv.indexOf('confirm') >= 0) _srcText += ' ·待确认';
+      src.textContent = _srcText;
       if (conf) conf.textContent = (typeof st.confidence === 'number') ? (Math.round(st.confidence * 100) + '%') : '—';
+      // 待确认提交数（二次确认模式）
+      var _pend = (st && typeof st.pendingSubmit === 'number') ? st.pendingSubmit : 0;
+      var _pendEl = p.querySelector('#__cxQuizPending'); if (_pendEl) _pendEl.textContent = _pend;
+      var _pendStat = p.querySelector('#__cxQuizPendingStat'); if (_pendStat) _pendStat.textContent = _pend;
+      var _submitAll = p.querySelector('#__cxBtnQuizSubmitAll');
+      if (_submitAll) {
+        var _as = true; try { if (typeof localStorage !== 'undefined') { var _av = localStorage.getItem('cx_quiz_autosubmit'); _as = (_av === null ? true : _av !== '0'); } } catch (e3) {}
+        _submitAll.style.display = (!_as || _pend > 0) ? 'block' : 'none';
+      }
+      // 人工复核队列计数（评估建议#6）：有低置信待复核则显示区与计数
+      var _rc = (st && typeof st.reviewCount === 'number') ? st.reviewCount : 0;
+      var _rw = p.querySelector('#__cxQuizReviewWrap'); if (_rw) _rw.style.display = (_rc > 0) ? 'block' : 'none';
+      var _rcEl = p.querySelector('#__cxQuizReviewCount'); if (_rcEl) _rcEl.textContent = _rc;
       if (row) row.style.opacity = on ? '1' : '.45';
     } catch (e) { swallow(e); }
   }
@@ -6240,6 +7113,7 @@ try {
       var ms = parseInt(arg, 10); if (isNaN(ms)) { Store.emit('ui:toast', '用法: /rescan 500~5000'); return; } CONFIG.RESCAN_INTERVAL = ms; clampCfg(); savePanelCfg();
       try { if (_loopTimer) clearInterval(_loopTimer); } catch (e) { swallow(e); }
       try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
+      try { Store.state._loopTimer = _loopTimer; } catch (e) {}                       // 同步镜像到 Store.state
       syncPanelInputs(); Store.emit('panel:refresh'); Store.emit('ui:toast', '轮询 ' + CONFIG.RESCAN_INTERVAL + 'ms');
     });
     registerCommand('cleardata', '彻底清除脚本写入的 localStorage(cx_* 键)', false, function () {
@@ -6287,7 +7161,7 @@ try {
     // —— 面板 / 模式控制 ——
     registerCommand('ninja', '切换 n 模式（可加 on/off）', true, function (raw, arg) {
       try { if (arg) { var on = !/^off$/i.test(arg.trim()); if (!!CONFIG.NINJA_MODE === on) { Store.emit('ui:toast', 'n 模式已是 ' + (on ? 'on' : 'off')); return; } }
-        toggleNinjaMode(); Store.emit('ui:toast', 'n 模式已' + (CONFIG.NINJA_MODE ? '关' : '开'));
+        toggleNinjaMode(); Store.emit('ui:toast', 'n 模式已' + (CONFIG.NINJA_MODE ? '开' : '关'));
       } catch (e) { swallow(e); }
     });
     registerCommand('single', '单视频模式 on/off（只控制前台视频）', true, function (raw, arg) {
@@ -6719,6 +7593,10 @@ try {
   var _loopTicks = 0, _loopLastTick = 0;   // 诊断#七：主循环健康遥测（已运行轮次 + 上次 tick 时间），供诊断一处查看续播调度是否仍在跑
   try { _loopTimer = setInterval(_loopTick, CONFIG.RESCAN_INTERVAL); } catch (e) { swallow(e); }
 
+  // 真答题引擎：接入 MutationObserver，题目动态出现即触发作答（减少 2s 轮询空窗）
+  try { if (typeof window !== 'undefined' && window.__CX_FORCE_PLAY) window.__CX_FORCE_PLAY.quizObserveDispatch = function () { try { _loopTick(); } catch (e) { swallow(e); } }; } catch (e) {}
+  try { if (typeof quizObserve === 'function') setTimeout(function () { try { quizObserve(document.body || document.documentElement); } catch (e) { swallow(e); } }, 1200); } catch (e) {}
+
   // #1 温和/礼貌模式：全模块加载、站点识别(SITE)已就绪后，按 INTRUSION_MODE 收敛原型中性化装/卸。
   // 加载期(config.js 早于 site-router.js)usePrototypeNeutralize 保守返回 true 已先装原型；
   // 此处对 'auto' 做精确站点解析、对持久化 'gentle' 执行卸载降级，使刷新后的设置即时生效。
@@ -6730,5 +7608,7 @@ try {
   Store.state.ENDED_SRCS = ENDED_SRCS;
   Store.state._watchStats = _watchStats;
   Store.state._loopTimer = _loopTimer;
+  // 暴露脚本版本到命名空间，便于控制台一键核对是否运行了最新构建（空白 tab 排查用）
+  try { window.__CX_FORCE_PLAY.version = SCRIPT_VERSION; } catch (e) {}
 
 })();

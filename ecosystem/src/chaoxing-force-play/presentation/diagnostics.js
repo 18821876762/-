@@ -49,7 +49,15 @@
         var _dsLogin = _ds.loggedIn === true ? '已登录' : (_ds.loggedIn === false ? '未登录' : '未知');
         L.push('DeepSeek[课程页]: 收到跨页广播=' + _got + (_got ? (' connected=' + _ds.connected + ' loggedIn=' + _dsLogin) : ' → 同源BroadcastChannel跨域不可达，课程页收不到DeepSeek已登录'));
       }
-      L.push('  应答端开关=' + (_f.DS_RESPONDER_ENABLED === false ? '关' : '开') + ' · dsAvailable=' + (typeof _f.dsAvailable === 'function' ? _f.dsAvailable() : 'n/a') + ' · 本机host=' + ((typeof location !== 'undefined' && location.host) || '?'));
+      var _dsAvailTxt;
+      if (_site === 'deepseek') {
+        // 应答端本页：dsAvailable() 永远 false（本页只广播不接收自身通道），应显示本页登录就绪态而非误导的 dsAvailable
+        var _li2 = (typeof _f._dsIsLoggedIn === 'function') ? _f._dsIsLoggedIn() : undefined;
+        _dsAvailTxt = '本页就绪=' + (_li2 === true ? '是(已登录可作应答端)' : (_li2 === false ? '否(未登录)' : '未知(选择器待校准)'));
+      } else {
+        _dsAvailTxt = 'dsAvailable=' + (typeof _f.dsAvailable === 'function' ? _f.dsAvailable() : 'n/a');
+      }
+      L.push('  应答端开关=' + (_f.DS_RESPONDER_ENABLED === false ? '关' : '开') + ' · ' + _dsAvailTxt + ' · 本机host=' + ((typeof location !== 'undefined' && location.host) || '?'));
       L.push('  最近请求=' + (_f.DS_LAST_ASK ? (Math.round((Date.now() - _f.DS_LAST_ASK) / 1000) + 's前') : '无') + (_f.DS_LAST_ANSWER ? (' · ' + _f.DS_LAST_ANSWER) : ''));
     }
     // 主循环健康（诊断#七）：确认续播调度仍在跑，避免"看起来没接管"却不知循环已停
@@ -120,7 +128,9 @@
     return L.join('\n');
   }
   function copyDiagnostics() {
-    var txt = buildDiagnostics();
+    var txt;
+    try { txt = buildDiagnostics(); }   // buildDiagnostics 访问 allVideos/_cxAuditProtoPause 等无 typeof 守卫，抛错时降级为错误文本，避免"复制无响应"
+    catch (e) { txt = '诊断生成失败: ' + (e && e.message ? e.message : String(e)); try { swallow(e); } catch (e2) {} }
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(txt).then(function () { Store.emit('ui:toast', '已复制诊断信息'); }, function () { fallbackCopy(txt); });

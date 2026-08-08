@@ -1,6 +1,7 @@
   // ===== DOMAIN: presentation/panel-ds-console (DeepSeek 应答端控制台事件绑定 + 状态刷新) =====
   // 仅在 detectSite()==='deepseek' 时由 ensurePanel 调用。课程页是主控面板，DeepSeek 页是应答端控制台。
   // 从 presentation/panel-core.js 抽出（行数红线合规），与 ensurePanel 同处一个 IIFE 闭包，函数声明 hoist，运行时调用安全。
+  var _dxDsCleanupDone = false;   // 防止多次注册 pagehide 监听
 
   function bindDSConsole(el) {
     if (!el) return;
@@ -24,10 +25,17 @@
         });
       }
       // 注：#__cxNinja / #__cxDebug / #__cxBtnCopy 已由通用绑定区(ensurePanel 主体)统一绑定，此处不再重复，避免双监听
-      // 联动状态实时刷新（每 2s）
+      // 联动状态实时刷新（每 2s）；页面卸载时清理解除此轮询
       _dsUpdateConsole(el);
       if (!window.__cxDsTicker) {
         window.__cxDsTicker = setInterval(function () { try { _dsUpdateConsole(el); } catch (e) { swallow(e); } }, 2000);
+      }
+      // 清理：离开应答端页面时停止 ticker，避免孤立回调及面板引用阻止 GC
+      if (!_dxDsCleanupDone) {
+        _dxDsCleanupDone = true;
+        var _dsCleanup = function () { try { if (window.__cxDsTicker) { clearInterval(window.__cxDsTicker); window.__cxDsTicker = null; } } catch (e) {} };
+        try { window.addEventListener('pagehide', _dsCleanup); } catch (e) {}
+        try { window.addEventListener('unload', _dsCleanup); } catch (e) {}
       }
     } catch (e) { swallow(e); }
   }

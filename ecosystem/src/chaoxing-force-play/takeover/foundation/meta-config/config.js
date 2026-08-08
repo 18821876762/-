@@ -226,6 +226,11 @@
     _ns.getPauseNeutralized = getPauseNeutralized;
     _ns.getRateNeutralized = getRateNeutralized;
     _ns.restorePrototypeNeutralization = restorePrototypeNeutralization;   // 暴露统一还原原语：运行期切换与全卸(cleanupListeners)共用
+    // 暴露装/卸原语（评估清单#7：供卸载对称测试与审计工具驱动，单一事实源，避免两套还原漂移）
+    _ns.installPrototypePauseNeutralize = installPrototypePauseNeutralize;
+    _ns.restorePrototypePause = restorePrototypePause;
+    _ns.installPlaybackRateNeutralize = installPlaybackRateNeutralize;
+    _ns.restorePrototypeRate = restorePrototypeRate;
     _ns.CONFIG = CONFIG;                  // 暴露配置引用（工具库项 tamper-guard 读取 POLITE_MODE 以切换探测方式）
     _ns.detectSite = detectSite;          // 暴露站点识别（#1 回归需断言 edu.cn 视为 chaoxing；presentation/审计亦可复用）
     _ns._pauseNeutralized = _pauseNeutralized;
