@@ -19,6 +19,11 @@ function check(name, condition, detail) {
   if (!condition && detail !== undefined) console.log(JSON.stringify(detail));
 }
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function waitUntil(predicate, timeout = 2000) {
+  const deadline = Date.now() + timeout;
+  while (!predicate() && Date.now() < deadline) await wait(5);
+  return predicate();
+}
 const settled = () => ({ remaining: 0, unsettled: 0, pendingSubmit: 0, reviewCount: 0, pendingAI: 0 });
 
 function load(artifact, on, prepare) {
@@ -59,12 +64,24 @@ function load(artifact, on, prepare) {
     const id = nativeSetInterval(fn, ms); intervals.set(id, { fn, ms, owner: registryOwner }); return id;
   };
   window.clearInterval = function (id) { intervals.delete(id); return nativeClearInterval(id); };
-  const nativeSetTimeout = window.setTimeout.bind(window);
+  const nativeSetTimeout = window.setTimeout.bind(window), nativeClearTimeout = window.clearTimeout.bind(window);
+  const navigationCooldowns = new Set();
   // Only plugin navigation/bootstrap/poll delays are compressed. Media intervals
   // and quiz boot/observation delays retain their normal scheduling.
   window.setTimeout = function (fn, ms, ...args) {
-    return nativeSetTimeout(fn, ms === 300 ? 20 : ms === 1500 ? 30 : ms === 4000 ? 40 : ms, ...args);
+    if (ms === 4000 && typeof fn === 'function') {
+      // Wait for the real cooldown callback to finish before another lesson.
+      // An elapsed wall-clock delay cannot establish that under runner load.
+      const id = nativeSetTimeout(function (...callbackArgs) {
+        try { return fn.apply(this, callbackArgs); }
+        finally { navigationCooldowns.delete(id); }
+      }, 40, ...args);
+      navigationCooldowns.add(id);
+      return id;
+    }
+    return nativeSetTimeout(fn, ms === 300 ? 20 : ms === 1500 ? 30 : ms, ...args);
   };
+  window.clearTimeout = function (id) { navigationCooldowns.delete(id); return nativeClearTimeout(id); };
   let respond = () => Promise.reject(new Error('Offline fixture: bridge unavailable'));
   window.fetch = function (url, options) { requests.push({ url: String(url), options }); return respond(String(url), options); };
   window.XMLHttpRequest = class { open() {} send() { throw new Error('Offline fixture: XHR unavailable'); } abort() {} };
@@ -107,6 +124,7 @@ function load(artifact, on, prepare) {
     bridgeOn() { window.localStorage.removeItem('cx_bridge_off'); window.localStorage.setItem('cx_bridge_on', '1'); },
     addon() { return addons[0]; },
     endedListenerCount() { return endedListeners.size; },
+    navigationCooldownCount() { return navigationCooldowns.size; },
     holdCount() { return ns.TimerRegistry.stats().byOwner['auto-next-hold'] || 0; },
     holdTick() { intervals.forEach(v => { if (v.owner === 'auto-next-hold') v.fn(); }); },
     end(v) { v.dispatchEvent(new window.Event('ended', { bubbles: true })); },
@@ -164,18 +182,19 @@ async function scenarios(artifact) {
     await wait(25);
     check(label + 'duplicate ended waits for submission and does not navigate', next.clicks() === 0);
     e.ns.quizStats = settled();
-    await wait(85);
+    await waitUntil(() => next.clicks() === 1 && e.navigationCooldownCount() === 0);
     check(label + 'settled submission permits a single navigation', next.clicks() === 1);
     e.end(nav); await wait(30);
     check(label + 'successful source identity prevents duplicate navigation', next.clicks() === 1);
     nav.src = 'https://mooc1.chaoxing.com/next-lesson.mp4';
-    e.end(nav); await wait(100);
+    e.end(nav);
+    await waitUntil(() => next.clicks() === 2 && e.navigationCooldownCount() === 0);
     check(label + 'reused video with changed source can navigate again', next.clicks() === 2, { clicks: next.clicks() });
     const retry = e.video('retry'); next.b.remove();
     e.end(retry); await wait(15);
-    const recovered = e.nextButton(); e.end(retry); await wait(65);
+    const recovered = e.nextButton(); e.end(retry);
+    await waitUntil(() => recovered.clicks() === 1 && e.navigationCooldownCount() === 0);
     check(label + 'failed lookup does not consume the video identity', recovered.clicks() === 1);
-    await wait(50);
     const late = e.video('late-dom');
     e.ns.quizStats = settled(); e.ns.quizStats.pendingAI = 1;
     e.end(late); await wait(5); e.addon().set(false); e.ns.quizStats = settled(); await wait(35);
