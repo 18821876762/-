@@ -1,0 +1,1532 @@
+[
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "_idempotency_audit/build-perception.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/_idempotency_audit/build-perception.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T19:41:48.753083+08:00",
+    "Bytes": 23942,
+    "SHA256": "E3F96C8CF7797E76FC77513E1B134B4C51A6C2A1E3F6394A69744AB22A85B432",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "_idempotency_audit/engine-foundation.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/_idempotency_audit/engine-foundation.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T19:40:11.203225+08:00",
+    "Bytes": 26523,
+    "SHA256": "E54D49718375643647C1697C02D45EB1C67B0DB68908F48996A4D96735AB543E",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "_idempotency_audit/presentation-plugins.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/_idempotency_audit/presentation-plugins.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T19:38:24.204526+08:00",
+    "Bytes": 22952,
+    "SHA256": "94FAA5A0381CB3FB533BAAEDBC71023C1401C230D12169B5D227B1F525A4673E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/build-dsfix.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/build-dsfix.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T12:13:39.379806+08:00",
+    "Bytes": 4754,
+    "SHA256": "45CBAED2BAE1D4272BD3540E9AF218AAC700D53106A89AFB7E2B7E50C2CA36A9",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/build-review.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/build-review.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T12:47:43.250868+08:00",
+    "Bytes": 1390,
+    "SHA256": "BC25B0E9B9395D4416E2E27C13EE16E4BD75A7F488B3560904902C3D1240963A",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/build-review2.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/build-review2.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T12:53:04.004949+08:00",
+    "Bytes": 4754,
+    "SHA256": "D18724F8AF407658453643ECC7E9DB7E416B030389E5172D7F61AA0AF3BC94DE",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/build-run.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/build-run.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T13:00:05.621414+08:00",
+    "Bytes": 1390,
+    "SHA256": "95EB05393A0F2CE14664A90C7C1BB3E1D9559CF71599AB0848F2A449D1EADF90",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/build-run3.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/build-run3.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T13:44:21.891423+08:00",
+    "Bytes": 1390,
+    "SHA256": "BA8FC7489AB4E68E212B368A026A8D7F8483E8896DF1BBADDE303BFC6CDB0179",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/build-run4.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/build-run4.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T13:51:27.886239+08:00",
+    "Bytes": 4754,
+    "SHA256": "6A078B0F2A7615ED0B27252C0EC7B8F927154E1389BE20E5DDF8AB1F8169D98C",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "_ninja_test/dependency-graph.html",
+    "ArchivePath": "旧文档/05_演示与历史素材/_ninja_test/dependency-graph.html",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T17:37:02.997904+08:00",
+    "Bytes": 5493,
+    "SHA256": "02086343F45A805AF365E2FAAB07F3A9B43A05CA38F04DEE8363A8377597598C",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_build.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_build.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T17:10:50.457635+08:00",
+    "Bytes": 2598,
+    "SHA256": "51A0315A357EAF2663A0E71D6A94EE2DA2A3729A4F544608D2DD348012707F53",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_fast_check.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_fast_check.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:50:34.237834+08:00",
+    "Bytes": 1728,
+    "SHA256": "FFC6E66C73EBCA0C7DD53973A88AFEC9783A1A7204B4FC0AD49C239A3C2D16CD",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_fast_check2.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_fast_check2.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:51:28.625943+08:00",
+    "Bytes": 4596,
+    "SHA256": "A975D2AA5A7DBD69AB4CF818ADCBF990A3802EA906C6E6BDBBA1354BF55543B5",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_full.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_full.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T17:13:35.635094+08:00",
+    "Bytes": 1390,
+    "SHA256": "B027ACFD9382DD9147DA36FE9110D1807213715916E7844B015499B66E000BED",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_full2.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_full2.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T17:18:22.340347+08:00",
+    "Bytes": 1390,
+    "SHA256": "CEFD68C249260B1BD412DAE1D2F0F71CB5575844FEC23991FC117A764645B56C",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_full3.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_full3.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T17:23:26.708869+08:00",
+    "Bytes": 4658,
+    "SHA256": "EAEC7B1857E9B12F198D85876D129897053FDC2F3EACE2EA1E83802F4920AB0E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_full_check.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_full_check.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:53:44.596087+08:00",
+    "Bytes": 4658,
+    "SHA256": "48E1F98F2D374799421B5058B38837B37DF384635B3428CAC08EA8FC15850013",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:04:44.536669+08:00",
+    "Bytes": 4658,
+    "SHA256": "D8F458C524FF93456786EB42FD110C4DB39886779C8243DBAE5967DA938BE061",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out2.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out2.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:11:57.095808+08:00",
+    "Bytes": 1726,
+    "SHA256": "FF9883BBB20ADB112C94AC91F4505FB64DA34AE18808034B86C5E29A3C7DC266",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out3.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out3.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:14:18.739196+08:00",
+    "Bytes": 4658,
+    "SHA256": "D2DCE1436907A2142AFC4AED6633621BAF90A78ECE862084E75132EB8CFE1316",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out4.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out4.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:22:56.206782+08:00",
+    "Bytes": 4658,
+    "SHA256": "CDC0EEC51E85F98A1B2ABD30AFD65DE222DBA03ABCD746761AEF4A54D541BDCA",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out5.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out5.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:34:58.418144+08:00",
+    "Bytes": 4658,
+    "SHA256": "75FC90755FABDDA2C1732C0123C669B3A654AC93AC408116E042141D4D09F471",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out6.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out6.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:51:40.645867+08:00",
+    "Bytes": 1390,
+    "SHA256": "10502A5A4D0DE3FD4EFA3B1D531F4C79B7DAA0760617CFE142D768B04378F72E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out7.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out7.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:56:28.233529+08:00",
+    "Bytes": 4658,
+    "SHA256": "E3D1BBB4B4A771B8F0939A4FCDDD5695BC3FB49F56C9146BD8648C8B81DE7DAD",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out8.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out8.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:10:35.039165+08:00",
+    "Bytes": 4658,
+    "SHA256": "DED250260B5B782F14B229E5C8055ECA04BE88A255B4946EB48CE672AA9E989B",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_out9.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_out9.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:23:23.642955+08:00",
+    "Bytes": 4658,
+    "SHA256": "3786DF189865F1C949F8E12D69AE8E06C1B704135313E546D591398E0A452AE7",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/gate_quizfix.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/gate_quizfix.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T16:43:25.958718+08:00",
+    "Bytes": 4596,
+    "SHA256": "A5C8C091A3D9D73D9DDFA1E16FD33BEF5F944AA1774D7B0F5C3881146D44EAC8",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/independence-probe.out",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/independence-probe.out",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T16:53:38.76755+08:00",
+    "Bytes": 402,
+    "SHA256": "F00C7725D9C7B92E75555287EC63889982734F482171EB0D11C502DBD830FCBE",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/out.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/out.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-07T18:40:54.984322+08:00",
+    "Bytes": 376,
+    "SHA256": "BF09219E963163DCA378A42C73D3F66BE9FE5B672B7E056AFCC59CC4013CB78C",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "_ninja_test/pptx_build/网课强制续播系统-架构与设计.pptx",
+    "ArchivePath": "旧文档/05_演示与历史素材/_ninja_test/pptx_build/网课强制续播系统-架构与设计.pptx",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-16T18:13:07.848077+08:00",
+    "Bytes": 515832,
+    "SHA256": "B33AFB6924F5DBA078591D7E8709FED83A899BAAD2286E46EB23CFD05ECB467D",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/pure_out.tap",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/pure_out.tap",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:04:55.193984+08:00",
+    "Bytes": 4168,
+    "SHA256": "6FE2906FE7D005EB0726D6F12E113CF87840E20F4F8AD2C0BE0F23420D8B2CAE",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/pure_out.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/pure_out.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:05:18.176189+08:00",
+    "Bytes": 3894,
+    "SHA256": "CD1684F64C3692F414002FAE3E64FC622E2F9F39F79731BCE6D141A67424A6F7",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run-sim-default.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run-sim-default.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T13:53:34.468188+08:00",
+    "Bytes": 3080,
+    "SHA256": "738DD71E1083FB9424743767448CBF6620BE61336386DF4B121BF096B7270227",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run-sim-fail.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run-sim-fail.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T14:04:03.577954+08:00",
+    "Bytes": 4190,
+    "SHA256": "0D10564E0D3E76D9C7CA552A4CB9418664FA0B1A2319AA8B6C6114C266C7009E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run-sim-nt.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run-sim-nt.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T13:51:57.577937+08:00",
+    "Bytes": 3662,
+    "SHA256": "A275834FE832293155299CCF6BD80AC76CF9F168E6F5AB188E41C965E50B917E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run-sim-nt2.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run-sim-nt2.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T16:55:35.603426+08:00",
+    "Bytes": 3662,
+    "SHA256": "D92F39B9DBFF809F6703FE671D986F4A88349840421E98CAF33883CFBB72575A",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run_sim6.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run_sim6.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T11:53:58.479864+08:00",
+    "Bytes": 4264,
+    "SHA256": "A3C17A0ED9D36650E1CEC1650A823118CFA3BAB319D5A4B5A12FDEAD781FA94C",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run_sim8.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run_sim8.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:12:43.912413+08:00",
+    "Bytes": 3640,
+    "SHA256": "848226CB750FBFFBBD30AE32AB0D23464A667BD130F79F691415609F679B1E94",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/run_sim9.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/run_sim9.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:25:19.148904+08:00",
+    "Bytes": 3640,
+    "SHA256": "848226CB750FBFFBBD30AE32AB0D23464A667BD130F79F691415609F679B1E94",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/sim-out.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/sim-out.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T12:50:08.784323+08:00",
+    "Bytes": 4648,
+    "SHA256": "FE9333651811231FC63BEBF73FBA3CF730F14F1F65CA7A9DAE44A8F29D9D5D22",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/sim-run.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/sim-run.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T12:54:50.443239+08:00",
+    "Bytes": 144506,
+    "SHA256": "32AB4BD4F1EF49B77F801162FC154FC15ECC9188808A6ACF23A6828774944D8E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/sim-run2.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/sim-run2.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T13:02:27.404999+08:00",
+    "Bytes": 5448,
+    "SHA256": "93E76DB50AE3DFCB8C60AFC3FF0C0187E132304B094705E4ACE140743DB6B94C",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/sim-run3.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/sim-run3.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T13:46:49.755352+08:00",
+    "Bytes": 5448,
+    "SHA256": "E732637F2932E5FBCA3934AF7F957719B3C3BA48FC08F64452D4E68359A0EE2F",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/sim_out.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/sim_out.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T17:15:33.021672+08:00",
+    "Bytes": 5332,
+    "SHA256": "6431D7646DFA60655D599381FB7035B0F94B402198A2702EFD65B5D16E0586D8",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "_ninja_test/sim_out2.txt",
+    "ArchivePath": "旧文档/06_构建测试历史记录/_ninja_test/sim_out2.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T17:20:17.694864+08:00",
+    "Bytes": 6184,
+    "SHA256": "2810E9B24DCA30D6DA35B8FA8259A0DD8EE582AE79428F8D0AEA3FB01EA5EEC9",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "chaoxing-force-play-architecture.pptx",
+    "ArchivePath": "旧文档/05_演示与历史素材/chaoxing-force-play-architecture.pptx",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-16T18:13:07.848077+08:00",
+    "Bytes": 515832,
+    "SHA256": "B33AFB6924F5DBA078591D7E8709FED83A899BAAD2286E46EB23CFD05ECB467D",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "code-review-report.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/code-review-report.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-10T12:48:40.981858+08:00",
+    "Bytes": 13926,
+    "SHA256": "CCCC98F6EFB0B2771A8BFB6F1A1FD61439BF8449CB03E05BDEC0E0A340A35748",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_AUDIT.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_AUDIT.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-09T17:52:28.105235+08:00",
+    "Bytes": 8760,
+    "SHA256": "60617DECE40A95DFB446ABC3E1685ED2B5082D0546BBBDD66C004757BAFEED82",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_AUDIT_FULL_REPORT_2026-08-24.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_AUDIT_FULL_REPORT_2026-08-24.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-24T20:29:08.584315+08:00",
+    "Bytes": 13942,
+    "SHA256": "F49A2DE3A4E7532171B498675ECC3CAF8ED7625BC5E7F79CB3494A95F6BAA969",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_AUDIT_REPORT_2026-08-14.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_AUDIT_REPORT_2026-08-14.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T21:46:24.375702+08:00",
+    "Bytes": 10722,
+    "SHA256": "24F5DB913119AFFC9949F689DD883C2A7212D1A2B92AA4E156AD3D843F47693B",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_AUDIT_REPORT_2026-08-16.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_AUDIT_REPORT_2026-08-16.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-16T22:09:44.265282+08:00",
+    "Bytes": 9741,
+    "SHA256": "A096C4F8953C39911886D0322870EF99CAE79B25A4995E0E68D8370A3DF896D9",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-13T09:21:26.506802+08:00",
+    "Bytes": 13641,
+    "SHA256": "A2B089A407FDD71B7D990D20C0FB775081479BB2A63A3AB44844F123FBDE1FED",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_2026-08-10.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_2026-08-10.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-11T12:06:22.879323+08:00",
+    "Bytes": 18881,
+    "SHA256": "D073F516A3C9171444106E3DC87B31D7FA73FE14371479602A0495D29A2E975A",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_2026-08-11.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_2026-08-11.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-11T13:20:41.28008+08:00",
+    "Bytes": 18123,
+    "SHA256": "45E87B1DD5D93A2A5CC5B1E58605B01DED87BD04B5DF9F2979F6E3CB7860716B",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_2026-08-12.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_2026-08-12.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-13T08:32:08.717545+08:00",
+    "Bytes": 21329,
+    "SHA256": "2AEE3A09701C7FF335E05D5D70D31986DEE21BAD6B5CC6D293E50466E2C0C48F",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_2026-08-13.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_2026-08-13.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-13T18:20:05.183497+08:00",
+    "Bytes": 13625,
+    "SHA256": "15B1F1329D5165276E44DBCE05A2C551694014ECE5674FB0091DAD0823EDD716",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_CURRENT.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_CURRENT.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-15T08:45:49.798331+08:00",
+    "Bytes": 10517,
+    "SHA256": "E24C2CD3543C993D81179C28DF7BF06BD4502BBB2D3C625CD0D278BEFB82393E",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_FULL.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_FULL.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-11T17:26:18.422883+08:00",
+    "Bytes": 23789,
+    "SHA256": "6B69D79046D9CA04E5D00AF24BC75E9821EA1AB3665FE982BB526B6F2B8F2EA4",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_GUARD_2026-08-19.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_GUARD_2026-08-19.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:26:50.217365+08:00",
+    "Bytes": 7820,
+    "SHA256": "3D6F77EA58F685CCD5817B514516EA7CB12FE5EFF7E6BFBC46F58CA764637E7B",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_IDEMPOTENCY.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_IDEMPOTENCY.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T19:57:14.551735+08:00",
+    "Bytes": 17691,
+    "SHA256": "94CA2D48204703BF19B2F1A9E98B313417AC9122BD510529AA8978032B7C754E",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_RECORD_2026-08-25.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_RECORD_2026-08-25.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-25T10:54:14.082584+08:00",
+    "Bytes": 3926,
+    "SHA256": "03EB30FBF318BA5C662237AC47DDD3965A190BCB36ED61688428A7BE69617E6A",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_RESULT.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_RESULT.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-11T18:40:05.365505+08:00",
+    "Bytes": 17053,
+    "SHA256": "E95CD7E2B57B0CE5DA6696C573C744F1DEA0F630000B9C886688A390F027C26E",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_SANDBOX.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_SANDBOX.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T20:17:37.513613+08:00",
+    "Bytes": 10790,
+    "SHA256": "DF0AA7EAC4CE8379E6A207E1CEEA972FB35D5A7DB7C0189B1DF1A7843382248A",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "CODE_REVIEW_THREADS.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/CODE_REVIEW_THREADS.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T22:43:48.248402+08:00",
+    "Bytes": 8322,
+    "SHA256": "04E8C633593B3C2B806916744BEC8184C61905361E56D8E28A21BE95A106A44E",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "CONTRIBUTING.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/CONTRIBUTING.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-15T08:23:09.361888+08:00",
+    "Bytes": 5222,
+    "SHA256": "C394A73B34F0C712072371D9C4A0DAA3DFD3E3EBAEA57EBCC6B0F05A799993B2",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "docs/_archive/_sim_run.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/docs/_archive/_sim_run.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T19:40:38.420864+08:00",
+    "Bytes": 3752,
+    "SHA256": "F8983A329D4FB443917CB6B87519039B988F83E057DEA7EA945C68E0589D766D",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/_archive/element-dump-research.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/_archive/element-dump-research.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-08T19:04:42.48555+08:00",
+    "Bytes": 4132,
+    "SHA256": "1DDF31B27FD72469A7C9F9D8089469B8D8D9A9B1D57F01C4E22529493F50A65C",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "docs/_archive/prototype.html",
+    "ArchivePath": "旧文档/05_演示与历史素材/docs/_archive/prototype.html",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:42:16.650668+08:00",
+    "Bytes": 28380,
+    "SHA256": "148ABE258D147DE0B70A479997624CD2BAB5FD638C7D642E8556A9A89681B7D2",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/ARCHITECTURE.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/ARCHITECTURE.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-16T17:51:20.447398+08:00",
+    "Bytes": 20395,
+    "SHA256": "A5D846859DAD000D903D5969106F612F0CCE27DCC010A4EA5765A8FBF240FB33",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/ARCHITECTURE_REVIEW.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/ARCHITECTURE_REVIEW.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-16T17:47:51.83862+08:00",
+    "Bytes": 7734,
+    "SHA256": "6DAFD0C55364E7EF5B6A2FAC978988EAEDCAF046E2F4A638DD278FECAD9C563C",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "docs/calibration-guide.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/docs/calibration-guide.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-13T18:46:00.862604+08:00",
+    "Bytes": 7508,
+    "SHA256": "D2055420A59E5150E2BBA9D03D42F3E313E1BCA47C2A813BE6A9A184864AA99D",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/CHANGE_视觉应答可靠性_v4.19.47.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/CHANGE_视觉应答可靠性_v4.19.47.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T13:27:29.578738+08:00",
+    "Bytes": 10345,
+    "SHA256": "4FACD4153A0F9988CD5D3B9039A6C5819BCDF452F4249BB8B8601B6A84A42845",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/CHANGELOG.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/CHANGELOG.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-28T22:02:43.067344+08:00",
+    "Bytes": 328264,
+    "SHA256": "663FF51DF40CFEBFA415EA08E7538ADDA12289535F824193447541FCEF659392",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/code-annotation-history.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/code-annotation-history.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-09T17:52:10.874977+08:00",
+    "Bytes": 7163,
+    "SHA256": "06766B83FF58DE248B7863316B7232B92B272A168DCBF853A3F570F4D637DCED",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/code-review-2026-08-09.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/code-review-2026-08-09.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-09T18:37:10.496274+08:00",
+    "Bytes": 18096,
+    "SHA256": "3E2B9451829F72DE7769A9BFE032EC61883F80DB8D53B15C34D5ABBC999A1E24",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/code-review-contract-2026-08-09.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/code-review-contract-2026-08-09.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-10T08:37:06.192267+08:00",
+    "Bytes": 25636,
+    "SHA256": "93F82DDF4804D2BF8033E49EBEDDB249294E59FAAE30059986B545F5F7BC1C2C",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/code-review-prompt.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/code-review-prompt.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-12T13:12:15.59184+08:00",
+    "Bytes": 13955,
+    "SHA256": "C45E47372370DFA7A4F7124F01DFDE28C5D821C8CA21AA6FC9D227EAB9014BBD",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/CODE_CHECK_2026-09-12.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/CODE_CHECK_2026-09-12.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-09-12T02:04:38.204767+08:00",
+    "Bytes": 3441,
+    "SHA256": "6E3066739128C480078FB53466C400F2CD8CE9E7FE07C2F34DAAE654A038E9E7",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/CODE_REVIEW_ALL_20260819.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/CODE_REVIEW_ALL_20260819.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T22:19:00.866999+08:00",
+    "Bytes": 9261,
+    "SHA256": "5E6B2D442B884638883EA790D4C46CFE12BF0BD27FD6B4B3D1825A108E086BEC",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/CODE_REVIEW_DETAILED.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/CODE_REVIEW_DETAILED.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-10T17:59:35.513419+08:00",
+    "Bytes": 19233,
+    "SHA256": "7FC686D915E04167F959120C957CDFFEBC5EBE1BFC6F8A012F1BB3464E5B08BA",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/CODE_REVIEW_OPTIMIZATION_2026-08-27.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/CODE_REVIEW_OPTIMIZATION_2026-08-27.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T21:07:02.94014+08:00",
+    "Bytes": 5870,
+    "SHA256": "02BBCA2D587128E5863E77E701F0842D07053755CF5E8983F24AB4FB0DD0CE34",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/CODE_REVIEW_RESULT_20260810.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/CODE_REVIEW_RESULT_20260810.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-12T13:12:15.901952+08:00",
+    "Bytes": 22173,
+    "SHA256": "B974BC75C8B1A478DF800B423FBC2D9A3A5E7259F1ED128A875B8E7BF7C9AD3C",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/crawler-framework-architecture.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/crawler-framework-architecture.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-07-25T11:51:06.785195+08:00",
+    "Bytes": 15639,
+    "SHA256": "36695C9BE7EB63E90092AF0498444443A5F7038F009323FB11B44CB0D5847C50",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/CRAWLER_REQUIREMENTS.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/CRAWLER_REQUIREMENTS.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-13T21:49:40.792174+08:00",
+    "Bytes": 12950,
+    "SHA256": "D125F533FD15F328F3BC8D58B4D073E1F80FCDED35050070A0717AE8C5F27C8C",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/DATA_GOVERNANCE_PLAN.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/DATA_GOVERNANCE_PLAN.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-20T20:28:25.350391+08:00",
+    "Bytes": 6502,
+    "SHA256": "A5BDF6CE50EB0BADFEEFAA1C90D4D7900C17E5F84EF9C2B1C3491BF9B576204C",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/DEFERRED_TASKS.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/DEFERRED_TASKS.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-12T13:22:50.486138+08:00",
+    "Bytes": 2911,
+    "SHA256": "0959FC771E4D3F19280BFD009913AC98C56B7BE49449F43B0255623643C9541C",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/design-gentle-polite-mode.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/design-gentle-polite-mode.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-12T13:12:14.73616+08:00",
+    "Bytes": 25614,
+    "SHA256": "5F66BEF461A7C879EFAC414239475AB2397639B3DE4D74AEA3CFB82B000EE56C",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/design-multi-web-ai-responder.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/design-multi-web-ai-responder.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T21:08:57.503246+08:00",
+    "Bytes": 9562,
+    "SHA256": "0366A7552713980C4E712AD288EC1A3BF1D4C50A343FD0EBECD6B36A8AE295DE",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "docs/DOC_INDEX.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/docs/DOC_INDEX.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-20T20:35:51.16405+08:00",
+    "Bytes": 7046,
+    "SHA256": "75341B14E0B34B1CAC3FB3547093EF59E12734F89EA8CB5E887605BBB39F708A",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/PERF_OPTIMIZATION_PROPOSAL.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/PERF_OPTIMIZATION_PROPOSAL.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T19:48:21.326843+08:00",
+    "Bytes": 9308,
+    "SHA256": "82B152F7CB2C4AD441430A2FEA4B9EEE3CEF639A9F6FBB70060597C1D64D72E6",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/PROMPT_ACCURACY_RESEARCH.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/PROMPT_ACCURACY_RESEARCH.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-20T19:40:06.674564+08:00",
+    "Bytes": 5965,
+    "SHA256": "D747DEF82E4F48EB6469292C7BF74896E135EDBEC505C3ADF0E489D051C04835",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "docs/README.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/docs/README.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-14T22:33:49.761761+08:00",
+    "Bytes": 5221,
+    "SHA256": "FE33D5C559B0B0EF868E005A5ECF493B1449E73BBD09A6CF72B83F6CF1152D0C",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/REFACTOR_CROSS_MODULE_DUP.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/REFACTOR_CROSS_MODULE_DUP.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-13T10:38:46.734977+08:00",
+    "Bytes": 3672,
+    "SHA256": "C9E99F340770A03ACBBE64BB3AD85C38B667EF36C1E974B754F2C66298BC838D",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/code_review_full.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/code_review_full.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:20:35.579329+08:00",
+    "Bytes": 14620,
+    "SHA256": "6C344A82D05683672D60E5354677A0FFE46C68E8940C7EEF8CFE981B0EE1E627",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/code_review_report.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/code_review_report.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:20:37.519708+08:00",
+    "Bytes": 25303,
+    "SHA256": "360F3ADB7D7477821FCC2073B91569AD986C8D8B39D5AA8FD224DE29DBBE21D0",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/code_review_report_2026.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/code_review_report_2026.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:21:56.163564+08:00",
+    "Bytes": 12142,
+    "SHA256": "5C1D5771B920DC8265EF6A35009B3DDCAEF3CC26280FE71A87913B194B253CCB",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/force_play_review.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/force_play_review.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:20:39.446333+08:00",
+    "Bytes": 12299,
+    "SHA256": "44FF4D044B5A81DBB57480EB4997C49C21800BABDDA73A4409AEBF7FC061A786",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/force_play_review_333_new.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/force_play_review_333_new.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-07-29T21:05:30.043679+08:00",
+    "Bytes": 4648,
+    "SHA256": "D63D293FFE2788289A3A687846CA6CFF19CC13B1E6AF09310E9E4793B6F5C872",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/README.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/README.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-03T13:13:39.131095+08:00",
+    "Bytes": 1520,
+    "SHA256": "FBEF87BD09B10FA4FF5B7A924D6BDC6E5B3316EE9DDF36039D127CD8B791445B",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/refactor-force-play-coupling-plan.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/refactor-force-play-coupling-plan.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-06T14:49:33.976223+08:00",
+    "Bytes": 22832,
+    "SHA256": "21D6C270E110414F6C79448EEACC799DDD8CB97EE024429645FE45AB285A3CBB",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/remediation-plan.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/remediation-plan.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:21:49.221041+08:00",
+    "Bytes": 11485,
+    "SHA256": "3C462E067F0B22A2023676844CA61832F07208B365D270C131E61DB95DF92DD5",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/review_validation_result.json",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/review_validation_result.json",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:20:41.263654+08:00",
+    "Bytes": 5145,
+    "SHA256": "2ED1F5EB6A08607784E020DEE460A7F7D64892ACCB4EA072D0F66B43CA839A2F",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/security_review.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/security_review.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T21:50:47.398798+08:00",
+    "Bytes": 11418,
+    "SHA256": "7125AED9374797A938DEB4460E41A8645F1216B964A2F16A1B136F2FCB356D14",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/reviews/workspace_code_review.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/reviews/workspace_code_review.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:20:38.461372+08:00",
+    "Bytes": 18557,
+    "SHA256": "6F0E5BA0A885FDD48CE5143963AC375AB27965B63D4B8D01A7BD16A0EB2AEF7A",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "docs/script-direction-review.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/docs/script-direction-review.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-08T19:19:10.52419+08:00",
+    "Bytes": 5234,
+    "SHA256": "EA02E7FEAE72B5247A6760CE1381953A5D10595AA4913D4B73CD82FAB97FD3C7",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/STAGES.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/STAGES.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-01T13:21:48.17795+08:00",
+    "Bytes": 11616,
+    "SHA256": "C313426B855707611A6FB542A4754F502CF87B528627AD3A599C1F81BA70F35A",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/TASK_HISTORY.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/TASK_HISTORY.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-28T19:03:59.944256+08:00",
+    "Bytes": 4502,
+    "SHA256": "3D471B497B42274D7543A8F160695C6423FF4F1E3A97A5291DF8EB0D310EA9F3",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "docs/TASKS.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/docs/TASKS.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-28T19:04:30.970493+08:00",
+    "Bytes": 4343,
+    "SHA256": "536F39AE077599A61494CCBC26B99931829230CB8F3A9C99DCB19E3E83F81B09",
+    "Status": "verified"
+  },
+  {
+    "Category": "02_架构设计与研究",
+    "OriginalPath": "docs/ui-design-main-panel.md",
+    "ArchivePath": "旧文档/02_架构设计与研究/docs/ui-design-main-panel.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T22:33:34.442557+08:00",
+    "Bytes": 15641,
+    "SHA256": "AB3BB63E6B63371BEF30D719D056BBB936954ED5308EDA11BF3367311652D3C1",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "ecosystem/_ninja_test/panel-layout.png",
+    "ArchivePath": "旧文档/05_演示与历史素材/ecosystem/_ninja_test/panel-layout.png",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-20T12:41:10.267349+08:00",
+    "Bytes": 44100,
+    "SHA256": "1AEB94754B9E48828E81E241A0363EB91367D7D56F2CBA8B592074108DE2C4A6",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/_npminstall.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/_npminstall.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-07T15:48:54.719154+08:00",
+    "Bytes": 0,
+    "SHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-audit.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-audit.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:47.990471+08:00",
+    "Bytes": 648,
+    "SHA256": "CAEAA8A91943CE1F8E60BAC5F750D62B0541E832E192EF663E74AF156C784B24",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-gentle.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-gentle.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:38.468351+08:00",
+    "Bytes": 452,
+    "SHA256": "06731184B1A711257171456B0D4BBEE7F58904EF4771EB3430C05475E65B7ABD",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-iframe.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-iframe.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:39.540726+08:00",
+    "Bytes": 738,
+    "SHA256": "B7F4445C6EAB6A2D968630B0C004DAA1AB18EFA3B105AAD314A31D5F2CD2BEE5",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-intrusion-switch.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-intrusion-switch.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:40.467984+08:00",
+    "Bytes": 2542,
+    "SHA256": "3E0DBFB960823547C492610969CE3EB78D3476372C21795A792AC7CEB3784273",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-lifecycle.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-lifecycle.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:41.369664+08:00",
+    "Bytes": 360,
+    "SHA256": "DA310503B4B81061D4F471B19197AC91A7AC7CF2FDF0EC978405583D2F7A70B3",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-mediasession.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-mediasession.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:42.275382+08:00",
+    "Bytes": 482,
+    "SHA256": "BEA76E0D045E15570E0E820326921DD73DA311DACBADA24997E2700873EC4BEA",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-mooc.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-mooc.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:35.390349+08:00",
+    "Bytes": 718,
+    "SHA256": "6CF241A3A0BBB3F36C298DA2FE905B4BA507E71E10C22892A6CBD5CEDD8F4B23",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-ninja.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-ninja.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:43.320767+08:00",
+    "Bytes": 506,
+    "SHA256": "AC9635D390136F48A4CA4B8BB84A332BC9B9AACA3F1A3BC77DCABF2956154B40",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-polite.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-polite.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:34.416054+08:00",
+    "Bytes": 1250,
+    "SHA256": "AE55E55296403F42197BA136636921804F769025411435091732BEE5A20B78B2",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-quiz-vision.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-quiz-vision.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:37.565875+08:00",
+    "Bytes": 1114,
+    "SHA256": "4921D3033725DCF3980BADB6513782D39CEBC3553A0254713A5BDAEA04D5BAC8",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-quiz.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-quiz.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:36.355757+08:00",
+    "Bytes": 814,
+    "SHA256": "95B96A487EF42E732341365ABB3D7E5A42F7B51B25AFCAA97518CB8AC7A1C5B0",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-ui.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-ui.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:44.972031+08:00",
+    "Bytes": 3070,
+    "SHA256": "EBE25A03B575FC7EDE4D355E2FF6621C17A83B7A9012DB03D7C853FCF0436998",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-width.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-width.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:46.085352+08:00",
+    "Bytes": 1590,
+    "SHA256": "01482A4858BFA99093327F048113D640F11359E2B2DE1AB599148BA5956D1801",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/out_sim-zhihuishu.js.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/out_sim-zhihuishu.js.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-05T19:44:47.034305+08:00",
+    "Bytes": 1004,
+    "SHA256": "2DA26AD8A0919179B6A01C801DC85FD99B029F29819FDB5291936AD0C14F12DD",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim/verify.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim/verify.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-06T21:22:15.095409+08:00",
+    "Bytes": 1094,
+    "SHA256": "903EA9004008430422252FE3931106E8AF0745634CC514008C64AD0628AA1AFB",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/_sim_run.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/_sim_run.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T18:56:24.974206+08:00",
+    "Bytes": 3688,
+    "SHA256": "DA3AC8D637626CCECBF146B9A105D54250064A8B7FF5B3C31CB482D03C7931E0",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-28T11:43:44.688705+08:00",
+    "Bytes": 1004,
+    "SHA256": "FD468DF2D81EECFAE0ED7100C8AFBE70CCB6D3EC453747A1039938861A16307E",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_eslint.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_eslint.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:32:00.322932+08:00",
+    "Bytes": 854,
+    "SHA256": "81423C63ED2557F921D7D1306AB363A373B2873934AF68399F78ADBFA5CBA824",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_eslint2.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_eslint2.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:37:27.684201+08:00",
+    "Bytes": 0,
+    "SHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_gate_fast.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_gate_fast.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:31:45.290053+08:00",
+    "Bytes": 4648,
+    "SHA256": "D54CAC5148A8DF2323E22FD5591390A6C24C34D4315659583F6EE3B3EB42A232",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_gate_fast2.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_gate_fast2.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:37:23.225595+08:00",
+    "Bytes": 1728,
+    "SHA256": "FFC6E66C73EBCA0C7DD53973A88AFEC9783A1A7204B4FC0AD49C239A3C2D16CD",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_r7.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_r7.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-10T13:37:44.689155+08:00",
+    "Bytes": 3886,
+    "SHA256": "B09AB6E4689109EA0BF13897D298818C92871C4087DCCC091FCE0B7DFCD2700A",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_sim.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_sim.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:33:49.048391+08:00",
+    "Bytes": 3640,
+    "SHA256": "848226CB750FBFFBBD30AE32AB0D23464A667BD130F79F691415609F679B1E94",
+    "Status": "verified"
+  },
+  {
+    "Category": "06_构建测试历史记录",
+    "OriginalPath": "ecosystem/build_sim2.log",
+    "ArchivePath": "旧文档/06_构建测试历史记录/ecosystem/build_sim2.log",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-19T12:39:17.25633+08:00",
+    "Bytes": 3640,
+    "SHA256": "848226CB750FBFFBBD30AE32AB0D23464A667BD130F79F691415609F679B1E94",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "ecosystem/CODE_REVIEW_REPORT.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/ecosystem/CODE_REVIEW_REPORT.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-23T13:59:08.324823+08:00",
+    "Bytes": 14239,
+    "SHA256": "23E2BB29477A8D73FE4EBBFA2220074F34429282D398A08D082E9C8F5C523DA4",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "ecosystem/docs/CHANGE_诊断信息结构化重排_v4.19.48.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/ecosystem/docs/CHANGE_诊断信息结构化重排_v4.19.48.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-27T18:16:35.7255+08:00",
+    "Bytes": 12601,
+    "SHA256": "59AC480FB1B4807A1F3E5F64BA4511FC6E25A88C0F02ED710106DAC7AF29CC28",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "ecosystem/README.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/ecosystem/README.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-06T13:35:16.674922+08:00",
+    "Bytes": 7715,
+    "SHA256": "20DC767E9EB7D7497059B9CAAF6D0A84B4B57FCD00A35653140CA1735A8837CD",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "ecosystem/src/chaoxing-force-play/填空题回填方案.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/ecosystem/src/chaoxing-force-play/填空题回填方案.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-09-05T13:41:46.584597+08:00",
+    "Bytes": 4783,
+    "SHA256": "C26B1B20B0BCE9A09ABA7C59D070201AAEF8C6008A203D678585E583D768D48E",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "ecosystem/新建 文本文档.txt",
+    "ArchivePath": "旧文档/01_历史评审与审计/ecosystem/新建 文本文档.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-11T16:55:09.055491+08:00",
+    "Bytes": 565064,
+    "SHA256": "DC6E9809CD0B602138ADB1E8716A9CF4CBDF758938F2FB66F27A009D71691B91",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "ecosystem/旧版.txt",
+    "ArchivePath": "旧文档/05_演示与历史素材/ecosystem/旧版.txt",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-07T19:36:21.79436+08:00",
+    "Bytes": 247000,
+    "SHA256": "9C115384C52FCFB2735F6019805392D46DF88C0BF79BECC23E6CA8638D0C2296",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "OPTIMIZATION_PLAN.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/OPTIMIZATION_PLAN.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-12T13:40:59.750754+08:00",
+    "Bytes": 11106,
+    "SHA256": "CE674AF61B7730E6360D375072100B0C2FDC003E59B2F6D4F16FBD25724737D5",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "PERFORMANCE_ANALYSIS.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/PERFORMANCE_ANALYSIS.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-14T22:03:05.716835+08:00",
+    "Bytes": 21934,
+    "SHA256": "3C96882A3C67D58076E5AA4FF07B8D9BAA93C501772BFEF82AECF4B45441F646",
+    "Status": "verified"
+  },
+  {
+    "Category": "01_历史评审与审计",
+    "OriginalPath": "PERFORMANCE_JANK_REPORT.md",
+    "ArchivePath": "旧文档/01_历史评审与审计/PERFORMANCE_JANK_REPORT.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T22:54:08.041499+08:00",
+    "Bytes": 25336,
+    "SHA256": "76DDDB2CFDB16BB867E7B826FA3ACB92CAABBF36267B8E1D7AF586D6BDCFB715",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "README.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/README.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-27T19:09:55.133346+08:00",
+    "Bytes": 3480,
+    "SHA256": "E932AA3E1BD39B88424BC32681087298DA2183C51A7CF0397AEAEAA3C9535479",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "REFACTOR_PLAN.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/REFACTOR_PLAN.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-09T17:36:12.315437+08:00",
+    "Bytes": 6600,
+    "SHA256": "2132ACDD6FACB1EAA247494E1F4B140BF64FA88B9E2E9A6CC03E11EFD4085BD4",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "TASK_PANEL_FREEZE_AND_AUDIT.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/TASK_PANEL_FREEZE_AND_AUDIT.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-17T11:34:04.6837+08:00",
+    "Bytes": 11693,
+    "SHA256": "1CB9C06CBF22A55C70E6E7A17B840DD0F6BF1FFBD532F7AF9581C3CA4EE8319A",
+    "Status": "verified"
+  },
+  {
+    "Category": "03_任务计划与变更",
+    "OriginalPath": "TASK_多选题修复.md",
+    "ArchivePath": "旧文档/03_任务计划与变更/TASK_多选题修复.md",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-16T20:05:41.238067+08:00",
+    "Bytes": 4642,
+    "SHA256": "44522231D4887B99ABBF7461615C87A3422BA677FD834762ED43C22B16145454",
+    "Status": "verified"
+  },
+  {
+    "Category": "05_演示与历史素材",
+    "OriginalPath": "网课强制续播系统-项目介绍.pptx",
+    "ArchivePath": "旧文档/05_演示与历史素材/网课强制续播系统-项目介绍.pptx",
+    "Operation": "move",
+    "OriginalLastWriteTime": "2026-08-29T20:45:24.644376+08:00",
+    "Bytes": 470996,
+    "SHA256": "654E9D68877DF64FCD8C260600D3A311692A8DA8DA6F2E171BA0045D67F025CD",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "chaoxing-force-play/README.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/chaoxing-force-play/README.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-27T19:09:26.95456+08:00",
+    "Bytes": 7568,
+    "SHA256": "1D2CC7E4674C82367B70D199AB2AFED9DEFF6577494B965DFEB168DA06DC7CD9",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "docs/ARCHITECTURE_GOVERNANCE.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/docs/ARCHITECTURE_GOVERNANCE.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-14T22:33:42.3205+08:00",
+    "Bytes": 13491,
+    "SHA256": "967A52E6751BB008A03A19CB4E1D8C07D08D4D15893A2AC4359D11BAD4DB5699",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "docs/error-handling-framework.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/docs/error-handling-framework.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-14T22:33:45.094085+08:00",
+    "Bytes": 1159,
+    "SHA256": "2654DDF86AB68068F9FC0EC1C0D9727591BE928F92BF3000D79227AA689A7DC8",
+    "Status": "verified"
+  },
+  {
+    "Category": "04_旧版说明与索引",
+    "OriginalPath": "docs/QUIZ_PIPELINE.md",
+    "ArchivePath": "旧文档/04_旧版说明与索引/docs/QUIZ_PIPELINE.md",
+    "Operation": "replace",
+    "OriginalLastWriteTime": "2026-08-20T20:35:29.225291+08:00",
+    "Bytes": 21637,
+    "SHA256": "E322E3F39AC2F7E2BEEA7C6AC89CA03F0EA62F04ED17E2FFC966B8D54BE17DCB",
+    "Status": "verified"
+  }
+]

@@ -1,0 +1,90 @@
+{
+  "Date": "2026-10-03",
+  "OriginalCount": 9,
+  "InitialArchiveFilesProtected": 158,
+  "SHAExactDuplicatesAgainstInitialOriginals": 0,
+  "Files": [
+    {
+      "Path": "panduan/chaoxing-force-play.user.js",
+      "SHA256": "B3C55029EAE51F1D036A45A3E8E1E04EF2673310DC0A9E9F488B7F3062B94C69",
+      "Bytes": 72815,
+      "LastWriteTimeUtc": "2026-07-29T12:50:37.418059+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/chaoxing-force-play.user.js",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "panduan/code_review.md",
+      "SHA256": "F3738A4F8A21C9B84F0CC10F2086404F847BA2A27375744D6EC6A81ADBDCB8B1",
+      "Bytes": 17872,
+      "LastWriteTimeUtc": "2026-07-28T11:31:40.192572+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/code_review.md",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "panduan/force_play_analysis.md",
+      "SHA256": "DA93CFCF0CA9F2260DA2F4D46A8C3A9EC2816193FEB52C066639D03DB8A7949F",
+      "Bytes": 14401,
+      "LastWriteTimeUtc": "2026-07-29T02:05:19.177602+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/force_play_analysis.md",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "panduan/force_play_bug_analysis.md",
+      "SHA256": "9EEBA81AA381165B1DE1B4B25CF1E1A40E3CA6261A146827E20B23C06852AEED",
+      "Bytes": 15365,
+      "LastWriteTimeUtc": "2026-07-29T02:27:33.325771+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/force_play_bug_analysis.md",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "panduan/force_play_review_333.md",
+      "SHA256": "6DFC4092DA688911289DF7095AECC174D5A58BC22B9CF0B97F249E5BE0CAFFAA",
+      "Bytes": 12094,
+      "LastWriteTimeUtc": "2026-07-29T12:51:44.964424+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/force_play_review_333.md",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "panduan/force_play_review_333_new.md",
+      "SHA256": "0FFB3C066F05FAE204E0B9C918584EC27A744CEB556B5B6D6B3758CA448CFA47",
+      "Bytes": 8209,
+      "LastWriteTimeUtc": "2026-07-29T12:57:22.858138+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/force_play_review_333_new.md",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "panduan/force_play_v333_review.md",
+      "SHA256": "21B2282588E535A7F5E25D7F6127EDD2724092E0ED3BDAED42FEB61255B00129",
+      "Bytes": 9647,
+      "LastWriteTimeUtc": "2026-07-29T12:52:45.816316+00:00",
+      "Action": "move",
+      "Destination": "旧文档/07_补充归档/2026-10-03/01_历史评审/panduan/force_play_v333_review.md",
+      "Reason": "针对 v3.15/v3.16/v3.33 的历史评审及配套脚本快照"
+    },
+    {
+      "Path": "docs/ARCHITECTURE_GOVERNANCE.md",
+      "SHA256": "B95E3E3D5EC2196A5584C59B728753FEE5F6ACDC20FADBD57428D1168D2896AC",
+      "Bytes": 11771,
+      "LastWriteTimeUtc": "2026-10-02T15:53:25.189631+00:00",
+      "Action": "copy",
+      "Destination": "旧文档/07_补充归档/2026-10-03/02_版本说明备查/docs/ARCHITECTURE_GOVERNANCE.md",
+      "Reason": "整理前混合现行说明与历史版本记录，保留完整原文再更新现行说明"
+    },
+    {
+      "Path": "docs/QUIZ_PIPELINE.md",
+      "SHA256": "C891E7E9D8BA4F8C8B74B54E14BC4A81E33AFE4C41739C69760BAF7044CCB6FC",
+      "Bytes": 21832,
+      "LastWriteTimeUtc": "2026-10-02T15:30:16.495277+00:00",
+      "Action": "copy",
+      "Destination": "旧文档/07_补充归档/2026-10-03/02_版本说明备查/docs/QUIZ_PIPELINE.md",
+      "Reason": "整理前混合现行说明与历史版本记录，保留完整原文再更新现行说明"
+    }
+  ],
+  "Note": "Same filenames can represent different review and repair stages; all originals retained."
+}

@@ -10,7 +10,9 @@ __pycache__/
 
 # Build / dist
 build/
-dist/
+/dist/*
+!/dist/*.user.js
+!/dist/README.md
 *.egg-info/
 
 # IDE / OS
@@ -25,13 +27,34 @@ dist/
 
 # Secrets / credentials — 切勿提交（含真实学习通会话，误提交即永久泄露）
 cookies.json
-perception/cx_crawler/cookies.json
+services/perception/cx_crawler/cookies.json
+services/perception/cx_crawler/courses.json
+services/perception/cx_crawler/bridge_config.json
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+id_rsa
+id_ed25519
+storage-state*.json
+storage_state*.json
+auth-state*.json
+auth_state*.json
+browser-profile*/
+browser_profile*/
+playwright-profile*/
+profiles/
 
 # Crawler output（含个人课程/进度数据，属轻度 PII）
-perception/cx_crawler/output/
+services/perception/cx_crawler/output/
+
+# 抓包日志（cx-capture 产出，含 Cookie/Authorization/会话参数，误提交即会话泄露，勿入版本库）
+apps/userscript/tools/capture/logs/
 
 # 绿色版 Node（本地语法校验用，非运行时依赖，随环境安装）
-node_home/
+tools/runtime/node_home/
 node-v*-win-x64.zip
 
 # 依赖安装产物（_sim 等模拟用例的 npm 依赖，非源码，勿入版本库）
@@ -39,7 +62,28 @@ node_modules/
 
 # 可重新生成的临时产物（调查 diff 转储、jsdom 回归比对输出，勿入版本库）
 .tmp_*.diff
-ecosystem/_sim/out-*.txt
+apps/userscript/_sim/out-*.txt
 
 # git bundle 交付物（便携仓库副本，用于离线搬运，勿入版本库）
 *.bundle
+
+# 临时/调试产物（由构建、测试、调查/复现脚本产生，可安全删除，勿入版本库）
+# 根目录：调试与复现脚本
+_d*.js
+_d*_out.txt
+_sim_*.txt
+_sim_*.ps1
+_xmc_*.txt
+_xmc_*.js
+_tmp_*.log
+_tmp_*.txt
+# 子目录临时产物（尺寸/样式/覆盖率探针等；注意 build-manifest.txt 是构建必需输入，已从忽略中移除）
+*_tmp.js
+_style_*
+_cov-probe*
+_tmp*
+
+# Local migration snapshots, patches and diagnostic outputs
+/backups/
+/tools/diagnostics/output/
+.pytest_cache/

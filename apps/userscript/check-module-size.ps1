@@ -1,0 +1,51 @@
+﻿# check-module-size.ps1
+# 单文件行数红线自检（参见 docs/ARCHITECTURE_GOVERNANCE.md §2/§5）
+#   - > HARD 且不在白名单 -> RED，退出码 1
+#   - SOFT..HARD          -> YELLOW（提示可拆分）
+#   - <= SOFT             -> OK
+$ErrorActionPreference = 'Stop'
+
+# 基于脚本自身位置解析，避免硬编码本机绝对路径导致 CI(云端)路径不存在而报错。
+# 本脚本位于 apps/userscript/，目标模块树为 apps/userscript/src/chaoxing-force-play。
+$root = Join-Path $PSScriptRoot 'src/chaoxing-force-play'
+$SOFT = 300
+$HARD = 350
+
+# whitelist: high-cohesion historical files pending refactor (do NOT add new entries; only takeover/dom/dom.js)
+# takeover/dom/dom.js: 670 lines at the 2026-10-10 check (including comments and blank lines).
+# Remaining content contains the takeover engine (overrideVideo / walkVideos /
+# neutralizeGlobalPause / MO). Keep the existing exception until a justified seam appears.
+$whitelist = @('takeover/dom/dom.js')
+# deprecated: old files superseded by the refactored domain modules; NOT built. Delete to comply.
+$deprecated = @()
+
+$files = Get-ChildItem -Path $root -Recurse -Filter *.js | Sort-Object FullName
+$red = 0
+Write-Output ('MODULE SIZE GATE  soft=' + $SOFT + '  hard=' + $HARD)
+Write-Output '----------------------------------------'
+foreach ($f in $files) {
+  $t = [IO.File]::ReadAllText($f.FullName, [Text.Encoding]::UTF8)
+  $n = ($t -split "`r?`n").Count
+  $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
+  $tag = 'OK '
+  if ($deprecated -contains $rel) { $tag = 'DEP' }
+  elseif ($n -gt $HARD) {
+    if ($whitelist -contains $rel) { $tag = 'WHT' }
+    else { $tag = 'RED'; $red++ }
+  } elseif ($n -gt $SOFT) { $tag = 'YLW' }
+  $line = '{0,-6} {1,5}  {2}' -f $tag, $n, $rel
+  Write-Output $line
+}
+Write-Output '----------------------------------------'
+if ($red -gt 0) {
+  Write-Output ('FAIL: ' + $red + ' file(s) exceed hard limit ' + $HARD + ' (not whitelisted). Split or move content per governance doc.')
+  exit 1
+} else {
+  Write-Output 'PASS: no non-whitelisted file exceeds hard limit.'
+  $dep = Get-ChildItem -Path $root -Recurse -Filter *.js | Where-Object { $deprecated -contains $_.FullName.Substring($root.Length + 1).Replace('\', '/') }
+  if ($dep.Count -gt 0) {
+    Write-Output ('NOTE: ' + $dep.Count + ' deprecated file(s) still present (superseded by domain modules, not built). Delete to fully comply:')
+    $dep | ForEach-Object { Write-Output ('  - ' + $_.FullName.Substring($root.Length + 1).Replace('\', '/')) }
+  }
+  exit 0
+}

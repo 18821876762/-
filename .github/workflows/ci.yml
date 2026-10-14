@@ -2,78 +2,109 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  gate:
+    name: Build and local validation
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
-      - name: Checkout (full history for git SHA injection)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Build user script
+          node-version: '24'
+      - name: Install Python test dependencies
+        run: python -m pip install -r services/perception/cx_crawler/requirements.txt
+      - name: Install locked application dependencies
+        working-directory: apps/userscript
+        run: npm ci
+      - name: Release checker regression
+        run: node --test scripts/tests/release-assets.test.cjs
+      - name: Build both variants and synchronize latest
         shell: pwsh
         run: |
-          cd ecosystem
-          pwsh -ExecutionPolicy Bypass -File build-force-play.ps1
-
-      - name: Syntax check built artifact (node --check)
+          pwsh -ExecutionPolicy Bypass -File scripts/build.ps1 -SkipSim -Minify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -ExecutionPolicy Bypass -File scripts/build.ps1 -Variant open -SkipSim -Minify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Pure functions, answer merge, contracts, all local sims and Python
         shell: pwsh
-        run: |
-          cd ecosystem
-          # 源模块是 IIFE 碎片（core.js 仅 opener、main-loop.js 仅 closer），不能单独 --check；
-          # 语法正确性由完整构建产物（单一 IIFE）代表，对其做 node --check。
-          node --check chaoxing-force-play.user.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          Write-Host "syntax check: built artifact OK"
-
-      - name: Install lint toolchain
-        shell: pwsh
-        run: |
-          cd ecosystem
-          npm install --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-
-      - name: ESLint static analysis (built artifact)
-        shell: pwsh
-        run: |
-          cd ecosystem
-          # 审查整改 #9：对完整构建产物做静态分析门禁。
-          # 源模块因被拼接进同一 IIFE 无法单独解析，故仅 lint 产物（源级语法由 build 的 node --check 退化为整体 --check）。
-          # error 级规则（no-undef 等）出现即失败；warn 级（已知 no-redeclare 技术债）不阻断。
-          node node_modules/eslint/bin/eslint.js chaoxing-force-play.user.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          Write-Host "eslint: built artifact OK"
-
+        run: pwsh -ExecutionPolicy Bypass -File scripts/test.ps1
       - name: Module size gate
         shell: pwsh
-        run: |
-          cd ecosystem
-          pwsh -ExecutionPolicy Bypass -File check-module-size.ps1
-
-      - name: Built artifact size gate
+        run: pwsh -ExecutionPolicy Bypass -File apps/userscript/check-module-size.ps1
+      - name: Python syntax
+        shell: pwsh
+        run: python -m compileall -q -x '(^|[\\/])(\.venv|venv|env)([\\/]|$)' services/perception/cx_crawler
+      - name: Record exact artifact identity
+        run: node scripts/release-assets.cjs manifest --out dist/release-manifest.json
+      - name: Require every uploaded release file
         shell: pwsh
         run: |
-          cd ecosystem
-          node tools/check-build-size.js
-
-      - name: Pure-function unit tests
-        shell: pwsh
-        run: |
-          cd ecosystem
-          node tests/pure.test.js
-
-      - name: Upload built user script
+          foreach ($file in @('dist/chaoxing-force-play.user.js', 'dist/chaoxing-force-play.open.user.js', 'dist/chaoxing-force-play-latest.user.js', 'dist/release-manifest.json', 'LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md')) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required release file missing: $file" }
+          }
+      - name: Upload validated products and notices
         uses: actions/upload-artifact@v4
         with:
-          name: chaoxing-force-play.user.js
-          path: ecosystem/chaoxing-force-play.user.js
+          name: userscript-build-${{ github.sha }}
+          path: |
+            dist/chaoxing-force-play.user.js
+            dist/chaoxing-force-play.open.user.js
+            dist/chaoxing-force-play-latest.user.js
+            dist/release-manifest.json
+            LICENSE
+            NOTICE.md
+            THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+
+  browser-sim:
+    name: Browser validation of this build
+    needs: gate
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: userscript-build-${{ github.sha }}
+          path: .ci-artifact
+      - name: Verify downloaded products against checkout and gate hashes
+        shell: pwsh
+        run: |
+          foreach ($file in @('dist/chaoxing-force-play.user.js', 'dist/chaoxing-force-play.open.user.js', 'dist/chaoxing-force-play-latest.user.js', 'dist/release-manifest.json', 'LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md')) {
+            if (-not (Test-Path -LiteralPath ".ci-artifact/$file" -PathType Leaf)) { throw "Required downloaded release file missing: $file" }
+          }
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item -LiteralPath .ci-artifact/dist/chaoxing-force-play.user.js -Destination dist/chaoxing-force-play.user.js -Force
+          Copy-Item -LiteralPath .ci-artifact/dist/chaoxing-force-play.open.user.js -Destination dist/chaoxing-force-play.open.user.js -Force
+          Copy-Item -LiteralPath .ci-artifact/dist/chaoxing-force-play-latest.user.js -Destination dist/chaoxing-force-play-latest.user.js -Force
+          node scripts/release-assets.cjs check --manifest .ci-artifact/dist/release-manifest.json --artifact-dir .ci-artifact --commit '${{ github.sha }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install locked browser test dependencies
+        working-directory: apps/userscript/_sim
+        run: npm ci
+      - name: Install Chromium
+        working-directory: apps/userscript/_sim
+        run: npx playwright install chromium
+      - name: Run five browser entrypoints
+        working-directory: apps/userscript
+        shell: pwsh
+        run: |
+          foreach ($file in @('smoke-pw.js', 'sim-iframe-pw.js', 'sim-bridge-noise-pw.js', 'sim-panel-scroll-pw.js', 'sim-safety-visible-pw.js')) {
+            node "_sim/$file" 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: $file"; exit 1 }
+            Write-Host "PASS: $file"
+          }

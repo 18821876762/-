@@ -1,0 +1,10 @@
+const projectPaths = require('./project-paths.cjs');
+const fs = require('fs');
+const s = fs.readFileSync(projectPaths.latestBundle, 'utf8');
+const m = s.match(/\/\/ @version\s+(\S+)/);
+console.log('ROOT @version:', m ? m[1] : 'MISSING');
+console.log('ROOT has quizPageSubmitted export:', s.indexOf('quizPageSubmitted') > -1);
+console.log('ROOT narrowed: workResult kept:', s.indexOf('[class*="workResult"]') > -1);
+console.log('ROOT narrowed: bare score/grade removed:', s.indexOf('[class*="score"],[class*="Score"]') < 0 && s.indexOf('[class*="grade"],[class*="Grade"]') < 0);
+console.log('ROOT has auto-submit gate in pageSubmitted:', s.indexOf('_quizAutoSubmit() && !_anyBtn') > -1);
+console.log('ROOT size:', s.length);

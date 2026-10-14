@@ -1,0 +1,34 @@
+{
+  "name": "chaoxing-force-play",
+  "version": "4.20.3",
+  "private": true,
+  "description": "网课强制续播 用户脚本（零运行时依赖单文件）— 开发期静态检查/测试工具链",
+  "scripts": {
+    "build": "powershell -ExecutionPolicy Bypass -File build-force-play.ps1",
+    "lint": "eslint --no-eslintrc --no-ignore --config .eslintrc.cjs ../../dist/chaoxing-force-play.user.js",
+    "test": "node tests/pure.test.js",
+    "test:sim": "node scripts/run-sim.js",
+    "capture": "node tools/capture/capture-server.js",
+    "capture:analyze": "node tools/capture/analyze.js",
+    "selftest:capture": "node tools/capture/capture-server.js --selftest",
+    "selftest:capture-hook": "node tools/capture/selftest-hook.cjs",
+    "verify:contracts": "node scripts/verify_contracts.js",
+    "verify:contract-doc": "node scripts/verify_contract_doc.js",
+    "verify:contract-semantics": "node scripts/verify_contract_semantics.js",
+    "selftest:contract-semantics": "node scripts/selftest_contract_semantics.js",
+    "verify:metadata": "node scripts/verify_metadata.js",
+    "selftest:metadata": "node scripts/selftest_metadata.js",
+    "contract:doc": "node scripts/verify_contract_doc.js --emit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "eslint": "^8.57.0",
+    "eslint-scope": "7.2.2",
+    "espree": "9.6.1",
+    "jsdom": "^29.1.1"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.15.0"
+  }
+}

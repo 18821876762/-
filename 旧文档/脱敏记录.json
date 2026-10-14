@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-13",
+  "known_literal_types": [
+    "clazzid",
+    "courseid",
+    "cpi",
+    "enc",
+    "personid",
+    "userid"
+  ],
+  "known_literal_count": 6,
+  "files_changed": [
+    {
+      "file": "apps/userscript/_sim/sim-auto-next.js",
+      "replacements": 2,
+      "before_sha256": "bda99de83049873446f289b888f34c81242cd20a743df5499707185638420579",
+      "after_sha256": "694b844b4976b2e82c69b07b4b861b0f5044d352515d8ad99dcd5af154a58f50"
+    },
+    {
+      "file": "services/perception/cx_crawler/courses.example.json",
+      "replacements": 1,
+      "before_sha256": "44dbe2c596afae17a1385283391558b759dc91238d1f8113f22633badfc04921",
+      "after_sha256": "17d9724892432e25f82c0204fa43d44965ccf7cff71d134e2e4e8ba358ca2cd1"
+    },
+    {
+      "file": "旧文档/01_历史评审与审计/docs/reviews/security_review.md",
+      "replacements": 2,
+      "before_sha256": "7125aed9374797a938deb4460e41a8645f1216b964a2f16a1b136f2fcb356d14",
+      "after_sha256": "1715e79d17d0e52f23706e464f7f00b8df41db736cd9146e9bd869045f4a3a52"
+    },
+    {
+      "file": "旧文档/旧文档_2026-10-02.zip",
+      "replacements": 2,
+      "before_sha256": "1afc2a52e5391d0604b0ad5c1a31ca2d5efe135938a2d34a09d9f25615d2a3eb",
+      "after_sha256": "fc21cc9a895ab3dec17b949e39234ee34e99affc181bc37efee66610eee019f3"
+    }
+  ],
+  "archive_entries_changed": [
+    {
+      "archive": "旧文档/旧文档_2026-10-02.zip",
+      "entry": "01_历史评审与审计/docs/reviews/security_review.md",
+      "replacements": 2,
+      "before_sha256": "7125aed9374797a938deb4460e41a8645f1216b964a2f16a1b136f2fcb356d14",
+      "after_sha256": "1715e79d17d0e52f23706e464f7f00b8df41db736cd9146e9bd869045f4a3a52"
+    }
+  ],
+  "original_values_retained": false,
+  "git_history_rewritten": false,
+  "raw_originals_location": "ignored backups/fixes/2026-10-13/security-publication/修正前快照.zip"
+}

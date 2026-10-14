@@ -1,0 +1,17 @@
+const projectPaths = require('./project-paths.cjs');
+const fs = require('fs');
+const s = fs.readFileSync(projectPaths.latestBundle, 'utf8');
+const v = s.match(/\/\/ @version\s+(\S+)/);
+console.log('ROOT @version:', v ? v[1] : 'MISSING');
+console.log('toast 作答失败:', s.indexOf('⛔ 作答失败') > -1);
+console.log('toast 识别未成功:', s.indexOf('题目识别未成功，已随机兜底') > -1);
+console.log('toast 待确认提交:', s.indexOf('·已点选·待确认提交') > -1);
+console.log('toast 待人工复核:', s.indexOf('·已随机兜底·待人工复核') > -1);
+console.log('light kind in payload:', s.indexOf('kind: x.kind') > -1);
+console.log('busyLabels 待确认提交:', s.indexOf("confirm: '待确认提交'") > -1);
+console.log('busyLabels 待人工复核:', s.indexOf("review: '待人工复核'") > -1);
+console.log('tooltip 黄=作答中/待确认/待复核:', s.indexOf('黄=作答中/待确认/待复核') > -1);
+console.log('old 标记人工复核 removed:', s.indexOf('标记人工复核') < 0);
+console.log('old 待你确认提交 removed:', s.indexOf('待你确认提交') < 0);
+console.log('old 题目识别失败 removed:', s.indexOf('题目识别失败') < 0);
+console.log('ROOT size:', s.length);

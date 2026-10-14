@@ -1,207 +1,130 @@
-# 超星（学习通）自动化套件 · 使用文档
+# 使用说明
 
-本仓库包含两部分：
+核实日期：2026-10-13。核心用户脚本版本：4.20.3。本页说明当前安装、面板操作和可选本地桥；项目布局见 [目录结构](PROJECT_STRUCTURE.md)。
 
-1. **爬虫（`perception/cx_crawler/`，Python）**：读取优先、绝不提交/修改平台数据；产物落盘到 `perception/cx_crawler/output/`。
-2. **浏览器用户脚本（`*.user.js`，Tampermonkey）**：在学习通网页内运行，负责强制续播、自动下一章等。
+## 安装与日常操作
 
-两者通过**本地桥（方案 A）**衔接：爬虫把逐章清单写到本地文件，再由 `bridge.py` 以只读 HTTP（`127.0.0.1`）暴露，浏览器脚本用 `fetch` 拉取。
+在浏览器用户脚本管理器中打开 [最新安装脚本](../dist/chaoxing-force-play-latest.user.js) 并安装。此文件对应个人版；同一浏览器只保留一个核心版本，避免同时注入个人版、公开版和 latest。分发文件说明见 [dist](../dist/README.md)。
 
-> 不启动桥 / 桥不在线时，所有用户脚本**自动回退**到原有的纯 DOM 启发式行为，不会失效。
+打开脚本元信息 `@match` 覆盖的课程页面后，查看悬浮面板。**P 键只切换面板显示，不直接暂停视频**；输入框聚焦时不处理该快捷键。暂停和恢复续播使用面板按钮，或已启用的快捷键增强。
 
----
+| 操作 | 当前行为 |
+| --- | --- |
+| 续播卡 | 调整接管、视频选择、速率、循环、停止计时与暂停后恢复 |
+| 做题卡 | 调整自动答题、自动启动、答案来源和提交策略；具体操作受站点适配与引擎开关约束 |
+| 工具库 | 管理已内置的自动下一课、Space/M 快捷键、篡改报警和视频结束通知 |
+| 洞察/诊断 | 查看站点识别、接管状态、提示和问题信息 |
 
-## 1. 环境准备
+新配置的主要默认值如下；面板持久化配置可以覆盖它们。
 
-- Python 3.8+，并 `pip install -r perception/cx_crawler/requirements.txt`。
-- 浏览器安装 [Tampermonkey](https://www.tampermonkey.net/)（或同类管理器）。
-- （可选）若需爬虫回填任务点 `objectid`/`jobid`（让白名单更精确），需 `pip install playwright && playwright install msedge`，并把 `config.py` 的 `RENDER_JOBS` 设为 `True`。
+| 配置或存储键 | 默认值 | 用途 |
+| --- | --- | --- |
+| `PAUSE_HOTKEY` | `p` | 显示或隐藏面板 |
+| `RESCAN_INTERVAL` | 2000 ms | 全量重扫间隔 |
+| `USER_RATE` | 1 | 被接管视频的播放速率 |
+| `LOOP_PLAY` | false | 结束后循环播放 |
+| `AUTO_STOP_MIN` | 0 | 累计观看到指定分钟后停止；0 为关闭 |
+| `RESUME_AFTER_MIN` | 0 | 暂停后恢复计时；0 为保持暂停 |
+| `cx_quiz_auto` | 开启 | 通用自动答题总开关，设为 `0` 关闭 |
+| `cx_quiz_auto_start` | 开启 | 检测后自动开始；关闭后登记题目并等待手动开始 |
+| `cx_quiz_source` | `random` | 答案来源，可在面板切换题库或 AI |
+| `cx_quiz_autosubmit` | 开启 | 自动提交；设为 `0` 后挂起待确认 |
+| `cx_an_on` | 关闭 | 学习通自动下一课 |
+| `cxKb_on` / `cxTg_on` / `cxEndedNotify` | 开启 | 快捷键、篡改报警、结束通知 |
 
----
+自动下一课优先查找页面中的题目入口和下一节入口。平台结构、任务解锁条件或弹窗变化可能影响跳转；出现验证码时，先完成人工验证，再检查面板状态。操作细节见 [内置插件](modules/decision.md)。
 
-## 2. 桥（bridge.py）启动
+## 官方 API Key 与配置数据
 
-### 2.1 先生成清单
+在面板“使用官方 API Key”的专用密码框输入 Key，然后移开焦点触发保存。密码框随即清空，不回显。状态显示私有持久化是否可用及授权端点 Origin，不显示 Key；无法使用管理器私有存储时仅在当前页面会话有效，刷新后重新输入。
 
-```bash
-cd perception/cx_crawler
-python dump.py
+保存非空 Key 时，当前 API 端点的完整 Origin 与 Key 一起放入私有存储，发送时必须匹配该授权 Origin。更改公开 CONFIG 或页面白名单不授予另一 Origin；切换服务地址后重新输入并保存 Key。远程凭据请求要求 HTTPS 并拒绝重定向。
+
+“清除 API Key”按钮或“恢复默认”清除凭据及授权绑定。旧 cx_quiz_vision_api_key 页面 localStorage 会被删除；旧格式迁移记录在重新保存前不授权发送。不要通过 CONFIG.QUIZ_VISION_API_KEY 或 localStorage 设置密钥。
+
+普通配置可以导入、导出；导出移除凭据及嵌套凭据字段，导入包含这些字段会拒绝整份配置。提交问题报告时仅提供脱敏配置和状态；私有管理器能力仍需在真实管理器中确认。更多边界见 [账号与数据安全](../SECURITY.md)。
+
+## 可选感知组件
+
+| 组件 | 位置与作用 |
+| --- | --- |
+| 进度面板 3.6 | [独立脚本](../services/perception/chaoxing-progress-panel.user.js)，安装后注册为核心面板的副面板；通过浏览器登录态向平台发送 GET 请求 |
+| 媒体采集器 1.2 | [独立脚本](../services/perception/chaoxing-media-collector.user.js)，记录已打开媒体的地址与元信息，存于脚本管理器并可导出 |
+| Python 爬虫 2.3 | [cx_crawler](../services/perception/cx_crawler/README.md)，抓取本地快照并生成章节清单 |
+| Python 本地桥 | 将已有章节清单通过本机 HTTP 提供给用户脚本 |
+
+进度面板不依赖 Python 桥；其中“本机已看”来自本地统计，不等同于平台确认的学习进度。媒体采集器独立运行，不加入核心面板，也不由桥转发媒体。
+
+基础续播可以在未启动 Python 组件时运行。桥仅提供 `/ping` 和 `/playlist/...`，不提供媒体服务、DeepSeek 应答服务或 AI 接口。逆向答题接口是另一组件，见 [协议说明](REVERSE_API.md)。
+
+## 准备与启动 Python 桥
+
+以下命令使用 PowerShell，均从项目根目录开始。Python 完整功能按 **3.10+** 准备；安装步骤按需执行一次，运行前在爬虫目录准备有效的 `cookies.json`，格式和配置见 [爬虫说明](../services/perception/cx_crawler/README.md)。
+
+```powershell
+Set-Location 'D:\gongJu\xiangmu\xiangmu-xue.xi.tong'
+Push-Location '.\services\perception\cx_crawler'
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# 准备 cookies.json 后生成清单；会访问学习通并更新本地 output
+.\.venv\Scripts\python.exe dump.py
+Pop-Location
 ```
 
-产物：`output/playlist_{cid}.json`（每课程逐章：knowledgeId / completed / unfinishedCount / hasTaskPoints / objectids / jobids）+ 汇总 `output/playlist_index.json`（原子写）。
+另开一个 PowerShell 终端启动桥；桥在前台常驻，按 Ctrl+C 退出。
 
-> `objectids` 预填依赖 `RENDER_JOBS=True`（渲染任务点页面）。**`RENDER_JOBS=False`（默认）时 `objectids` 恒为空**，桥的「精确任务点清单」增强整体失效：浏览器端退而读取网页内的 `window.attachments` DOM 启发式，定向续播精度下降（可能回退到全量续播），但主流程不受影响。
-
-### 2.2 启动只读桥服务
-
-```bash
-cd perception/cx_crawler
-python bridge.py                 # 默认 127.0.0.1:7531，前台常驻，Ctrl+C 退出
+```powershell
+Set-Location 'D:\gongJu\xiangmu\xiangmu-xue.xi.tong'
+& '.\services\perception\cx_crawler\.venv\Scripts\python.exe' '.\services\perception\cx_crawler\bridge.py' --host 127.0.0.1 --port 7531
 ```
 
-验证：浏览器打开 `http://127.0.0.1:7531/ping` 应返回 `{"ok": true, ...}`。
+未建立虚拟环境时，可将上述解释器路径替换为已安装依赖的 `python`。`run_bridge.bat` 使用 PATH 中的 Python，未保证使用项目的虚拟环境。
 
-接口一览：
-
-| 接口 | 说明 |
-|------|------|
-| `GET /ping` | 健康检查（脚本据此自动探测端口） |
-| `GET /playlist/index` | 汇总清单 |
-| `GET /playlist/{courseid}` | 某课程逐章清单 |
-
-### 2.3 端口可配置化（优先级：高 → 低）
-
-1. 命令行（最高）：`python bridge.py --host 0.0.0.0 --port 7532` ；或 `--config bridge_config.json`
-2. 环境变量：`CX_BRIDGE_HOST` / `CX_BRIDGE_PORT`
-3. 同目录配置文件 `perception/cx_crawler/bridge_config.json`：`{"host":"127.0.0.1","port":7531}`（模板见 `bridge_config.example.json`）
-4. 默认值：`127.0.0.1:7531`
-
-> **保持本机地址 `127.0.0.1`**：`127.0.0.1` 属 potentially-trustworthy origin，https 页面可直接 `fetch`，无混合内容拦截。对外暴露 `0.0.0.0` 仅在你明确需要跨设备访问时设置。
-
-脚本侧如何对齐端口见 §4.3。
-
----
-
-## 3. 浏览器脚本安装与开关
-
-2026-07-30 架构重组：**主脚本 + 工具库项**。主脚本 `force-play` 提供悬浮主控面板（按 `P` 呼出），工具库项把各自的开关挂入主面板「工具库项」区统一管理；不能适配或功能已被主脚本覆盖的脚本全部弃置（默认自禁用）。
-
-**核心脚本（必装）**
-
-| 脚本 | 作用 | 关键开关 |
-|------|------|----------|
-| `chaoxing-force-play.user.js`（v4.5+） | 强制续播 / 防暂停 / 定向任务点 / 抗重建重播 / 用户暂停开关 / **主控面板**：「续播」卡（暂停恢复 + 视频开关 + 播放设置：速率/循环/自动停止/恢复）+「做题」卡（真实答题开关/来源/统计 + 弹窗随堂题自动作答 + 智慧树作业考试引导）+ 工具库项区 + 洞察 + 钉底「最近提示」 | `DEBUG`、`RESCAN_INTERVAL`、`PAUSE_HOTKEY`、`AUTO_STOP_MIN`、`RESUME_AFTER_MIN`、`USER_RATE`、`cx_quiz_auto`、`cx_quiz_source`、`cx_popup_quiz` |
-
-**工具库项（已内置核心脚本，无需单独安装；开关均在主面板「工具库」区）**
-
-以下 4 项原是独立「副脚本」（`decision/`），已于 2026-08-05 迁入核心脚本 `plugins/addons/` 一并构建分发，安装 `chaoxing-force-play.user.js` 即自动获得，已删除独立脚本形式：
-
-| 工具库项 | 作用 | 面板开关 |
-|------|------|----------|
-| `auto-next`（自动下一课） | 播完自动进答题入口 / 跳下一未完成章节（桥优先，DOM 兜底）；插播题遮罩自动暂停 | 「自动下一课」（`localStorage.cx_an_on`，默认关） |
-| `keyboard`（快捷键增强） | `M` 静音切换；`Space` 接管播放/暂停（手动暂停后让位核心脚本） | 「快捷键增强 (Space/M)」（`localStorage.cxKb_on`，默认开） |
-| `tamper-guard`（原型篡改报警） | 检测 ananas 暂停/倍速接管被绕过并告警（顶栏色条 + 系统通知） | 「原型篡改报警」（`localStorage.cxTg_on`，默认开） |
-| `video-ended-notify`（视频结束通知） | 视频结束 → 系统通知（复用核心 `bridge` 多端联动 + 本地 OS 通知降级） | 「视频结束系统通知」（`localStorage.cxEndedNotify`，默认开） |
-
-仍为独立脚本、按需单独安装的工具库项：
-
-| 脚本 | 作用 | 面板开关 |
-|------|------|----------|
-| `chaoxing-progress-panel.user.js`（v3.6，位于 `perception/`） | 只读进度面板（课程/章节任务点完成状态） | 内嵌为「副面板」；fetch 失败分级提示；CSS 图表；**本地估算**（课程卡片展示「本机已看 Xmin · 效率≈Y%/min」，数据来自 force-play 按课程聚合的本地已看时长，非平台同步） |
-
-
-**其他用途（独立脚本，与学习通无关）**
-
-- `chaoxing-media-collector.user.js`：常驻后台的媒体采集器（捕获视频/音频源地址、时长等元信息，本地存储、不联网），`@match` 默认仅学习通域与本地文件（隐私收敛，修复#15；采集其它网站媒体需手动在脚本头部追加对应 `@match` 行）。它与本套超星脚本**无依赖、不接入主控面板**，是独立用途工具，按需单独启用，不随本套架构更新。
-
-> 工具库项注册机制：工具库项向 `window.__cxAddonQueue` 推入 `{id,type,label,get,set,onClick,render}` 并调用 `window.__cxRegisterAddon()`，核心脚本面板建成后渲染，**加载顺序无关**。`type` 支持 `toggle`(开关)/`button`(按钮)/`subpanel`(内嵌副面板：`render(container)` 把内容渲染进主控面板「副面板」可折叠区，标题栏点击展开/折叠)。调试常量均位于脚本顶部，改完保存即生效。
-
-### 3.1 force-play 开关
-
-```js
-var DEBUG = false;          // 设为 true 开详细日志（控制台 [CX-FORCE] 前缀）
-var CONFIG = {
-  RESCAN_INTERVAL: 2000,    // 轮询间隔(ms)，越小越即时、越耗资源
-  PAUSE_HOTKEY: 'p',        // 手动暂停切换键：非输入框聚焦时按此键切换当前播放视频的暂停/续播；空串 '' 禁用
-  AUTO_STOP_MIN: 0,         // 自动停止计时器：累计观看满 N 分钟自动暂停且不再续播；0=禁用
-  RESUME_AFTER_MIN: 0       // 暂停后自动恢复：N 分钟后自动续播；0=保持暂停直到手动恢复（即"暂停后是否开启"开关）
-};
-```
-> 用户暂停开关（v3.23）：按 `PAUSE_HOTKEY` 暂停当前视频后，脚本不再强制续播，右下角有 `[CX] 已暂停续播` 提示；再按一次恢复。
-> `AUTO_STOP_MIN=30` 表示看满 30 分钟自动停；`RESUME_AFTER_MIN=5` 表示暂停 5 分钟后自动恢复（设 0 则一直停到你手动恢复）。
-
-### 3.1.1 主控面板双区（续播 / 做题）
-
-主控面板「主控」tab 现分两张并列卡片，**自动续播与自动做题权重对等**：
-
-- **续播卡**：暂停/恢复按钮 + 视频开关列表（仅播此轨 / 全部续播 / 锁定）+ 播放设置（速率 / 循环 / 自动停止计时 / 暂停后恢复）。
-- **做题卡**（按站点显隐）：
-  - 真实答题区（超星/人卫/U校园/实验空间等）：自动答题开关、实时统计（总数/已做/剩余/来源）、来源下拉（随机 `cx_quiz_source` / 题库 / AI），由 `cx_quiz_auto` 总开关控制。
-  - 弹窗随堂题自动作答（智慧树/中国大学MOOC/学堂在线/智慧职教等）：由 `cx_popup_quiz` 控制，显示实时弹窗计数。
-  - 智慧树专属：作业/考试作答走页面右下角悬浮「作业/考试助手」面板（自动作答 + 手动交卷）；做题卡内除引导提示外，还提供「打开作业 / 考试助手」按钮，点击直接复用该助手引擎（无需手动找悬浮球）。
-- 面板底部常驻「最近提示」条：跨 tab 始终可见最近一条轻提示（原提示流仅在洞察 tab）。
-
-行为要点：
-
-- **定向续播**：仅对 `window.attachments` / 桥 `objectids` 命中的任务点视频强制续播；未命中的广告/插播视频**正常可暂停**，不会误伤。
-- **已完成章避让**：桥判定当前章 `completed` 且无未完成任务点时，自动禁用强制续播。
-- **抗暂停**：原型级拦截 `HTMLMediaElement.prototype.pause` 与 `playbackRate=0` 伪暂停；auto-next 的 hold 暂停通过原生备份绕过、不受影响。
-- **抗重建重播**：已结束任务的视频被平台重建时，按 iframe 签名/视频指纹锁死不自动重播。
-- `window.attachments` 延迟到达时通过 setter 钩子即时重建白名单；永不出现时由桥 `objectids` 兜底。
-
-### 3.2 auto-next 开关
-
-```js
-var DEBUG = false;          // 设为 true 开详细日志（控制台 [CX-AUTO] 前缀）
-var CONFIG = {
-  BRIDGE_BASE: 'http://127.0.0.1:7531',   // 桥地址默认值（可被 ?cxbridge= / localStorage 覆盖）
-  NAV_LOCK_TIMEOUT: 8000,                 // 导航锁超时兜底(ms)，防卡死
-  NAV_MAX_RETRIES: 6,                     // 单章最大导航尝试次数
-  // ...
-};
+```powershell
+Invoke-RestMethod 'http://127.0.0.1:7531/ping'
+Invoke-RestMethod 'http://127.0.0.1:7531/playlist/index'
 ```
 
----
+`/ping` 在线不代表已有课程清单。`/playlist/{courseid}` 只接受 8–12 位数字课程 ID；文件缺失返回 404。数据位于 `services/perception/cx_crawler/output/`，生成时间见 JSON 的 `generatedAt`。
 
-## 4. DEBUG 调试
+`dump.py` 默认使用完整的章节断点快照。需要刷新已完成断点中的状态时，将 `config.py` 的 `FORCE_RERUN` 设为 `True` 后重跑；完成后按需要恢复。默认 `RENDER_JOBS=False`，新抓取章节通常没有 `objectids/jobids`，已有渲染断点可能保留这些字段。
 
-### 4.1 浏览器脚本
+## 浏览器连接桥
 
-把对应脚本顶部的 `var DEBUG = false;` 改为 `true`，刷新学习通播放页，按 F12 → Console：
+核心桥客户端默认关闭。可在播放页 URL 追加 `cxbridge=7531`：原 URL 已有 `?` 时用 `&cxbridge=7531`。也可在该课程页面控制台执行后刷新：
 
-- force-play：`[CX-FORCE] ...`（轮询命中、桥命中、重建锁、防暂停拦截等）
-- auto-next：`[CX-AUTO] ...`（桥清单加载、跳章目标、导航锁状态等）
-
-调试结束记得改回 `false`。
-
-### 4.2 爬虫
-
-```bash
-CX_DEBUG=1 python dump.py       # 开启详细结构化日志（含 trace_id）
+```javascript
+localStorage.removeItem('cx_bridge_off');
+localStorage.setItem('cx_bridge_base', 'http://127.0.0.1:7531');
+localStorage.setItem('cx_bridge_on', '1');
 ```
 
-### 4.3 让脚本连上非默认端口的桥
+只设置 `cx_bridge_base` 不会开启桥。`cx_bridge_off=1` 优先关闭核心桥；URL 指定地址优先于本地保存地址。核心客户端仅接受本机回环地址，失败时尝试端口 `[7531,7532,7533,8543,9090]`。成功获取并校验清单后，核心可使用当前章节完成态和 `objectids`；清单异常或不可达时忽略该增强。
 
-若 `bridge.py` 用了非 `7531` 端口，二选一即可（脚本也会自动探测候选端口 `[7531,7532,7533,8543,9090]`）：
+核心桥的同源帧共享请求协调，各帧仍消费自己的章节状态。停止、关闭、卸载或页面身份变化会取消旧消费者，迟到响应不再改写状态；跨域帧分别管理。
 
-- 播放页 URL 追加参数：`...&cxbridge=7532`（支持 `7532` / `127.0.0.1:7532` / 完整 `http://...:7532`）
-- 或在控制台执行一次后永久生效：
-  ```js
-  localStorage.setItem('cx_bridge_base', 'http://127.0.0.1:7532')
-  ```
+自动下一课默认关闭。开启插件且核心桥配置允许后，插件使用核心桥地址规则和回环端口 `[7531,7532,7533,8543,9090]` 探测；关闭插件时不探测。它兼容 `dump.py` 返回的 `{chapters:[...]}` 和旧数组清单，桥不可达时使用 DOM 跳转。待提交、待复核或 AI 求解未结算时保持等待；关闭、停机或卸载会取消旧导航。当前运行状态与取消规则见 [核心状态机](CORE_STATE.md)。
 
----
+桥启用 token 后，核心与自动下一课当前不会自动发送鉴权参数，不能直接沿用上述连接流程。鉴权配置及完整优先级见 [爬虫桥配置](../services/perception/cx_crawler/README.md)。
 
-## 5. 常见排错
+## 排查问题
 
-| 现象 | 可能原因 | 处理 |
-|------|----------|------|
-| 脚本没反应 / 不续播 | 脚本未启用或 `@match` 不匹配当前域名 | 确认 Tampermonkey 中脚本已启用；确认当前页在脚本 `@match` 范围内 |
-| 控制台报 `blocked by CORS` | 桥未开 CORS 或端口不匹配 | 确认 `bridge.py` 在运行；§4.3 对齐端口；检查 `/ping` 是否可达 |
-| `/ping` 打不开 | 桥服务没起 / 端口被占用 | 重跑 `python bridge.py`；换端口（§2.3）；`netstat -ano \| findstr 7531` 看占用 |
-| 强制续播没生效（视频仍暂停） | 当前章被桥判定为已完成 | 检查 `playlist_index.json` 该章 `completed`；或临时关桥验证 |
-| 广告/插播被误续播 | 白名单过宽 | 正常不应发生（非任务点视频不置 `__cxForcePaused`）；开 `DEBUG` 看命中日志 |
-| 已播完的任务点反复重播 | 重建去重未命中 | 开 `DEBUG` 看 `ENDED_SRCS` 注册与 `isRebuildFinished`；确认 iframe 签名含任务 id |
-| 切后台后停播 | 主脚本未启用（visibility-resume 已删除） | 确认 `chaoxing-force-play.user.js`(v4.0) 已启用，其轮询 play() 覆盖切后台续播 |
-| 想彻底静默（无日志） | — | 所有脚本 `DEBUG=false`；爬虫不设置 `CX_DEBUG` |
-| 桥数据陈旧 | `dump.py` 很久没跑 | 重新 `python dump.py` 再重启 `bridge.py` |
+| 现象 | 检查方法 |
+| --- | --- |
+| 脚本未显示 | 检查管理器是否启用、页面是否匹配 `@match`，以及是否同时安装多个核心版本 |
+| 按 P 没反应 | 先移出输入框焦点，再检查 `PAUSE_HOTKEY`；暂停视频请用面板按钮 |
+| 视频未续播 | 查看总开关、课程关闭名单、逐视频开关、用户暂停/计时状态、验证停机与已完成章判定 |
+| 自动下一课未跳转 | 检查工具库开关、页面是否有可点击入口及课程是否已解锁；桥当前不保证精确跳章 |
+| 桥返回 404 | 区分路由/课程 ID 不合规则、清单文件缺失；先检查 `/playlist/index` |
+| 桥返回 401 | 已启用 token；检查客户端是否发送对应鉴权 |
+| 桥在浏览器连接失败 | 分别测试 `/ping`、清单接口与浏览器控制台；检查端口、CSP、浏览器本地网络权限及请求拦截 |
+| 数据不是最新 | 检查 `generatedAt` 与断点策略，必要时启用 `FORCE_RERUN`；桥逐次读文件，通常无需重启 |
+| 进度面板获取失败 | 检查浏览器登录态、平台接口、跨域限制；Python 桥在线不代表该面板接口可用 |
 
----
+需要 Python 详细日志时，在运行 `dump.py` 前执行 `$env:CX_DEBUG='1'`；结束后用 `Remove-Item Env:CX_DEBUG` 恢复。核心调试开关可从面板调整；自动下一课使用自己的日志配置。
 
-## 6. 典型工作流
+`cookies.json` 含明文登录凭证；本地采集数据也可能包含课程和媒体信息。它们属于运行数据，应保留在本机并避免提交、分享。是否真正完成平台任务，以平台页面和服务端状态为准。
 
-```bash
-# 1) 爬虫：抓课程 + 生成清单（必要时开 RENDER_JOBS 回填 objectids）
-cd perception/cx_crawler
-CX_DEBUG=1 python dump.py
+## 开发验证与许可
 
-# 2) 常驻桥（可用 --port 自定义）
-python bridge.py --port 7531
-
-# 3) 浏览器：Tampermonkey 启用 force-play + auto-next（必要时按 §4.3 对齐端口）
-#    打开学习通播放页，脚本自动续播并跳章。
-```
-
-> 安全红线：限速优先于对抗（单域最小请求间隔见 `config.py` 的 `MIN_INTERVAL`），且爬虫只读不写，避免触发风控。
-
-> **凭证安全（修复#26）**：`session.save_cookies` 会把登录态**明文**写入 `perception/cx_crawler/cookies.json`。请务必：① 不要将该文件提交到 git 或任何公开位置；② 在共享/公共电脑上使用后及时删除；③ 脚本已对 `cookies.json` 施加 `0o600` 权限（类 Unix 下仅属主可读写，Windows 尽力而为）作为额外防护，但这不能替代前两条习惯。
+开发使用 Node.js 24.15.0+、npm ci 安装应用与 _sim 的锁定依赖；Playwright 场景还需安装 Chromium。命令、发布预检与本地打包见 [贡献说明](../CONTRIBUTING.md)。源码采用 [MIT](../LICENSE)，每份独立用户脚本带完整版权与许可通知。[风险提示](../NOTICE.md)不增加 MIT 授权条件。当前版本检查范围与线上未验证项见 [4.20.3 记录](releases/4.20.3.md)。

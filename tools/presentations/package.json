@@ -1,0 +1,20 @@
+{
+  "name": "project-presentations",
+  "version": "1.0.0",
+  "description": "项目介绍与架构演示稿生成工具（历史讲稿）",
+  "scripts": {
+    "build:introduction": "node build-ppt.js",
+    "build:architecture": "node build.js",
+    "verify": "node verify.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  }
+}

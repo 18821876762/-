@@ -1,0 +1,7 @@
+{
+  "_comment": "复制为同目录 bridge_config.json 后使用。逐字段优先级：CLI > 显式 --config > CX_BRIDGE_* 环境变量 > 同目录配置 > 默认值。默认仅允许 HTTPS chaoxing.com 来源；学校自有域名请在 allowed_origins 添加实际 origin（协议、主机、可选端口，无路径）。配置 token 后只接受 Authorization: Bearer；非回环监听必须配置非空 token。不要提交含密钥的实际配置文件。",
+  "host": "127.0.0.1",
+  "port": 7531,
+  "auth_token": "",
+  "allowed_origins": []
+}

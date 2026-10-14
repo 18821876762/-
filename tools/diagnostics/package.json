@@ -1,0 +1,20 @@
+{
+  "name": "project-diagnostics",
+  "version": "1.0.0",
+  "scripts": {
+    "audit:metrics": "node audit-metrics.js",
+    "audit:meta": "node audit-meta.js",
+    "probe:independence": "node independence-probe.js",
+    "probe:leaks": "node global-leak-probe.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "项目诊断与历史探针",
+  "dependencies": {
+    "jsdom": "^29.1.1"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  }
+}

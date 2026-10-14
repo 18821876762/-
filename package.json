@@ -2,11 +2,25 @@
   "name": "chaoxing-force-play-workspace",
   "version": "1.0.0",
   "private": true,
-  "description": "Workspace for chaoxing-force-play. jsdom is installed as a dev dependency to support server-side DOM operations and HTML parsing.",
+  "description": "Project entrypoints for userscript, perception services, tests and developer tools.",
   "scripts": {
-    "test:dom": "node scripts/dom-check.js"
+    "build": "powershell -ExecutionPolicy Bypass -File scripts/build.ps1",
+    "build:open": "powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -Variant open",
+    "test": "powershell -ExecutionPolicy Bypass -File scripts/test.ps1",
+    "test:sim": "node apps/userscript/scripts/run-sim.js",
+    "test:python": "python -B -m unittest discover -s services/perception/cx_crawler/tests -p \"test_*.py\"",
+    "test:dom": "node scripts/dom-check.js",
+    "sync": "powershell -ExecutionPolicy Bypass -File scripts/sync-copy.ps1",
+    "release:check": "node scripts/release-assets.cjs check --git",
+    "release:draft": "powershell -ExecutionPolicy Bypass -File scripts/prepare-release.ps1 -Draft",
+    "release:prepare": "powershell -ExecutionPolicy Bypass -File scripts/prepare-release.ps1"
   },
   "devDependencies": {
-    "jsdom": "^22.1.0"
+    "jsdom": "^30.0.1",
+    "playwright": "^1.62.1"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.15.0"
   }
 }

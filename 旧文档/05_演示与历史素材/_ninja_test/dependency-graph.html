@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>chaoxing-force-play 依赖图</title>
+<script>
+  // 多镜像 CDN 兜底（与项目 html2canvas 兜底同一思路），任一可用即可渲染
+  (function () {
+    var cdns = [
+      'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js',
+      'https://unpkg.com/mermaid@10/dist/mermaid.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js'
+    ];
+    var i = 0;
+    function tryLoad() {
+      if (i >= cdns.length) { document.getElementById('fallback').style.display = 'block'; return; }
+      var s = document.createElement('script');
+      s.src = cdns[i++];
+      s.onload = function () { try { mermaid.initialize({ startOnLoad: true, theme: 'default' }); } catch (e) {} };
+      s.onerror = tryLoad;
+      document.head.appendChild(s);
+    }
+    tryLoad();
+  })();
+</script>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 24px; color: #222; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 32px; }
+  .mermaid { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 12px; margin: 8px 0; }
+  #fallback { display: none; background: #fff7e6; border: 1px solid #ffd591; padding: 12px; border-radius: 8px; }
+  pre { background: #f6f8fa; padding: 12px; border-radius: 8px; overflow: auto; }
+  .note { color: #666; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>chaoxing-force-play · 模块依赖图</h1>
+<p class="note">依据 <code>build-manifest.txt</code>（拼接顺序）、各文件 <code>// ===== DOMAIN:</code> 分层标记、<code>// @requires:</code> 契约，以及 31 处跨文件符号的真实提供方生成。黑色实线 = 分层依赖方向；虚线 = 运行时契约（共享全局）提供方 → 消费方。所有 domain 拼接为单一脚本、共享顶层作用域，故"依赖"= 运行时可解析的全局符号。</p>
+
+<h2>视图 1 · 分层架构</h2>
+<div class="mermaid">
+graph TB
+  subgraph KERNEL[共享内核 · takeover/foundation/]
+    K1[guard.js<br/>safeGet / bestEffort / DEBUG / dbg]
+    K2[utils.js<br/>swallow / cxState / escapeHTML]
+    K3[state.js<br/>EventBus / Store]
+    K4[config.js<br/>CONFIG / CONST / SELECTORS / FLAGS / NATIVE_PAUSE]
+    K5[keys.js<br/>CX_KEYS]
+    K6[site-router.js<br/>detectSite / registerSiteTick / runSiteTick / currentSiteCfg]
+    K7[storage.js / metrics.js / url.js]
+  end
+  subgraph ENGINE[takeover/engine + dom · 业务内核]
+    E1[dom.js<br/>allVideos / currentVideo]
+    E2[playback.js]
+    E3[quiz.js<br/>quizTick]
+    E4[popup-quiz.js<br/>popupQuizTick]
+    E5[bridge.js / targeting.js / dedup.js / foreground.js / stats.js]
+    E6[quiz-vision.js / vision-deepseek-web.js<br/>dsAvailable]
+    E7[session.js / lifecycle.js]
+  end
+  subgraph SITES[sites/ · 站点适配]
+    S1[chaoxing-exam / zhihuishu-exam]
+    S2[icourse163 / icve / xuetangx]
+    S3[renwei / ucampus / unipus / ilabx]
+    S4[zhihuishu / quiz-selectors]
+  end
+  subgraph PRESENT[presentation/ · UI]
+    P1[panel.js<br/>_cxPanel / SCRIPT_VERSION]
+    P2[styles.js<br/>STYLES / cxIcon]
+    P3[panel-core / panel-controls / panel-template<br/>panel-drag / panel-ds-console / dashboard<br/>diagnostics / commands / toast / panel-toast-feed / zhihuishu-fab]
+  end
+  subgraph PLUG[plugins/ · 工具库]
+    PL1[registry.js + addons/*]
+  end
+  BOOT[main-loop.js<br/>2s 调度主循环 / 单入口 restartLoopTimer]
+
+  KERNEL --> ENGINE
+  KERNEL --> SITES
+  KERNEL --> PRESENT
+  KERNEL --> PLUG
+  ENGINE --> SITES
+  ENGINE --> PRESENT
+  ENGINE --> PLUG
+  SITES -. "registerSiteTick 注册" .-> BOOT
+  ENGINE -. "quizTick / popupQuizTick" .-> BOOT
+  PRESENT -. "_cxPanel / panel:refresh" .-> BOOT
+  BOOT --> ENGINE
+  BOOT --> SITES
+</div>
+
+<h2>视图 2 · 跨文件契约（提供方 → 消费方）</h2>
+<div class="mermaid">
+graph LR
+  state[state.js<br/>EventBus]
+  guard[guard.js<br/>safeGet/bestEffort]
+  config[config.js<br/>CONFIG/CONST/SELECTORS/FLAGS]
+  sr[site-router.js<br/>detectSite/registerSiteTick]
+  dom[dom.js<br/>allVideos/currentVideo]
+  quiz[quiz.js<br/>quizTick]
+  pq[popup-quiz.js<br/>popupQuizTick]
+  panel[panel.js<br/>_cxPanel]
+  styles[styles.js<br/>STYLES/cxIcon]
+  vds[vision-deepseek-web.js<br/>dsAvailable]
+
+  state -. EventBus .-> engine[takeover/engine + dom]
+  guard -. safeGet/bestEffort .-> engine
+  config -. CONFIG/常量 .-> engine
+  state -. EventBus .-> sites[sites/*]
+  config -. CONFIG/常量 .-> sites
+  sr -. detectSite .-> sites
+  quiz -. quizTick .-> S_uni[unipus/ucampus/renwei/ilabx/chaoxing-exam]
+  pq -. popupQuizTick .-> S_pop[zhihuishu/xuetangx/icve/icourse163]
+  vds -. dsAvailable .-> S_zh[zhihuishu-exam / zhihuishu-fab / quiz.js]
+  dom -. allVideos .-> present[presentation/*]
+  panel -. _cxPanel .-> present
+  styles -. STYLES/cxIcon .-> present
+  panel -. _cxPanel .-> lifecycle[lifecycle.js]
+  quiz -. quizTick .-> main[main-loop.js]
+  pq -. popupQuizTick .-> main
+  dom -. allVideos .-> main
+  sites -. registerSiteTick .-> sr
+</div>
+
+<div id="fallback">
+  <b>Mermaid CDN 均不可用（可能被追踪防护拦截）。</b>下方为可复制到本地 <code>.md</code> 的 Mermaid 源码：
+  <pre id="src"></pre>
+</div>
+
+<script>
+  document.getElementById('src').textContent =
+    document.querySelector('.mermaid') ? '' : '';
+</script>
+</body>
+</html>
