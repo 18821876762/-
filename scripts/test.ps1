@@ -2,6 +2,8 @@
 [CmdletBinding()]
 param([switch]$SkipSim,[switch]$SkipPython,[switch]$Browser,[string]$PythonExe)
 $ErrorActionPreference='Stop'
+$env:PYTHONUTF8='1'
+$env:PYTHONIOENCODING='utf-8'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $appRoot=Join-Path $projectRoot 'apps\userscript'
 $localNode=Join-Path $projectRoot 'tools\runtime\node_home\node-v24.19.0-win-x64\node.exe'
